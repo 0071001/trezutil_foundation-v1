@@ -1,0 +1,155 @@
+# Trezutil Design Tokens
+
+## Overview
+
+Design tokens are the source of truth for visual consistency across Trezutil surfaces.
+
+Every component uses these tokens. No hardcoded values.
+
+---
+
+## Color Tokens
+
+```css
+:root {
+  /* Primary */
+  --color-blue: #155EEF;
+  --color-blue-light: #E8F0FE;
+  --color-blue-dark: #0F4BD1;
+
+  /* Surfaces */
+  --color-navy: #0B1220;
+  --color-navy-light: #1A2332;
+  --color-ice: #F5F8FC;
+  --color-ice-dark: #E8EDF4;
+  --color-white: #FFFFFF;
+
+  /* Status */
+  --color-mint: #35D0BA;
+  --color-mint-light: #E6F7F4;
+  --color-mint-dark: #2AA894;
+
+  /* Accent */
+  --color-coral: #FF7A66;
+  --color-coral-light: #FFE8E4;
+
+  /* Dark Mode */
+  --color-dark-bg: #080D17;
+  --color-dark-surface: #101827;
+  --color-dark-elevated: #172238;
+
+  /* Text */
+  --color-text-primary: #0B1220;
+  --color-text-secondary: #6B7280;
+  --color-text-tertiary: #9CA3AF;
+  --color-text-inverse: #FFFFFF;
+}
+```
+
+---
+
+## Typography Tokens
+
+```css
+:root {
+  /* Font Family */
+  --font-primary: 'Manrope', 'Plus Jakarta Sans', sans-serif;
+  --font-body: 'Inter', system-ui, sans-serif;
+
+  /* Type Scale */
+  --text-display: 48px;
+  --text-h1: 32px;
+  --text-h2: 24px;
+  --text-h3: 20px;
+  --text-body: 16px;
+  --text-small: 14px;
+  --text-caption: 12px;
+
+  /* Line Height */
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.7;
+
+  /* Font Weight */
+  --weight-bold: 800;
+  --weight-semibold: 700;
+  --weight-medium: 600;
+  --weight-normal: 400;
+}
+```
+
+---
+
+## Spacing Tokens
+
+```css
+:root {
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+}
+```
+
+---
+
+## Radius Tokens
+
+```css
+:root {
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+}
+```
+
+---
+
+## Shadow Tokens
+
+```css
+:root {
+  --shadow-sm: 0 1px 2px rgba(11, 18, 32, 0.06);
+  --shadow-md: 0 4px 12px rgba(11, 18, 32, 0.08);
+  --shadow-lg: 0 8px 24px rgba(11, 18, 32, 0.12);
+}
+```
+
+---
+
+## Dark Mode Override
+
+```css
+[data-theme="dark"] {
+  --color-text-primary: #FFFFFF;
+  --color-text-secondary: #9CA3AF;
+  --color-text-tertiary: #6B7280;
+  --color-ice: #101827;
+  --color-ice-dark: #080D17;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+```
+
+---
+
+## Motion Tokens
+
+```css
+:root {
+  /* Duration */
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+
+  /* Easing */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+```

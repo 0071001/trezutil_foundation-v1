@@ -2,18 +2,28 @@ services:
   postgres:
     image: postgres:16-alpine
     environment:
-      POSTGRES_DB: trezutil
-      POSTGRES_USER: trezutil
-      POSTGRES_PASSWORD: trezutil_dev
+      POSTGRES_DB: ${POSTGRES_DB:-trezutil}
+      POSTGRES_USER: ${POSTGRES_USER:-trezutil}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-trezutil_dev_change_me}
     ports:
       - "5432:5432"
     volumes:
-      - ../../infrastructure/postgres/data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trezutil} -d ${POSTGRES_DB:-trezutil}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   kafka:
     image: bitnami/kafka:3.8
@@ -26,20 +36,27 @@ services:
       KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
       KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
       KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "false"
+    volumes:
+      - kafka_data:/bitnami/kafka
 
   minio:
     image: minio/minio:latest
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin_change_me}
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - ../../infrastructure/minio/data:/data
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   opensearch:
     image: opensearchproject/opensearch:2.17.1
@@ -50,7 +67,12 @@ services:
     ports:
       - "9200:9200"
     volumes:
-      - ../../infrastructure/opensearch/data:/usr/share/opensearch/data
+      - opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200 >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
 
   prometheus:
     image: prom/prometheus:latest
@@ -65,3 +87,9 @@ services:
       - "3000:3000"
     depends_on:
       - prometheus
+
+volumes:
+  postgres_data:
+  kafka_data:
+  minio_data:
+  opensearch_data:

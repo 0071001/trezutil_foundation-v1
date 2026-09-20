@@ -1,19 +1,7 @@
-APP_NAME := trezutil
+.PHONY: build test vet fmt lint up down logs tidy govulncheck opensearch-tests infra-up infra-down infra-status test-integration
 
-.PHONY: help fmt test vet build up down logs lint tidy
-
-help:
-	@echo "make up      - start local infrastructure"
-	@echo "make down    - stop local infrastructure"
-	@echo "make logs    - follow local infrastructure logs"
-	@echo "make fmt     - format Go code"
-	@echo "make test    - run tests"
-	@echo "make vet     - run go vet"
-	@echo "make build   - build foundation commands"
-	@echo "make tidy    - go mod tidy"
-
-fmt:
-	gofmt -w $$(find . -name '*.go' -not -path './.git/*')
+build:
+	go build ./...
 
 test:
 	go test ./...
@@ -21,11 +9,16 @@ test:
 vet:
 	go vet ./...
 
-build:
-	go build ./cmd/...
+fmt:
+	gofmt -w $$(find . -name '*.go' -not -path './vendor/*')
 
-tidy:
-	go mod tidy
+lint: fmt vet test
+
+govulncheck:
+	govulncheck ./...
+
+opensearch-tests:
+	go test ./internal/search/... -tags=integration
 
 up:
 	docker compose -f deployments/docker/docker-compose.yml up -d
@@ -35,3 +28,18 @@ down:
 
 logs:
 	docker compose -f deployments/docker/docker-compose.yml logs -f
+
+tidy:
+	go mod tidy
+
+infra-up:
+	powershell -ExecutionPolicy Bypass -File C:\Trezutil\infra\scripts\infra-start.ps1
+
+infra-down:
+	powershell -ExecutionPolicy Bypass -File C:\Trezutil\infra\scripts\infra-stop.ps1
+
+infra-status:
+	powershell -ExecutionPolicy Bypass -File C:\Trezutil\infra\scripts\infra-status.ps1
+
+test-integration: infra-up
+	go test ./... -tags=integration

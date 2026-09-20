@@ -2,6 +2,9 @@ global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: trezutil
+  - job_name: trezutil-api
     static_configs:
-      - targets: ["host.docker.internal:8080"]
+      - targets: ["host.docker.internal:8081"]
+  - job_name: trezutil-search
+    static_configs:
+      - targets: ["host.docker.internal:8082"]

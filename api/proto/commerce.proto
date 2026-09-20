@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+package trezutil.commerce.v1;
+
+option go_package = "github.com/trezutil/trezutil/api/proto/gen/commerce/v1;commercev1";
+
+message Money {
+  int64 amount_minor = 1;
+  string currency = 2;
+}
+
+message Listing {
+  string id = 1;
+  string seller_id = 2;
+  string type = 3;
+  string title = 4;
+  string description = 5;
+  string status = 6;
+  Money price = 7;
+}
+
+message GetListingRequest {
+  string listing_id = 1;
+}
+
+message GetListingResponse {
+  Listing listing = 1;
+}
+
+message SearchListingsRequest {
+  string natural_language = 1;
+  map<string, string> filters = 2;
+  int32 page_size = 3;
+}
+
+message SearchListingsResponse {
+  repeated Listing listings = 1;
+  string next_page_token = 2;
+}
+
+service CatalogService {
+  rpc GetListing(GetListingRequest) returns (GetListingResponse);
+}
+
+service SearchService {
+  rpc SearchListings(SearchListingsRequest) returns (SearchListingsResponse);
+}

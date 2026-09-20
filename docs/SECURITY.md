@@ -1,12 +1,161 @@
 # Trezutil Security
 
-Foundation requirements:
+**Status:** Version 1.0 — Security baseline
 
-- explicit authorization on every privileged action
-- AI never bypasses business authorization
-- secrets outside source control
-- auditability for sensitive actions
-- idempotency for externally retried operations
-- webhook signature validation
-- rate limiting and abuse protection
-- tenant/data isolation
+## 1. Security objectives
+
+Trezutil handles identity, commerce, potentially sensitive conversations, payments and trust decisions. The security baseline prioritises confidentiality, integrity, availability, auditability and abuse resistance.
+
+## 2. Threat model
+
+Primary threats include:
+
+- account takeover;
+- fake sellers/listings;
+- webhook spoofing;
+- replayed payment confirmations;
+- prompt injection through user content;
+- AI tool abuse;
+- privilege escalation;
+- data leakage across organizations;
+- fraudulent refunds/cancellations;
+- marketplace spam;
+- malicious media/documents;
+- denial-of-service and automation abuse.
+
+## 3. Identity and access
+
+- Verify phone identity according to channel capability.
+- Use RBAC for baseline authorization.
+- Add resource-level policy checks for sensitive actions.
+- Admin roles must be separate from seller roles.
+- Service-to-service identities must be explicit.
+
+## 4. AI security
+
+AI is treated as an untrusted planner.
+
+Controls:
+
+1. No direct SQL access.
+2. No unrestricted HTTP tool access.
+3. Every tool has a typed schema.
+4. Tool authorization runs independently of the model.
+5. High-risk actions may require explicit confirmation.
+6. User-provided text, media and documents are untrusted input.
+7. System instructions are not exposed to users.
+8. Prompt-injection attempts must not alter authorization or policy rules.
+
+High-risk examples:
+
+- deleting listings;
+- issuing refunds;
+- changing payout/payment data;
+- changing seller ownership;
+- disabling trust controls;
+- bulk messaging.
+
+## 5. WhatsApp webhook security
+
+- Verify provider signatures where available.
+- Validate timestamp/replay windows.
+- Persist provider message IDs for deduplication.
+- Apply rate limits and abuse controls.
+- Never trust user-supplied payment status.
+
+## 6. Payment security
+
+Payment secrets and provider credentials MUST be stored in a secrets manager or protected environment configuration.
+
+Payment state transitions must originate from trusted provider responses or approved reconciliation workflows.
+
+Payment callbacks require idempotency and replay protection.
+
+## 7. Data protection
+
+Classify at minimum:
+
+- public;
+- internal;
+- confidential;
+- highly sensitive.
+
+Examples of highly sensitive data may include identity documents, payment secrets and certain private support content.
+
+Sensitive data must be encrypted in transit. Encryption at rest should be enabled in production infrastructure where supported.
+
+## 8. Tenant isolation
+
+Every organization-scoped query must include the resolved tenant/organization authorization context. Cross-tenant access must require explicit platform/admin policy.
+
+## 9. Secrets management
+
+Never commit:
+
+- API keys;
+- access tokens;
+- database passwords;
+- WhatsApp credentials;
+- payment credentials;
+- private signing keys.
+
+`.env.example` may contain placeholders only.
+
+## 10. Audit logging
+
+Sensitive actions must create an audit record containing:
+
+- actor;
+- role;
+- action;
+- target resource;
+- request/correlation ID;
+- timestamp;
+- result;
+- reason when applicable.
+
+Do not store raw secrets or unnecessary message content in audit logs.
+
+## 11. Abuse controls
+
+At minimum:
+
+- per-user rate limits;
+- per-phone/channel rate limits;
+- per-IP rate limits for web APIs;
+- seller listing quotas;
+- campaign volume limits;
+- suspicious pattern detection;
+- moderation workflows.
+
+## 12. Secure development
+
+CI should include:
+
+- formatting;
+- unit tests;
+- integration tests where configured;
+- static analysis;
+- dependency vulnerability scanning;
+- secret scanning.
+
+## 13. Backups and recovery
+
+Production requires:
+
+- automated PostgreSQL backups;
+- tested restore procedure;
+- object storage backup/replication policy;
+- Kafka retention strategy;
+- documented RPO/RTO targets.
+
+## 14. Incident response
+
+Production must define:
+
+- incident severity levels;
+- escalation paths;
+- credential rotation procedure;
+- affected-user communication procedure;
+- evidence preservation;
+- post-incident review.
