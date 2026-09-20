@@ -1,0 +1,878 @@
+package api
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+
+	"github.com/trezutil/trezutil/internal/domain"
+)
+
+// ErrorResponse represents a standard API error response.
+type ErrorResponse struct {
+	Error Error `json:"error"`
+}
+
+// Error represents a structured API error.
+type Error struct {
+	Code      string      `json:"code"`
+	Message   string      `json:"message"`
+	Details   interface{} `json:"details,omitempty"`
+	RequestID string      `json:"request_id,omitempty"`
+}
+
+// readJSONBody reads and decodes the JSON body of an HTTP request.
+func readJSONBody(r *http.Request, v interface{}) error {
+	return json.NewDecoder(r.Body).Decode(v)
+}
+
+// writeJSON writes a JSON response with the given status code.
+func writeJSON(w http.ResponseWriter, v interface{}, statusCode ...int) {
+	w.Header().Set("Content-Type", "application/json")
+	if len(statusCode) > 0 {
+		w.WriteHeader(statusCode[0])
+	} else {
+		w.WriteHeader(http.StatusOK)
+	}
+	json.NewEncoder(w).Encode(v)
+}
+
+// OrganizationUseCases interface for organization operations.
+type OrganizationUseCases interface {
+	CreateOrganization(ctx context.Context, actorID string, org *domain.Organization) error
+	GetOrganization(ctx context.Context, organizationID string) (*domain.Organization, error)
+	UpdateOrganization(ctx context.Context, actorID, organizationID string, updates map[string]interface{}) error
+	AddMember(ctx context.Context, actorID, organizationID, userID string, role domain.OrganizationRole) error
+	GetMembers(ctx context.Context, organizationID string) ([]domain.OrganizationMember, error)
+	RemoveMember(ctx context.Context, actorID, organizationID, userID string) error
+}
+
+// SellerUseCases interface for seller operations.
+type SellerUseCases interface {
+	CreateSellerProfile(ctx context.Context, actorID string, seller *domain.SellerProfile) error
+	GetSellerProfile(ctx context.Context, sellerID string) (*domain.SellerProfile, error)
+	UpdateSellerProfile(ctx context.Context, actorID, sellerID string, updates map[string]interface{}) error
+}
+
+// StoreUseCases interface for store operations.
+type StoreUseCases interface {
+	CreateStore(ctx context.Context, actorID string, store *domain.Store) error
+	GetStore(ctx context.Context, storeID string) (*domain.Store, error)
+	UpdateStore(ctx context.Context, actorID, storeID string, updates map[string]interface{}) error
+}
+
+// ListingUseCases interface for listing operations.
+type ListingUseCases interface {
+	CreateListing(ctx context.Context, actorID string, listing *domain.Listing, attributes []*domain.AttributeValue, media []*domain.ListingMedia, availability *domain.ListingAvailability, locations []*domain.ListingLocation) error
+	GetListing(ctx context.Context, actorID string, listingID string) (*domain.Listing, error)
+	PublishListing(ctx context.Context, actorID string, listingID string) error
+	PauseListing(ctx context.Context, actorID string, listingID string) error
+	ResumeListing(ctx context.Context, actorID string, listingID string) error
+}
+
+// OrderUseCases interface for order operations.
+type OrderUseCases interface {
+	CreateOrder(ctx context.Context, actorID string, listingID string, quantity int) (*domain.Order, error)
+	GetOrder(ctx context.Context, actorID string, orderID string) (*domain.Order, error)
+	CancelOrder(ctx context.Context, actorID string, orderID string) error
+}
+
+// ReservationUseCases interface for reservation operations.
+type ReservationUseCases interface {
+	CreateReservation(ctx context.Context, actorID string, listingID string, startAt int64, endAt int64, quantity int, partySize int, idempotencyKey string) (*domain.Reservation, error)
+	GetReservation(ctx context.Context, actorID string, reservationID string) (*domain.Reservation, error)
+	CancelReservation(ctx context.Context, actorID string, reservationID string) error
+}
+
+// AvailabilityUseCases interface for availability operations.
+type AvailabilityUseCases interface {
+	CheckAvailability(ctx context.Context, actorID string, query domain.AvailabilityQuery) (domain.AvailabilityResult, error)
+}
+
+// OrganizationHandler handles organization HTTP requests.
+type OrganizationHandler struct {
+	orgUseCases OrganizationUseCases
+}
+
+// NewOrganizationHandler creates a new OrganizationHandler.
+func NewOrganizationHandler(orgUseCases OrganizationUseCases) *OrganizationHandler {
+	return &OrganizationHandler{orgUseCases: orgUseCases}
+}
+
+// CreateOrganizationH handles POST /v1/organizations
+func (h *OrganizationHandler) CreateOrganizationH(w http.ResponseWriter, r *http.Request) {
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
+		return
+	}
+
+	var req domain.Organization
+	if err := readJSONBody(r, &req); err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request format"}}, http.StatusBadRequest)
+		return
+	}
+
+	err := h.orgUseCases.CreateOrganization(r.Context(), userID, &req)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "ORGANIZATION_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, req, http.StatusCreated)
+}
+
+// GetOrganizationH handles GET /v1/organizations/{organization_id}
+func (h *OrganizationHandler) GetOrganizationH(w http.ResponseWriter, r *http.Request) {
+	orgID := r.URL.Query().Get("organization_id")
+	if orgID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_ORGANIZATION_ID", Message: "Organization ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	org, err := h.orgUseCases.GetOrganization(r.Context(), orgID)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "ORGANIZATION_NOT_FOUND", Message: "Organization not found"}}, http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, org, http.StatusOK)
+}
+
+// UpdateOrganizationH handles PATCH /v1/organizations/{organization_id}
+func (h *OrganizationHandler) UpdateOrganizationH(w http.ResponseWriter, r *http.Request) {
+	userID := r.URL.Query().Get("user_id")
+	orgID := r.URL.Query().Get("organization_id")
+	if userID == "" || orgID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_PARAMS", Message: "User ID and Organization ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	var updates map[string]interface{}
+	if err := readJSONBody(r, &updates); err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request format"}}, http.StatusBadRequest)
+		return
+	}
+
+	err := h.orgUseCases.UpdateOrganization(r.Context(), userID, orgID, updates)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "ORGANIZATION_UPDATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "updated"}, http.StatusOK)
+}
+
+// AddMemberH handles POST /v1/organizations/{organization_id}/members
+func (h *OrganizationHandler) AddMemberH(w http.ResponseWriter, r *http.Request) {
+	actorID := r.URL.Query().Get("user_id")
+	orgID := r.URL.Query().Get("organization_id")
+	if actorID == "" || orgID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_PARAMS", Message: "User ID and Organization ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		UserID         string `json:"user_id"`
+		MembershipRole string `json:"membership_role"`
+	}
+	if err := readJSONBody(r, &req); err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request format"}}, http.StatusBadRequest)
+		return
+	}
+
+	role := domain.OrganizationRole(req.MembershipRole)
+	err := h.orgUseCases.AddMember(r.Context(), actorID, orgID, req.UserID, role)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "ADD_MEMBER_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "member_added"}, http.StatusCreated)
+}
+
+// GetMembersH handles GET /v1/organizations/{organization_id}/members
+func (h *OrganizationHandler) GetMembersH(w http.ResponseWriter, r *http.Request) {
+	orgID := r.URL.Query().Get("organization_id")
+	if orgID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_ORGANIZATION_ID", Message: "Organization ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	members, err := h.orgUseCases.GetMembers(r.Context(), orgID)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "GET_MEMBERS_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]interface{}{"items": members}, http.StatusOK)
+}
+
+// RemoveMemberH handles DELETE /v1/organizations/{organization_id}/members/{user_id}
+func (h *OrganizationHandler) RemoveMemberH(w http.ResponseWriter, r *http.Request) {
+	actorID := r.URL.Query().Get("user_id")
+	orgID := r.URL.Query().Get("organization_id")
+	userID := r.URL.Query().Get("user_id")
+	if actorID == "" || orgID == "" || userID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_PARAMS", Message: "User ID and Organization ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	err := h.orgUseCases.RemoveMember(r.Context(), actorID, orgID, userID)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "REMOVE_MEMBER_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// SellerHandler handles seller HTTP requests.
+type SellerHandler struct {
+	sellerUseCases SellerUseCases
+}
+
+// NewSellerHandler creates a new SellerHandler.
+func NewSellerHandler(sellerUseCases SellerUseCases) *SellerHandler {
+	return &SellerHandler{sellerUseCases: sellerUseCases}
+}
+
+// CreateSellerH handles POST /v1/sellers
+func (h *SellerHandler) CreateSellerH(w http.ResponseWriter, r *http.Request) {
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
+		return
+	}
+
+	var req domain.SellerProfile
+	if err := readJSONBody(r, &req); err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request format"}}, http.StatusBadRequest)
+		return
+	}
+
+	err := h.sellerUseCases.CreateSellerProfile(r.Context(), userID, &req)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "SELLER_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, req, http.StatusCreated)
+}
+
+// GetSellerH handles GET /v1/sellers/{seller_id}
+func (h *SellerHandler) GetSellerH(w http.ResponseWriter, r *http.Request) {
+	sellerID := r.URL.Query().Get("seller_id")
+	if sellerID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_SELLER_ID", Message: "Seller ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	seller, err := h.sellerUseCases.GetSellerProfile(r.Context(), sellerID)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "SELLER_NOT_FOUND", Message: "Seller not found"}}, http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, seller, http.StatusOK)
+}
+
+// UpdateSellerH handles PATCH /v1/sellers/{seller_id}
+func (h *SellerHandler) UpdateSellerH(w http.ResponseWriter, r *http.Request) {
+	userID := r.URL.Query().Get("user_id")
+	sellerID := r.URL.Query().Get("seller_id")
+	if userID == "" || sellerID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_PARAMS", Message: "User ID and Seller ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	var updates map[string]interface{}
+	if err := readJSONBody(r, &updates); err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request format"}}, http.StatusBadRequest)
+		return
+	}
+
+	err := h.sellerUseCases.UpdateSellerProfile(r.Context(), userID, sellerID, updates)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "SELLER_UPDATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "updated"}, http.StatusOK)
+}
+
+// StoreHandler handles store HTTP requests.
+type StoreHandler struct {
+	storeUseCases StoreUseCases
+}
+
+// NewStoreHandler creates a new StoreHandler.
+func NewStoreHandler(storeUseCases StoreUseCases) *StoreHandler {
+	return &StoreHandler{storeUseCases: storeUseCases}
+}
+
+// CreateStoreH handles POST /v1/stores
+func (h *StoreHandler) CreateStoreH(w http.ResponseWriter, r *http.Request) {
+	userID := r.URL.Query().Get("user_id")
+	if userID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
+		return
+	}
+
+	var req domain.Store
+	if err := readJSONBody(r, &req); err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request format"}}, http.StatusBadRequest)
+		return
+	}
+
+	err := h.storeUseCases.CreateStore(r.Context(), userID, &req)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "STORE_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, req, http.StatusCreated)
+}
+
+// GetStoreH handles GET /v1/stores/{store_id}
+func (h *StoreHandler) GetStoreH(w http.ResponseWriter, r *http.Request) {
+	storeID := r.URL.Query().Get("store_id")
+	if storeID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_STORE_ID", Message: "Store ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	store, err := h.storeUseCases.GetStore(r.Context(), storeID)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "STORE_NOT_FOUND", Message: "Store not found"}}, http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, store, http.StatusOK)
+}
+
+// UpdateStoreH handles PATCH /v1/stores/{store_id}
+func (h *StoreHandler) UpdateStoreH(w http.ResponseWriter, r *http.Request) {
+	userID := r.URL.Query().Get("user_id")
+	storeID := r.URL.Query().Get("store_id")
+	if userID == "" || storeID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_PARAMS", Message: "User ID and Store ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	var updates map[string]interface{}
+	if err := readJSONBody(r, &updates); err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request format"}}, http.StatusBadRequest)
+		return
+	}
+
+	err := h.storeUseCases.UpdateStore(r.Context(), userID, storeID, updates)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "STORE_UPDATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "updated"}, http.StatusOK)
+}
+
+// OrderHandler handles order HTTP requests.
+type OrderHandler struct {
+	orderUseCases OrderUseCases
+}
+
+// NewOrderHandler creates a new OrderHandler.
+func NewOrderHandler(orderUseCases OrderUseCases) *OrderHandler {
+	return &OrderHandler{orderUseCases: orderUseCases}
+}
+
+// CreateOrderH handles POST /v1/orders
+func (h *OrderHandler) CreateOrderH(w http.ResponseWriter, r *http.Request) {
+	actorID := r.URL.Query().Get("user_id")
+	if actorID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		ListingID string `json:"listing_id"`
+		Quantity  int    `json:"quantity"`
+	}
+	if err := readJSONBody(r, &req); err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request format"}}, http.StatusBadRequest)
+		return
+	}
+
+	if req.ListingID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_LISTING_ID", Message: "Listing ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	if req.Quantity <= 0 {
+		req.Quantity = 1
+	}
+
+	// Check idempotency key
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	if idempotencyKey != "" {
+		// TODO: Implement idempotency check using existing mechanism
+	}
+
+	order, err := h.orderUseCases.CreateOrder(r.Context(), actorID, req.ListingID, req.Quantity)
+	if err != nil {
+		switch err {
+		case domain.ErrOrderNotFound:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_NOT_FOUND", Message: "Listing not found"}}, http.StatusNotFound)
+		case domain.ErrInsufficientPermissions:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
+		default:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	response := map[string]interface{}{
+		"order_id":    order.ID,
+		"status":      string(order.Status),
+		"total":       order.TotalAmount,
+		"currency":    order.Currency,
+		"customer_id": order.CustomerID,
+	}
+
+	writeJSON(w, response, http.StatusCreated)
+}
+
+// GetOrderH handles GET /v1/orders/{order_id}
+func (h *OrderHandler) GetOrderH(w http.ResponseWriter, r *http.Request) {
+	orderID := r.URL.Query().Get("order_id")
+	if orderID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_ORDER_ID", Message: "Order ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	actorID := r.URL.Query().Get("user_id")
+	if actorID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
+		return
+	}
+
+	order, err := h.orderUseCases.GetOrder(r.Context(), actorID, orderID)
+	if err != nil {
+		if err == domain.ErrOrderNotFound || err == domain.ErrInsufficientPermissions {
+			writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_NOT_FOUND", Message: "Order not found"}}, http.StatusNotFound)
+		} else {
+			writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_GET_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	writeJSON(w, order, http.StatusOK)
+}
+
+// CancelOrderH handles POST /v1/orders/{order_id}/cancel
+func (h *OrderHandler) CancelOrderH(w http.ResponseWriter, r *http.Request) {
+	orderID := r.URL.Query().Get("order_id")
+	if orderID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_ORDER_ID", Message: "Order ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	actorID := r.URL.Query().Get("user_id")
+	if actorID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
+		return
+	}
+
+	err := h.orderUseCases.CancelOrder(r.Context(), actorID, orderID)
+	if err != nil {
+		switch err {
+		case domain.ErrOrderNotFound:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_NOT_FOUND", Message: "Order not found"}}, http.StatusNotFound)
+		case domain.ErrInsufficientPermissions:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
+		case domain.ErrOrderCannotBeCancelled:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_TRANSITION", Message: "Order cannot be cancelled in current state"}}, http.StatusBadRequest)
+		default:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_CANCEL_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	writeJSON(w, map[string]string{"order_id": orderID, "status": "cancelled"}, http.StatusOK)
+}
+
+// ListingHandler handles listing HTTP requests.
+type ListingHandler struct {
+	listingUseCases ListingUseCases
+}
+
+// NewListingHandler creates a new ListingHandler.
+func NewListingHandler(listingUseCases ListingUseCases) *ListingHandler {
+	return &ListingHandler{listingUseCases: listingUseCases}
+}
+
+// CreateListingH handles POST /v1/listings
+func (h *ListingHandler) CreateListingH(w http.ResponseWriter, r *http.Request) {
+	actorID := r.URL.Query().Get("user_id")
+	if actorID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		Listing      *domain.Listing             `json:"listing"`
+		Attributes   []*domain.AttributeValue    `json:"attributes"`
+		Media        []*domain.ListingMedia      `json:"media"`
+		Availability *domain.ListingAvailability `json:"availability"`
+		Locations    []*domain.ListingLocation   `json:"locations"`
+	}
+	if err := readJSONBody(r, &req); err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request format"}}, http.StatusBadRequest)
+		return
+	}
+
+	if req.Listing == nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_LISTING", Message: "Listing is required"}}, http.StatusBadRequest)
+		return
+	}
+
+	err := h.listingUseCases.CreateListing(r.Context(), actorID, req.Listing, req.Attributes, req.Media, req.Availability, req.Locations)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, req.Listing, http.StatusCreated)
+}
+
+// GetListingH handles GET /v1/listings/{listing_id}
+func (h *ListingHandler) GetListingH(w http.ResponseWriter, r *http.Request) {
+	listingID := r.URL.Query().Get("listing_id")
+	if listingID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_LISTING_ID", Message: "Listing ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	actorID := r.URL.Query().Get("user_id")
+	listing, err := h.listingUseCases.GetListing(r.Context(), actorID, listingID)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_NOT_FOUND", Message: "Listing not found"}}, http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, listing, http.StatusOK)
+}
+
+// PublishListingH handles POST /v1/listings/{listing_id}/publish
+func (h *ListingHandler) PublishListingH(w http.ResponseWriter, r *http.Request) {
+	actorID := r.URL.Query().Get("user_id")
+	listingID := r.URL.Query().Get("listing_id")
+	if actorID == "" || listingID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_PARAMS", Message: "User ID and Listing ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	err := h.listingUseCases.PublishListing(r.Context(), actorID, listingID)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_PUBLISH_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "published"}, http.StatusOK)
+}
+
+// PauseListingH handles POST /v1/listings/{listing_id}/pause
+func (h *ListingHandler) PauseListingH(w http.ResponseWriter, r *http.Request) {
+	actorID := r.URL.Query().Get("user_id")
+	listingID := r.URL.Query().Get("listing_id")
+	if actorID == "" || listingID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_PARAMS", Message: "User ID and Listing ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	err := h.listingUseCases.PauseListing(r.Context(), actorID, listingID)
+	if err != nil {
+		switch err {
+		case domain.ErrListingNotFound:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_NOT_FOUND", Message: "Listing not found"}}, http.StatusNotFound)
+		case domain.ErrInsufficientPermissions:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
+		case domain.ErrInvalidStatusTransition:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_TRANSITION", Message: "Invalid status transition"}}, http.StatusBadRequest)
+		default:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_PAUSE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "paused"}, http.StatusOK)
+}
+
+// ResumeListingH handles POST /v1/listings/{listing_id}/resume
+func (h *ListingHandler) ResumeListingH(w http.ResponseWriter, r *http.Request) {
+	actorID := r.URL.Query().Get("user_id")
+	listingID := r.URL.Query().Get("listing_id")
+	if actorID == "" || listingID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_PARAMS", Message: "User ID and Listing ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	err := h.listingUseCases.ResumeListing(r.Context(), actorID, listingID)
+	if err != nil {
+		switch err {
+		case domain.ErrListingNotFound:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_NOT_FOUND", Message: "Listing not found"}}, http.StatusNotFound)
+		case domain.ErrInsufficientPermissions:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
+		case domain.ErrInvalidStatusTransition:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_TRANSITION", Message: "Invalid status transition"}}, http.StatusBadRequest)
+		default:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_RESUME_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	writeJSON(w, map[string]string{"status": "published"}, http.StatusOK)
+}
+
+// ReservationHandler handles reservation HTTP requests.
+type ReservationHandler struct {
+	reservationUseCases  ReservationUseCases
+	availabilityUseCases AvailabilityUseCases
+}
+
+// NewReservationHandler creates a new ReservationHandler.
+func NewReservationHandler(reservationUseCases ReservationUseCases, availabilityUseCases AvailabilityUseCases) *ReservationHandler {
+	return &ReservationHandler{
+		reservationUseCases:  reservationUseCases,
+		availabilityUseCases: availabilityUseCases,
+	}
+}
+
+// CreateReservationH handles POST /v1/reservations
+func (h *ReservationHandler) CreateReservationH(w http.ResponseWriter, r *http.Request) {
+	actorID := r.URL.Query().Get("user_id")
+	if actorID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
+		return
+	}
+
+	var req struct {
+		ListingID      string `json:"listing_id"`
+		StartAt        int64  `json:"start_at"`
+		EndAt          int64  `json:"end_at"`
+		Quantity       int    `json:"quantity"`
+		PartySize      int    `json:"party_size"`
+		IdempotencyKey string `json:"idempotency_key"`
+	}
+	if err := readJSONBody(r, &req); err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request format"}}, http.StatusBadRequest)
+		return
+	}
+
+	if req.ListingID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_LISTING_ID", Message: "Listing ID required"}}, http.StatusBadRequest)
+		return
+	}
+	if req.StartAt == 0 || req.EndAt == 0 {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_DATES", Message: "Start and end timestamps required"}}, http.StatusBadRequest)
+		return
+	}
+	if req.EndAt <= req.StartAt {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_DATES", Message: "End must be after start"}}, http.StatusBadRequest)
+		return
+	}
+	if req.Quantity <= 0 {
+		req.Quantity = 1
+	}
+	if req.PartySize < 0 {
+		req.PartySize = 0
+	}
+
+	// Check idempotency key
+	idempotencyKey := req.IdempotencyKey
+	if idempotencyKey == "" {
+		idempotencyKey = r.Header.Get("Idempotency-Key")
+	}
+
+	reservation, err := h.reservationUseCases.CreateReservation(r.Context(), actorID, req.ListingID, req.StartAt, req.EndAt, req.Quantity, req.PartySize, idempotencyKey)
+	if err != nil {
+		switch err {
+		case domain.ErrListingNotFound:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_NOT_FOUND", Message: "Listing not found"}}, http.StatusNotFound)
+		case domain.ErrInsufficientPermissions:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
+		case domain.ErrAvailabilityUnavailable:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "UNAVAILABLE", Message: "Requested period not available"}}, http.StatusConflict)
+		case domain.ErrReservationConflict:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "CONFLICT", Message: "Reservation conflict: period not available"}}, http.StatusConflict)
+		default:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "RESERVATION_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	response := map[string]interface{}{
+		"reservation_id": reservation.ID,
+		"status":         string(reservation.Status),
+		"start_at":       reservation.StartAt,
+		"end_at":         reservation.EndAt,
+		"quantity":       reservation.Quantity,
+		"party_size":     reservation.PartySize,
+		"customer_id":    reservation.CustomerID,
+		"listing_id":     reservation.ListingID,
+	}
+
+	writeJSON(w, response, http.StatusCreated)
+}
+
+// GetReservationH handles GET /v1/reservations/{reservation_id}
+func (h *ReservationHandler) GetReservationH(w http.ResponseWriter, r *http.Request) {
+	// Extract reservation_id from path: /v1/reservations/{reservation_id}
+	path := r.URL.Path
+	reservationID := ""
+	if len(path) > len("/v1/reservations/") {
+		reservationID = path[len("/v1/reservations/"):]
+		// Remove any trailing query string or additional path segments
+		if idx := strings.Index(reservationID, "?"); idx >= 0 {
+			reservationID = reservationID[:idx]
+		}
+		if idx := strings.Index(reservationID, "/"); idx >= 0 {
+			reservationID = reservationID[:idx]
+		}
+	}
+	if reservationID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_RESERVATION_ID", Message: "Reservation ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	actorID := r.URL.Query().Get("user_id")
+	if actorID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
+		return
+	}
+
+	reservation, err := h.reservationUseCases.GetReservation(r.Context(), actorID, reservationID)
+	if err != nil {
+		switch err {
+		case domain.ErrReservationNotFound:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "RESERVATION_NOT_FOUND", Message: "Reservation not found"}}, http.StatusNotFound)
+		case domain.ErrInsufficientPermissions:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
+		default:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "RESERVATION_GET_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	writeJSON(w, reservation, http.StatusOK)
+}
+
+// CancelReservationH handles POST /v1/reservations/{reservation_id}/cancel
+func (h *ReservationHandler) CancelReservationH(w http.ResponseWriter, r *http.Request) {
+	// Extract reservation_id from path: /v1/reservations/{reservation_id}/cancel
+	path := r.URL.Path
+	reservationID := ""
+	prefix := "/v1/reservations/"
+	suffix := "/cancel"
+	if strings.HasPrefix(path, prefix) && strings.HasSuffix(path, suffix) {
+		reservationID = path[len(prefix) : len(path)-len(suffix)]
+	}
+	if reservationID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_RESERVATION_ID", Message: "Reservation ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	actorID := r.URL.Query().Get("user_id")
+	if actorID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
+		return
+	}
+
+	err := h.reservationUseCases.CancelReservation(r.Context(), actorID, reservationID)
+	if err != nil {
+		switch err {
+		case domain.ErrReservationNotFound:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "RESERVATION_NOT_FOUND", Message: "Reservation not found"}}, http.StatusNotFound)
+		case domain.ErrInsufficientPermissions:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
+		case domain.ErrReservationCannotBeCancelled:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_TRANSITION", Message: "Reservation cannot be cancelled in current state"}}, http.StatusBadRequest)
+		default:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "RESERVATION_CANCEL_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	writeJSON(w, map[string]string{"reservation_id": reservationID, "status": "cancelled"}, http.StatusOK)
+}
+
+// CheckAvailabilityH handles GET /v1/availability
+func (h *ReservationHandler) CheckAvailabilityH(w http.ResponseWriter, r *http.Request) {
+	actorID := r.URL.Query().Get("user_id")
+	if actorID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
+		return
+	}
+
+	listingID := r.URL.Query().Get("listing_id")
+	if listingID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_LISTING_ID", Message: "Listing ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	startAtStr := r.URL.Query().Get("start_at")
+	endAtStr := r.URL.Query().Get("end_at")
+	if startAtStr == "" || endAtStr == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_DATES", Message: "Start and end timestamps required"}}, http.StatusBadRequest)
+		return
+	}
+
+	var startAt, endAt int64
+	_, err := fmt.Sscanf(startAtStr, "%d", &startAt)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_START_AT", Message: "Invalid start_at format"}}, http.StatusBadRequest)
+		return
+	}
+	_, err = fmt.Sscanf(endAtStr, "%d", &endAt)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_END_AT", Message: "Invalid end_at format"}}, http.StatusBadRequest)
+		return
+	}
+
+	if endAt <= startAt {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_DATES", Message: "End must be after start"}}, http.StatusBadRequest)
+		return
+	}
+
+	quantity := 1
+	if qStr := r.URL.Query().Get("quantity"); qStr != "" {
+		fmt.Sscanf(qStr, "%d", &quantity)
+	}
+	if quantity <= 0 {
+		quantity = 1
+	}
+
+	partySize := 0
+	if psStr := r.URL.Query().Get("party_size"); psStr != "" {
+		fmt.Sscanf(psStr, "%d", &partySize)
+	}
+	if partySize < 0 {
+		partySize = 0
+	}
+
+	result, err := h.availabilityUseCases.CheckAvailability(r.Context(), actorID, domain.AvailabilityQuery{
+		ListingID: listingID,
+		StartAt:   startAt,
+		EndAt:     endAt,
+		Quantity:  quantity,
+		PartySize: partySize,
+	})
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "AVAILABILITY_CHECK_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, result, http.StatusOK)
+}
