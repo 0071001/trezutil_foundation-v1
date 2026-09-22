@@ -531,6 +531,22 @@ func (m *mockOrderUseCases) CancelOrder(ctx context.Context, actorID string, ord
 	return nil
 }
 
+func (m *mockOrderUseCases) ConfirmOrder(ctx context.Context, actorID string, orderID string) (*domain.Order, error) {
+	if orderID == "not-found" {
+		return nil, domain.ErrOrderNotFound
+	}
+	if actorID == "unauthorized" {
+		return nil, domain.ErrInsufficientPermissions
+	}
+	if orderID == "invalid-state" {
+		return nil, fmt.Errorf("cannot confirm order")
+	}
+	return &domain.Order{
+		ID:     orderID,
+		Status: domain.OrderStatusConfirmed,
+	}, nil
+}
+
 // mockReservationUseCases implements ReservationUseCases for testing.
 type mockReservationUseCases struct{}
 
@@ -780,6 +796,67 @@ func TestOrderHandler_CancelOrder(t *testing.T) {
 			w := httptest.NewRecorder()
 
 			handler.CancelOrderH(w, req)
+
+			if w.Code != tt.expectedStatus {
+				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
+			}
+		})
+	}
+}
+
+// TestOrderHandler_ConfirmOrder tests POST /v1/orders/{order_id}/confirm
+func TestOrderHandler_ConfirmOrder(t *testing.T) {
+	tests := []struct {
+		name           string
+		actorID        string
+		orderID        string
+		expectedStatus int
+	}{
+		{
+			name:           "missing order_id",
+			actorID:        "user-123",
+			orderID:        "",
+			expectedStatus: http.StatusBadRequest,
+		},
+		{
+			name:           "missing user_id",
+			actorID:        "",
+			orderID:        "order-123",
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name:           "order not found",
+			actorID:        "user-123",
+			orderID:        "not-found",
+			expectedStatus: http.StatusNotFound,
+		},
+		{
+			name:           "unauthorized access",
+			actorID:        "unauthorized",
+			orderID:        "order-123",
+			expectedStatus: http.StatusForbidden,
+		},
+		{
+			name:           "invalid state for confirmation",
+			actorID:        "user-123",
+			orderID:        "invalid-state",
+			expectedStatus: http.StatusInternalServerError,
+		},
+		{
+			name:           "valid confirm",
+			actorID:        "user-123",
+			orderID:        "order-123",
+			expectedStatus: http.StatusOK,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			handler := NewOrderHandler(&mockOrderUseCases{})
+			req := httptest.NewRequest(http.MethodPost, "/v1/orders/confirm?order_id="+tt.orderID+"&user_id="+tt.actorID, nil)
+			w := httptest.NewRecorder()
+
+			handler.ConfirmOrderH(w, req)
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)

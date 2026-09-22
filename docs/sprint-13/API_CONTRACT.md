@@ -332,6 +332,35 @@ POST /v1/fulfillments/{id}/tracking
 
 ---
 
+### Confirm Order
+
+```
+POST /v1/orders/{order_id}/confirm
+```
+
+**Query Parameters:**
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `order_id` | UUID | Yes | Order to confirm |
+| `user_id` | string | Yes | Actor ID |
+
+**Response 200:**
+```json
+{
+  "order_id": "uuid",
+  "status": "confirmed"
+}
+```
+
+**Errors:**
+- `400` — Invalid order ID
+- `401` — Missing user ID
+- `403` — Forbidden
+- `404` — Order not found
+- `500` — Confirmation failed (invalid state, inventory issues)
+
+---
+
 ## Error Response Format
 
 ```json
@@ -385,6 +414,7 @@ All mutation endpoints require `idempotency_key` header or body field.
 | `POST /fulfillments/{id}/transition` | ❌ | ✅ (assigned) | ✅ | ✅ |
 | `POST /fulfillments/{id}/assign` | ❌ | ✅ (admin) | ✅ | ✅ |
 | `POST /fulfillments/{id}/tracking` | ❌ | ✅ (assigned) | ✅ | ✅ |
+| `POST /orders/{id}/confirm` | ❌ | ✅ (own) | ✅ | ✅ |
 
 ---
 
@@ -395,5 +425,6 @@ Add to `api/openapi/openapi.yaml`:
 - `/capacity` paths
 - `/fulfillments` paths
 - `/orders/{id}/fulfillment`
+- `/orders/{id}/confirm`
 - `/reservations/{id}/fulfillment`
 - Schema definitions for all request/response bodies

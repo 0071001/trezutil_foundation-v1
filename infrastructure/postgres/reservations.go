@@ -21,6 +21,7 @@ type reservationRow struct {
 	Quantity            int
 	PartySize           int
 	PricingSnapshotJSON []byte
+	IdempotencyKey      sql.NullString
 	Version             int64
 	CreatedAt           time.Time
 	UpdatedAt           time.Time
@@ -40,13 +41,30 @@ func (r *ReservationRepository) Create(ctx context.Context, reservation *domain.
 		return fmt.Errorf("failed to marshal pricing snapshot: %w", err)
 	}
 
-	query := `INSERT INTO reservations (id, organization_id, customer_id, listing_id, status, start_at, end_at, quantity, party_size, pricing_snapshot, version, created_at, updated_at)
-	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`
+	if reservation.ID == "" {
+		query := `INSERT INTO reservations (organization_id, customer_id, listing_id, status, start_at, end_at, quantity, party_size, pricing_snapshot, idempotency_key, version, created_at, updated_at)
+		          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`
+		err = r.db.QueryRowContext(ctx, query,
+			reservation.OrganizationID, reservation.CustomerID, reservation.ListingID,
+			string(reservation.Status), toTime(reservation.StartAt), toTime(reservation.EndAt),
+			reservation.Quantity, reservation.PartySize, string(pricingJSON),
+			nullString(reservation.IdempotencyKey),
+			reservation.Version, toTime(reservation.CreatedAt), toTime(reservation.UpdatedAt),
+		).Scan(&reservation.ID)
+		if err != nil {
+			return fmt.Errorf("failed to create reservation: %w", err)
+		}
+		return nil
+	}
+
+	query := `INSERT INTO reservations (id, organization_id, customer_id, listing_id, status, start_at, end_at, quantity, party_size, pricing_snapshot, idempotency_key, version, created_at, updated_at)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
 
 	_, err = r.db.ExecContext(ctx, query,
 		reservation.ID, reservation.OrganizationID, reservation.CustomerID, reservation.ListingID,
 		string(reservation.Status), toTime(reservation.StartAt), toTime(reservation.EndAt),
 		reservation.Quantity, reservation.PartySize, string(pricingJSON),
+		nullString(reservation.IdempotencyKey),
 		reservation.Version, toTime(reservation.CreatedAt), toTime(reservation.UpdatedAt),
 	)
 	if err != nil {
@@ -56,7 +74,7 @@ func (r *ReservationRepository) Create(ctx context.Context, reservation *domain.
 }
 
 func (r *ReservationRepository) FindByID(ctx context.Context, id string) (*domain.Reservation, error) {
-	query := `SELECT id, organization_id, customer_id, listing_id, status, start_at, end_at, quantity, party_size, pricing_snapshot, version, created_at, updated_at
+	query := `SELECT id, organization_id, customer_id, listing_id, status, start_at, end_at, quantity, party_size, pricing_snapshot, idempotency_key, version, created_at, updated_at
 	          FROM reservations WHERE id = $1`
 	row := r.db.QueryRowContext(ctx, query, id)
 
@@ -64,13 +82,35 @@ func (r *ReservationRepository) FindByID(ctx context.Context, id string) (*domai
 	err := row.Scan(
 		&u.ID, &u.OrganizationID, &u.CustomerID, &u.ListingID,
 		&u.Status, &u.StartAt, &u.EndAt, &u.Quantity, &u.PartySize,
-		&u.PricingSnapshotJSON, &u.Version, &u.CreatedAt, &u.UpdatedAt,
+		&u.PricingSnapshotJSON, &u.IdempotencyKey, &u.Version, &u.CreatedAt, &u.UpdatedAt,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("reservation not found: %s", id)
 		}
 		return nil, fmt.Errorf("failed to find reservation: %w", err)
+	}
+
+	return unmarshalReservation(u), nil
+}
+
+// FindByIDForUpdate retrieves a reservation by ID with row-level lock.
+func (r *ReservationRepository) FindByIDForUpdate(ctx context.Context, id string) (*domain.Reservation, error) {
+	query := `SELECT id, organization_id, customer_id, listing_id, status, start_at, end_at, quantity, party_size, pricing_snapshot, idempotency_key, version, created_at, updated_at
+	          FROM reservations WHERE id = $1 FOR UPDATE`
+	row := r.db.QueryRowContext(ctx, query, id)
+
+	var u reservationRow
+	err := row.Scan(
+		&u.ID, &u.OrganizationID, &u.CustomerID, &u.ListingID,
+		&u.Status, &u.StartAt, &u.EndAt, &u.Quantity, &u.PartySize,
+		&u.PricingSnapshotJSON, &u.IdempotencyKey, &u.Version, &u.CreatedAt, &u.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("reservation not found: %s", id)
+		}
+		return nil, fmt.Errorf("failed to find reservation for update: %w", err)
 	}
 
 	return unmarshalReservation(u), nil
@@ -83,14 +123,15 @@ func (r *ReservationRepository) Update(ctx context.Context, reservation *domain.
 	}
 
 	query := `UPDATE reservations SET
-	          status = $1, start_at = $2, end_at = $3, quantity = $4, party_size = $5,
-	          pricing_snapshot = $6, version = $7, updated_at = $8
-	          WHERE id = $9 AND version = $6`
+          status = $1, start_at = $2, end_at = $3, quantity = $4, party_size = $5,
+          pricing_snapshot = $6, idempotency_key = $7, version = version + 1, updated_at = $8
+          WHERE id = $9 AND version = $10`
 
 	result, err := r.db.ExecContext(ctx, query,
 		string(reservation.Status), toTime(reservation.StartAt), toTime(reservation.EndAt),
 		reservation.Quantity, reservation.PartySize, string(pricingJSON),
-		reservation.Version, toTime(reservation.UpdatedAt), reservation.ID,
+		nullString(reservation.IdempotencyKey),
+		toTime(reservation.UpdatedAt), reservation.ID, reservation.Version-1,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update reservation: %w", err)
@@ -108,7 +149,7 @@ func (r *ReservationRepository) Update(ctx context.Context, reservation *domain.
 }
 
 func (r *ReservationRepository) FindByResourceAndPeriod(ctx context.Context, listingID string, startAt, endAt int64) ([]*domain.Reservation, error) {
-	query := `SELECT id, organization_id, customer_id, listing_id, status, start_at, end_at, quantity, party_size, pricing_snapshot, version, created_at, updated_at
+	query := `SELECT id, organization_id, customer_id, listing_id, status, start_at, end_at, quantity, party_size, pricing_snapshot, idempotency_key, version, created_at, updated_at
 	          FROM reservations
 	          WHERE listing_id = $1
 	            AND status <> 'cancelled'
@@ -128,7 +169,7 @@ func (r *ReservationRepository) FindByResourceAndPeriod(ctx context.Context, lis
 		if err := rows.Scan(
 			&u.ID, &u.OrganizationID, &u.CustomerID, &u.ListingID,
 			&u.Status, &u.StartAt, &u.EndAt, &u.Quantity, &u.PartySize,
-			&u.PricingSnapshotJSON, &u.Version, &u.CreatedAt, &u.UpdatedAt,
+			&u.PricingSnapshotJSON, &u.IdempotencyKey, &u.Version, &u.CreatedAt, &u.UpdatedAt,
 		); err != nil {
 			return nil, fmt.Errorf("failed to scan reservation: %w", err)
 		}
@@ -147,6 +188,28 @@ func (r *ReservationRepository) FindByResourceAndPeriod(ctx context.Context, lis
 	return reservations, nil
 }
 
+// FindByIdempotencyKey retrieves a reservation by its idempotency key.
+func (r *ReservationRepository) FindByIdempotencyKey(ctx context.Context, idempotencyKey string) (*domain.Reservation, error) {
+	query := `SELECT id, organization_id, customer_id, listing_id, status, start_at, end_at, quantity, party_size, pricing_snapshot, idempotency_key, version, created_at, updated_at
+	          FROM reservations WHERE idempotency_key = $1`
+	row := r.db.QueryRowContext(ctx, query, idempotencyKey)
+
+	var u reservationRow
+	err := row.Scan(
+		&u.ID, &u.OrganizationID, &u.CustomerID, &u.ListingID,
+		&u.Status, &u.StartAt, &u.EndAt, &u.Quantity, &u.PartySize,
+		&u.PricingSnapshotJSON, &u.IdempotencyKey, &u.Version, &u.CreatedAt, &u.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to find reservation by idempotency key: %w", err)
+	}
+
+	return unmarshalReservation(u), nil
+}
+
 func unmarshalReservation(u reservationRow) *domain.Reservation {
 	reservation := &domain.Reservation{
 		ID:             u.ID,
@@ -158,6 +221,7 @@ func unmarshalReservation(u reservationRow) *domain.Reservation {
 		EndAt:          toUnix(u.EndAt),
 		Quantity:       u.Quantity,
 		PartySize:      u.PartySize,
+		IdempotencyKey: nullStringToString(u.IdempotencyKey),
 		Version:        u.Version,
 		CreatedAt:      toUnix(u.CreatedAt),
 		UpdatedAt:      toUnix(u.UpdatedAt),
@@ -171,4 +235,18 @@ func unmarshalReservation(u reservationRow) *domain.Reservation {
 	}
 
 	return reservation
+}
+
+func nullString(s string) sql.NullString {
+	if s == "" {
+		return sql.NullString{Valid: false}
+	}
+	return sql.NullString{String: s, Valid: true}
+}
+
+func nullStringToString(ns sql.NullString) string {
+	if !ns.Valid {
+		return ""
+	}
+	return ns.String
 }

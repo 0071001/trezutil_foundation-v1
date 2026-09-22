@@ -26,6 +26,7 @@ type Reservation struct {
 	Quantity        int
 	PartySize       int
 	PricingSnapshot *PricingSnapshot
+	IdempotencyKey  string
 	CreatedAt       int64
 	UpdatedAt       int64
 	Version         int64

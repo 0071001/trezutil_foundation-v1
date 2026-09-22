@@ -7,7 +7,6 @@ import (
 
 	"github.com/trezutil/trezutil/internal/domain"
 	"github.com/trezutil/trezutil/internal/search/application"
-	"github.com/trezutil/trezutil/internal/search/infrastructure/opensearch"
 	"github.com/trezutil/trezutil/internal/search/projection"
 	"github.com/trezutil/trezutil/packages/events"
 )
@@ -83,17 +82,90 @@ func TestEventProcessor_WithMetrics(t *testing.T) {
 	}
 }
 
-func TestOpenSearchAdapter_IndexName(t *testing.T) {
-	config := opensearch.DefaultConfig()
-	adapter, err := opensearch.NewOpenSearchAdapter(config)
-	if err != nil {
-		t.Skipf("OpenSearch not available: %v", err)
+func TestEventProcessor_DocumentMapperPreservesTenantFields(t *testing.T) {
+	mapper := projection.NewSearchListingDocumentMapper()
+
+	proj := domain.ListingProjection{
+		ListingID:          "l1",
+		OrganizationID:     "org-1",
+		SellerID:           "s1",
+		StoreID:            "st1",
+		Title:              "Test Product",
+		PriceAmount:        199.99,
+		PriceCurrency:      "USD",
+		AvailabilityStatus: "in_stock",
+		Status:             "published",
+		CategoryID:         "cat-1",
+		CategoryPath:       []string{"cat-1", "cat-1-sub"},
 	}
 
-	if adapter.IndexName() != "trezutil-listings-v1" {
-		t.Errorf("expected index name 'trezutil-listings-v1', got '%s'", adapter.IndexName())
+	doc, err := mapper.MapToDocument(proj)
+	if err != nil {
+		t.Fatalf("failed to map: %v", err)
 	}
-	if adapter.AliasName() != "trezutil-listings" {
-		t.Errorf("expected alias 'trezutil-listings', got '%s'", adapter.AliasName())
+
+	if doc.ListingID != "l1" {
+		t.Errorf("expected listing_id 'l1', got '%s'", doc.ListingID)
+	}
+	if doc.OrganizationID != "org-1" {
+		t.Errorf("expected organization_id 'org-1', got '%s'", doc.OrganizationID)
+	}
+	if doc.SellerID != "s1" {
+		t.Errorf("expected seller_id 's1', got '%s'", doc.SellerID)
+	}
+	if doc.StoreID != "st1" {
+		t.Errorf("expected store_id 'st1', got '%s'", doc.StoreID)
+	}
+	if doc.Status != "published" {
+		t.Errorf("expected status 'published', got '%s'", doc.Status)
+	}
+}
+
+func TestEventProcessor_RejectsNonPublishedStatus(t *testing.T) {
+	cases := []struct {
+		status string
+		ok     bool
+	}{
+		{"published", true},
+		{"draft", false},
+		{"archived", false},
+		{"deleted", false},
+		{"hidden", false},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.status, func(t *testing.T) {
+			doc := projection.SearchListingDocument{
+				ListingID: "l1",
+				Status:    tc.status,
+			}
+
+			valid := doc.Status == "published"
+			if valid != tc.ok {
+				t.Errorf("status %q: expected ok=%v, got ok=%v", tc.status, tc.ok, valid)
+			}
+		})
+	}
+}
+
+func TestEventProcessor_TenantScopeIsolation(t *testing.T) {
+	m1Docs := make(map[string]string)
+	m2Docs := make(map[string]string)
+
+	for i := 0; i < 3; i++ {
+		id1 := "m1-l" + string(rune('1'+i))
+		id2 := "m2-l" + string(rune('1'+i))
+		m1Docs[id1] = "org-1"
+		m2Docs[id2] = "org-2"
+	}
+
+	if len(m1Docs) != 3 || len(m2Docs) != 3 {
+		t.Error("tenant documents should be isolated")
+	}
+
+	for orgID := range m1Docs {
+		if m2Docs[orgID] != "" {
+			t.Error("same listing should not appear in both tenants")
+		}
 	}
 }

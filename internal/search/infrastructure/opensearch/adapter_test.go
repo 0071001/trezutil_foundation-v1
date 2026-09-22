@@ -6,70 +6,90 @@ import (
 	"time"
 
 	"github.com/trezutil/trezutil/internal/domain"
+	"github.com/trezutil/trezutil/internal/search/projection"
 )
 
 func TestOpenSearchAdapter_ImplementsInterfaces(t *testing.T) {
-	config := Config{
-		URL:        "http://localhost:9200",
-		MaxRetries: 1,
-		Timeout:    1 * time.Second,
-	}
+	adapter := ensureTestIndex(t)
 
-	adapter, err := NewOpenSearchAdapter(config)
-	if err != nil {
-		// OpenSearch may not be running in tests; this is expected
-		t.Skipf("OpenSearch not available: %v", err)
-	}
-
-	// Verify it implements SearchEnginePort
 	var _ domain.SearchEnginePort = adapter
-
-	// Verify it implements SearchIndexPort
 	var _ domain.SearchIndexPort = adapter
 }
 
 func TestOpenSearchAdapter_ExecuteSearch(t *testing.T) {
-	config := Config{
-		URL:        "http://localhost:9200",
-		MaxRetries: 1,
-		Timeout:    1 * time.Second,
+	adapter := ensureTestIndex(t)
+
+	doc := testListingDocument("l1", "org-1", "seller-1", "store-1", "iPhone 15")
+	if err := adapter.IndexListingDocument(context.Background(), doc); err != nil {
+		t.Fatalf("failed to index document: %v", err)
 	}
 
-	adapter, err := NewOpenSearchAdapter(config)
+	result, err := adapter.ExecuteSearch(context.Background(), testSearchQuery("iphone", 10))
 	if err != nil {
-		t.Skipf("OpenSearch not available: %v", err)
+		t.Fatalf("unexpected error: %v", err)
 	}
 
-	result, err := adapter.ExecuteSearch(context.Background(), domain.DiscoveryQuery{
-		Text: "test",
-		Pagination: domain.PaginationCursor{
-			PageSize: 10,
-		},
-	})
+	if result.Total == 0 {
+		t.Error("expected at least 1 result, got 0")
+	}
+}
+
+func TestOpenSearchAdapter_ExecuteSearch_EmptyIndex(t *testing.T) {
+	adapter := ensureTestIndex(t)
+
+	result, err := adapter.ExecuteSearch(context.Background(), testSearchQuery("nonexistent", 10))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
 	if result.Total != 0 {
-		t.Errorf("expected total 0, got %d", result.Total)
+		t.Errorf("expected total 0 for empty index, got %d", result.Total)
+	}
+}
+
+func TestOpenSearchAdapter_ExecuteSearch_Pagination(t *testing.T) {
+	adapter := ensureTestIndex(t)
+
+	for i := 0; i < 5; i++ {
+		doc := testListingDocument(
+			string(rune('a'+i)),
+			"org-1", "seller-1", "store-1",
+			string(rune('A'+i))+" listing",
+		)
+		if err := adapter.IndexListingDocument(context.Background(), doc); err != nil {
+			t.Fatalf("failed to index document %d: %v", i, err)
+		}
+	}
+
+	result, err := adapter.ExecuteSearch(context.Background(), testSearchQuery("listing", 3))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(result.Items) > 3 {
+		t.Errorf("expected at most 3 results (page size), got %d", len(result.Items))
 	}
 }
 
 func TestOpenSearchAdapter_Health(t *testing.T) {
-	config := Config{
-		URL:        "http://localhost:9200",
-		MaxRetries: 1,
-		Timeout:    1 * time.Second,
-	}
-
-	adapter, err := NewOpenSearchAdapter(config)
-	if err != nil {
-		t.Skipf("OpenSearch not available: %v", err)
-	}
+	adapter := ensureTestIndex(t)
 
 	status := adapter.Health(context.Background())
-	if status != domain.SearchHealthAvailable && status != domain.SearchHealthUnavailable {
-		t.Errorf("unexpected health status: %s", status)
+	if status != domain.SearchHealthAvailable {
+		t.Errorf("expected health status %s, got %s", domain.SearchHealthAvailable, status)
+	}
+}
+
+func TestOpenSearchAdapter_IndexListingAndDelete(t *testing.T) {
+	adapter := ensureTestIndex(t)
+
+	doc := testListingDocument("doc-1", "org-1", "seller-1", "store-1", "Test Product")
+	if err := adapter.IndexListingDocument(context.Background(), doc); err != nil {
+		t.Fatalf("failed to index document: %v", err)
+	}
+
+	if err := adapter.DeleteListingDocument(context.Background(), "doc-1"); err != nil {
+		t.Fatalf("failed to delete document: %v", err)
 	}
 }
 
@@ -90,5 +110,57 @@ func TestConfig_Defaults(t *testing.T) {
 
 	if config.ReindexBatch != 1000 {
 		t.Errorf("expected default reindex batch 1000, got %d", config.ReindexBatch)
+	}
+}
+
+func TestOpenSearchAdapter_IndexName(t *testing.T) {
+	config := DefaultConfig()
+	adapter, err := NewOpenSearchAdapter(config)
+	if err != nil {
+		t.Skipf("OpenSearch not available: %v", err)
+	}
+
+	if adapter.IndexName() != "trezutil-listings-v1" {
+		t.Errorf("expected index name 'trezutil-listings-v1', got '%s'", adapter.IndexName())
+	}
+	if adapter.AliasName() != "trezutil-listings" {
+		t.Errorf("expected alias 'trezutil-listings', got '%s'", adapter.AliasName())
+	}
+}
+
+func TestOpenSearchAdapter_BulkIndex(t *testing.T) {
+	adapter := ensureTestIndex(t)
+
+	docs := []*projection.SearchListingDocument{
+		testListingDocument("bulk-1", "org-1", "seller-1", "store-1", "Bulk Product 1"),
+		testListingDocument("bulk-2", "org-1", "seller-1", "store-1", "Bulk Product 2"),
+		testListingDocument("bulk-3", "org-1", "seller-1", "store-1", "Bulk Product 3"),
+	}
+
+	if err := adapter.documentStore.BulkIndexDocuments(context.Background(), docs); err != nil {
+		t.Fatalf("failed to bulk index documents: %v", err)
+	}
+
+	result, err := adapter.ExecuteSearch(context.Background(), testSearchQuery("Bulk", 10))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if result.Total < 3 {
+		t.Errorf("expected at least 3 results, got %d", result.Total)
+	}
+}
+
+func TestAdapter_TimeoutConfig(t *testing.T) {
+	config := testConfig
+	config.Timeout = 5 * time.Second
+
+	adapter, err := NewOpenSearchAdapter(config)
+	if err != nil {
+		t.Fatalf("failed to create adapter: %v", err)
+	}
+
+	if adapter.config.Timeout != 5*time.Second {
+		t.Errorf("expected timeout 5s, got %v", adapter.config.Timeout)
 	}
 }

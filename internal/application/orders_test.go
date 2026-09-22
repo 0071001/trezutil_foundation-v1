@@ -28,6 +28,9 @@ func (f *fakeOrderRepo) FindByID(ctx context.Context, orderID string) (*domain.O
 	}
 	return nil, domain.ErrOrderNotFound
 }
+func (f *fakeOrderRepo) FindByIDForUpdate(ctx context.Context, orderID string) (*domain.Order, error) {
+	return f.FindByID(ctx, orderID)
+}
 func (f *fakeOrderRepo) Update(ctx context.Context, order *domain.Order) error {
 	if f.err != nil {
 		return f.err
@@ -167,6 +170,60 @@ func (f *fakeAuditLoggerForOrder) Record(ctx context.Context, entry domain.Audit
 	return nil
 }
 
+type fakeInventoryRepoForOrder struct{}
+
+func (f *fakeInventoryRepoForOrder) Create(ctx context.Context, resource *domain.InventoryResource) error {
+	return nil
+}
+func (f *fakeInventoryRepoForOrder) FindByID(ctx context.Context, tenantID, id string) (*domain.InventoryResource, error) {
+	return nil, domain.ErrInventoryNotFound
+}
+func (f *fakeInventoryRepoForOrder) FindByListingID(ctx context.Context, tenantID, listingID string) (*domain.InventoryResource, error) {
+	return nil, domain.ErrInventoryNotFound
+}
+func (f *fakeInventoryRepoForOrder) FindByListingIDForUpdate(ctx context.Context, tenantID, listingID string) (*domain.InventoryResource, error) {
+	return nil, domain.ErrInventoryNotFound
+}
+func (f *fakeInventoryRepoForOrder) Update(ctx context.Context, resource *domain.InventoryResource) error {
+	return nil
+}
+func (f *fakeInventoryRepoForOrder) FindByTenantID(ctx context.Context, tenantID string, offset, limit int) ([]*domain.InventoryResource, error) {
+	return nil, nil
+}
+func (f *fakeInventoryRepoForOrder) Reserve(ctx context.Context, id string, quantity int64, expectedVersion int64) error {
+	return nil
+}
+func (f *fakeInventoryRepoForOrder) Release(ctx context.Context, id string, quantity int64, expectedVersion int64) error {
+	return nil
+}
+func (f *fakeInventoryRepoForOrder) Consume(ctx context.Context, id string, quantity int64, expectedVersion int64) error {
+	return nil
+}
+
+type fakeFulfillmentRepoForOrder struct{}
+
+func (f *fakeFulfillmentRepoForOrder) Create(ctx context.Context, fulfillment *domain.Fulfillment) error {
+	return nil
+}
+func (f *fakeFulfillmentRepoForOrder) FindByID(ctx context.Context, tenantID, id string) (*domain.Fulfillment, error) {
+	return nil, domain.ErrFulfillmentNotFound
+}
+func (f *fakeFulfillmentRepoForOrder) FindByIDForUpdate(ctx context.Context, tenantID, id string) (*domain.Fulfillment, error) {
+	return nil, domain.ErrFulfillmentNotFound
+}
+func (f *fakeFulfillmentRepoForOrder) FindByOrderID(ctx context.Context, tenantID, orderID string) (*domain.Fulfillment, error) {
+	return nil, domain.ErrFulfillmentNotFound
+}
+func (f *fakeFulfillmentRepoForOrder) FindByReservationID(ctx context.Context, tenantID, reservationID string) (*domain.Fulfillment, error) {
+	return nil, domain.ErrFulfillmentNotFound
+}
+func (f *fakeFulfillmentRepoForOrder) FindByAssignedTo(ctx context.Context, tenantID, actorID string, status *domain.FulfillmentStatus) ([]*domain.Fulfillment, error) {
+	return nil, nil
+}
+func (f *fakeFulfillmentRepoForOrder) Update(ctx context.Context, fulfillment *domain.Fulfillment) error {
+	return nil
+}
+
 func NewTestOrderUseCases(
 	orderRepo *fakeOrderRepo,
 	listingRepo *fakeListingRepoForOrder,
@@ -174,7 +231,7 @@ func NewTestOrderUseCases(
 	orgRepo *fakeOrgRepoForOrder,
 	userRepo *fakeUserRepoForOrder,
 ) *OrderUseCases {
-	return NewOrderUseCases(orderRepo, listingRepo, sellerRepo, orgRepo, userRepo, &fakeAuditLoggerForOrder{})
+	return NewOrderUseCases(orderRepo, listingRepo, sellerRepo, orgRepo, userRepo, &fakeInventoryRepoForOrder{}, &fakeFulfillmentRepoForOrder{}, &fakeAuditLoggerForOrder{})
 }
 
 func TestOrderUseCases_CreateOrder_Success(t *testing.T) {

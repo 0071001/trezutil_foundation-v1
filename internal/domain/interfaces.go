@@ -224,6 +224,7 @@ var ErrOrderCannotBeCancelled = fmt.Errorf("order cannot be cancelled from curre
 type OrderRepository interface {
 	Create(ctx context.Context, order *Order) error
 	FindByID(ctx context.Context, orderID string) (*Order, error)
+	FindByIDForUpdate(ctx context.Context, orderID string) (*Order, error)
 	Update(ctx context.Context, order *Order) error
 }
 
@@ -243,8 +244,48 @@ var ErrAvailabilityUnavailable = fmt.Errorf("availability unavailable")
 type ReservationRepository interface {
 	Create(ctx context.Context, reservation *Reservation) error
 	FindByID(ctx context.Context, id string) (*Reservation, error)
+	FindByIDForUpdate(ctx context.Context, id string) (*Reservation, error)
 	Update(ctx context.Context, reservation *Reservation) error
 	FindByResourceAndPeriod(ctx context.Context, listingID string, startAt, endAt int64) ([]*Reservation, error)
+	FindByIdempotencyKey(ctx context.Context, idempotencyKey string) (*Reservation, error)
+}
+
+// InventoryRepository defines the interface for inventory persistence.
+type InventoryRepository interface {
+	Create(ctx context.Context, resource *InventoryResource) error
+	FindByID(ctx context.Context, tenantID, id string) (*InventoryResource, error)
+	FindByListingID(ctx context.Context, tenantID, listingID string) (*InventoryResource, error)
+	FindByListingIDForUpdate(ctx context.Context, tenantID, listingID string) (*InventoryResource, error)
+	Update(ctx context.Context, resource *InventoryResource) error
+	FindByTenantID(ctx context.Context, tenantID string, offset, limit int) ([]*InventoryResource, error)
+	Reserve(ctx context.Context, id string, quantity int64, expectedVersion int64) error
+	Release(ctx context.Context, id string, quantity int64, expectedVersion int64) error
+	Consume(ctx context.Context, id string, quantity int64, expectedVersion int64) error
+}
+
+// CapacityRepository defines the interface for capacity persistence.
+type CapacityRepository interface {
+	Create(ctx context.Context, unit *CapacityUnit) error
+	FindByID(ctx context.Context, tenantID, id string) (*CapacityUnit, error)
+	FindByInventoryID(ctx context.Context, tenantID, inventoryID string) ([]*CapacityUnit, error)
+	FindByInventoryIDAndRange(ctx context.Context, tenantID, inventoryID string, startAt, endAt int64) ([]*CapacityUnit, error)
+	FindByInventoryIDAndRangeForUpdate(ctx context.Context, tenantID, inventoryID string, startAt, endAt int64) ([]*CapacityUnit, error)
+	Update(ctx context.Context, unit *CapacityUnit) error
+	Reserve(ctx context.Context, id string, quantity int64, expectedVersion int64) error
+	Release(ctx context.Context, id string, quantity int64, expectedVersion int64) error
+	ReserveCapacity(ctx context.Context, tenantID, listingID string, startAt, endAt int64, quantity int64, reservationID string) error
+	ReleaseCapacity(ctx context.Context, tenantID, listingID string, startAt, endAt int64, quantity int64, reservationID string) error
+}
+
+// FulfillmentRepository defines the interface for fulfillment persistence.
+type FulfillmentRepository interface {
+	Create(ctx context.Context, fulfillment *Fulfillment) error
+	FindByID(ctx context.Context, tenantID, id string) (*Fulfillment, error)
+	FindByIDForUpdate(ctx context.Context, tenantID, id string) (*Fulfillment, error)
+	FindByOrderID(ctx context.Context, tenantID, orderID string) (*Fulfillment, error)
+	FindByReservationID(ctx context.Context, tenantID, reservationID string) (*Fulfillment, error)
+	FindByAssignedTo(ctx context.Context, tenantID, actorID string, status *FulfillmentStatus) ([]*Fulfillment, error)
+	Update(ctx context.Context, fulfillment *Fulfillment) error
 }
 
 // ErrDuplicateMembership is returned when a user is already a member.
@@ -252,6 +293,30 @@ var ErrDuplicateMembership = fmt.Errorf("user is already a member")
 
 // ErrListingNotFound is returned when a listing is not found.
 var ErrListingNotFound = fmt.Errorf("listing not found")
+
+// Inventory errors
+var (
+	ErrInsufficientInventory = fmt.Errorf("insufficient inventory available")
+	ErrInvalidQuantity       = fmt.Errorf("invalid quantity")
+	ErrInvalidAdjustment     = fmt.Errorf("adjustment would violate invariants")
+	ErrInventoryNotFound     = fmt.Errorf("inventory not found")
+	ErrOptimisticLock        = fmt.Errorf("optimistic lock conflict")
+)
+
+// Capacity errors
+var (
+	ErrInsufficientCapacity    = fmt.Errorf("insufficient capacity available")
+	ErrInvalidCapacityQuantity = fmt.Errorf("invalid capacity quantity")
+	ErrCapacityNotFound        = fmt.Errorf("capacity unit not found")
+)
+
+// Fulfillment errors
+var (
+	ErrInvalidFulfillmentTransition = fmt.Errorf("invalid fulfillment transition")
+	ErrTrackingNotSupported         = fmt.Errorf("tracking reference not supported for this fulfillment type")
+	ErrFulfillmentNotFound          = fmt.Errorf("fulfillment not found")
+	ErrNotAssigned                  = fmt.Errorf("actor not assigned to this fulfillment")
+)
 
 // ErrNotImplemented is returned when a feature is not yet implemented.
 var ErrNotImplemented = fmt.Errorf("not implemented")
@@ -270,4 +335,9 @@ var (
 	ErrUsageAccountNotFound     = fmt.Errorf("usage account not found")
 	ErrUsagePlanNotFound        = fmt.Errorf("usage plan not found")
 	ErrDuplicateEvent           = fmt.Errorf("duplicate webhook event")
+
+	ErrProviderNotFound      = fmt.Errorf("provider not found")
+	ErrProviderNotUsable     = fmt.Errorf("provider is not usable")
+	ErrNoProvidersAvailable  = fmt.Errorf("no providers available for capability")
+	ErrUnsupportedCapability = fmt.Errorf("unsupported capability")
 )

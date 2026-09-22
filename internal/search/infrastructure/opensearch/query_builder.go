@@ -139,6 +139,14 @@ func buildSearchQuery(query domain.DiscoveryQuery) map[string]interface{} {
 	shouldClauses := buildRankingSignals(query)
 	boolQuery["should"] = shouldClauses
 
+	// Only require minimum_should_match when there are actual should clauses.
+	// When should is empty, minimum_should_match=1 returns zero results in real OpenSearch.
+	if len(shouldClauses) > 0 {
+		boolQuery["minimum_should_match"] = 1
+	} else {
+		boolQuery["minimum_should_match"] = 0
+	}
+
 	// Sort
 	sort := buildSort(query)
 
@@ -246,15 +254,19 @@ func buildAttributeFilter(attr domain.AttributeFilter) map[string]interface{} {
 func buildRankingSignals(query domain.DiscoveryQuery) []interface{} {
 	signals := []interface{}{}
 
-	// Freshness signal: newer is better (logarithmic decay from published_at)
-	signals = append(signals, map[string]interface{}{
-		"geo_distance": map[string]interface{}{
-			"location": map[string]interface{}{
-				"lat": 0,
-				"lon": 0,
+	// Geo-distance signal: closer locations are better (only when location is specified)
+	if query.Location != nil && query.RadiusMeters != nil && *query.RadiusMeters > 0 {
+		signals = append(signals, map[string]interface{}{
+			"geo_distance": map[string]interface{}{
+				"distance": fmt.Sprintf("%fm", *query.RadiusMeters),
+				"location": map[string]interface{}{
+					"lat": *query.Location.Latitude,
+					"lon": *query.Location.Longitude,
+				},
+				"boost": 1.2,
 			},
-		},
-	})
+		})
+	}
 
 	// Category match boost
 	if query.Category != nil {

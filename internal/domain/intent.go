@@ -25,7 +25,13 @@ const (
 	ActionCancelReservation CommerceActionType = "CANCEL_RESERVATION"
 	ActionModifyReservation CommerceActionType = "MODIFY_RESERVATION"
 
-	ActionCheckInventory CommerceActionType = "CHECK_INVENTORY"
+	ActionCheckInventory  CommerceActionType = "CHECK_INVENTORY"
+	ActionAdjustInventory CommerceActionType = "ADJUST_INVENTORY"
+
+	ActionGetFulfillmentStatus      CommerceActionType = "GET_FULFILLMENT_STATUS"
+	ActionTransitionFulfillment     CommerceActionType = "TRANSITION_FULFILLMENT"
+	ActionAssignFulfillment         CommerceActionType = "ASSIGN_FULFILLMENT"
+	ActionUpdateFulfillmentTracking CommerceActionType = "UPDATE_FULFILLMENT_TRACKING"
 
 	ActionInitiatePayment  CommerceActionType = "INITIATE_PAYMENT"
 	ActionGetPaymentStatus CommerceActionType = "GET_PAYMENT_STATUS"
@@ -50,11 +56,14 @@ func (t CommerceActionType) GetCategory() ActionCategory {
 	switch t {
 	case ActionCreateListing, ActionUpdateListing, ActionPublishListing, ActionPauseListing,
 		ActionCreateOrder, ActionCancelOrder, ActionCreateCampaign,
-		ActionCreateReservation, ActionCancelReservation, ActionModifyReservation:
+		ActionCreateReservation, ActionCancelReservation, ActionModifyReservation,
+		ActionAdjustInventory, ActionAssignFulfillment, ActionTransitionFulfillment,
+		ActionUpdateFulfillmentTracking:
 		return ActionCategoryWrite
 	case ActionCheckAvailability, ActionGetOrder, ActionGetListing, ActionCompareListings,
 		ActionGetReservation, ActionCheckInventory, ActionGetPaymentStatus,
-		ActionGetDeliveryStatus, ActionGetSellerReport, ActionSuggest:
+		ActionGetDeliveryStatus, ActionGetSellerReport, ActionSuggest,
+		ActionGetFulfillmentStatus:
 		return ActionCategoryRead
 	case ActionInitiatePayment:
 		return ActionCategoryFinancial

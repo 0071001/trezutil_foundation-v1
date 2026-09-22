@@ -2,10 +2,17 @@ package reservations
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"fmt"
+	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"testing"
 	"time"
+
+	_ "github.com/lib/pq"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,16 +21,81 @@ import (
 	"github.com/trezutil/trezutil/internal/domain"
 )
 
+const reservationTestDBName = "trezutil_reservation_test"
+
+func testUUID() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
 func setupReservationTestDB(t *testing.T) *sql.DB {
-	db, err := sql.Open("postgres", "postgres://trezutil:trezutil@localhost:5432/trezutil_test?sslmode=disable")
+	t.Helper()
+
+	adminDSN := "host=localhost port=5432 user=trezutil password=trezutil dbname=postgres sslmode=disable"
+	adminDB, err := sql.Open("postgres", adminDSN)
 	require.NoError(t, err)
+	defer adminDB.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	adminDB.ExecContext(ctx, fmt.Sprintf("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '%s' AND pid <> pg_backend_pid()", reservationTestDBName))
+	adminDB.ExecContext(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", reservationTestDBName))
+	if _, err := adminDB.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE %s", reservationTestDBName)); err != nil {
+		t.Fatalf("failed to create test database: %v", err)
+	}
+
+	testDSN := fmt.Sprintf("host=localhost port=5432 user=trezutil password=trezutil dbname=%s sslmode=disable", reservationTestDBName)
+	db, err := sql.Open("postgres", testDSN)
+	require.NoError(t, err)
+
+	require.NoError(t, applyReservationMigrations(ctx, db))
+
 	return db
+}
+
+func applyReservationMigrations(ctx context.Context, db *sql.DB) error {
+	migrationsDir := "../../../migrations"
+	files, err := filepath.Glob(filepath.Join(migrationsDir, "*.sql"))
+	if err != nil {
+		return err
+	}
+	sort.Strings(files)
+	for _, file := range files {
+		sqlBytes, err := os.ReadFile(file)
+		if err != nil {
+			return fmt.Errorf("failed to read migration %s: %w", file, err)
+		}
+		upSQL := extractReservationUpSection(string(sqlBytes))
+		if _, err := db.ExecContext(ctx, upSQL); err != nil {
+			return fmt.Errorf("failed to execute migration %s: %w", file, err)
+		}
+	}
+	return nil
+}
+
+func extractReservationUpSection(content string) string {
+	upMarker := "-- +goose Up"
+	downMarker := "-- +goose Down"
+	upIdx := strings.Index(content, upMarker)
+	downIdx := strings.Index(content, downMarker)
+	if upIdx == -1 {
+		return content
+	}
+	start := upIdx + len(upMarker)
+	if downIdx == -1 {
+		return strings.TrimSpace(content[start:])
+	}
+	return strings.TrimSpace(content[start:downIdx])
 }
 
 func createTestOrg(t *testing.T, db *sql.DB) string {
 	orgRepo := postgres.NewOrganizationRepository(db)
 	org := &domain.Organization{
-		ID:          "org-test-" + fmt.Sprintf("%d", time.Now().UnixNano()),
+		ID:          testUUID(),
 		Type:        domain.OrganizationTypeBusiness,
 		LegalName:   "Test Org",
 		DisplayName: "Test Org",
@@ -40,7 +112,7 @@ func createTestOrg(t *testing.T, db *sql.DB) string {
 func createTestUser(t *testing.T, db *sql.DB, orgID string, role domain.Role) string {
 	userRepo := postgres.NewUserRepository(db)
 	user := &domain.User{
-		ID:          "user-test-" + fmt.Sprintf("%d", time.Now().UnixNano()),
+		ID:          testUUID(),
 		Phone:       "+15551234567",
 		DisplayName: "Test User",
 		Status:      domain.UserStatusActive,
@@ -56,7 +128,7 @@ func createTestUser(t *testing.T, db *sql.DB, orgID string, role domain.Role) st
 func createTestSeller(t *testing.T, db *sql.DB, orgID, userID string) string {
 	sellerRepo := postgres.NewSellerRepository(db)
 	seller := &domain.SellerProfile{
-		ID:             "seller-test-" + fmt.Sprintf("%d", time.Now().UnixNano()),
+		ID:             testUUID(),
 		UserID:         &userID,
 		OrganizationID: &orgID,
 		SellerType:     domain.SellerTypeOrganization,
@@ -70,12 +142,48 @@ func createTestSeller(t *testing.T, db *sql.DB, orgID, userID string) string {
 	return seller.ID
 }
 
-func createTestListing(t *testing.T, db *sql.DB, orgID, sellerID string) string {
+func createTestStore(t *testing.T, db *sql.DB, orgID string) string {
+	storeRepo := postgres.NewStoreRepository(db)
+	store := &domain.Store{
+		ID:             testUUID(),
+		OrganizationID: orgID,
+		Name:           "Test Store",
+		Slug:           "test-store-" + testUUID()[:8],
+		Country:        "US",
+		Phone:          "+15551234567",
+		Status:         domain.StoreStatusActive,
+		CreatedAt:      time.Now().Unix(),
+		UpdatedAt:      time.Now().Unix(),
+	}
+	err := storeRepo.Create(context.Background(), store)
+	require.NoError(t, err)
+	return store.ID
+}
+
+func createTestCategory(t *testing.T, db *sql.DB) string {
+	categoryRepo := postgres.NewCategoryRepository(db)
+	category := &domain.Category{
+		ID:        testUUID(),
+		Name:      "Test Category",
+		Slug:      "test-category-" + testUUID()[:8],
+		Status:    domain.CategoryStatusActive,
+		Scope:     domain.CategoryScopeGlobal,
+		CreatedAt: time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
+	}
+	err := categoryRepo.Create(context.Background(), category)
+	require.NoError(t, err)
+	return category.ID
+}
+
+func createTestListing(t *testing.T, db *sql.DB, orgID, sellerID, storeID, categoryID string) string {
 	listingRepo := postgres.NewListingRepository(db)
 	listing := &domain.Listing{
-		ID:             "listing-test-" + fmt.Sprintf("%d", time.Now().UnixNano()),
+		ID:             testUUID(),
 		OrganizationID: orgID,
 		SellerID:       sellerID,
+		StoreID:        storeID,
+		CategoryID:     categoryID,
 		Title:          "Test Listing",
 		ListingType:    domain.ListingTypeService,
 		PricingModel:   domain.PricingModelFixed,
@@ -90,37 +198,40 @@ func createTestListing(t *testing.T, db *sql.DB, orgID, sellerID string) string 
 	return listing.ID
 }
 
+func newTestUseCases(db *sql.DB) *ReservationUseCasesImpl {
+	return NewReservationUseCases(
+		postgres.NewReservationRepository(db),
+		postgres.NewListingRepository(db),
+		postgres.NewSellerRepository(db),
+		postgres.NewUserRepository(db),
+		postgres.NewOrganizationRepository(db),
+		&mockAvailabilityProvider{available: true},
+		&fakeCapacityRepo{},
+		&fakeInventoryRepo{},
+		&fakeFulfillmentRepo{},
+		&fakeAuditLogger{},
+		ConfirmationPolicy{RequiresConfirmation: false, AutoConfirm: true},
+	)
+}
+
 func TestReservationUseCases_CreateReservation_Success(t *testing.T) {
 	db := setupReservationTestDB(t)
 	defer db.Close()
 
 	orgID := createTestOrg(t, db)
-	userID := createTestUser(t, db, orgID, domain.RoleCustomer)
+	userID := createTestUser(t, db, orgID, domain.RoleAdmin)
 	sellerID := createTestSeller(t, db, orgID, userID)
-	listingID := createTestListing(t, db, orgID, sellerID)
+	storeID := createTestStore(t, db, orgID)
+	categoryID := createTestCategory(t, db)
+	listingID := createTestListing(t, db, orgID, sellerID, storeID, categoryID)
 
-	reservationRepo := postgres.NewReservationRepository(db)
-	listingRepo := postgres.NewListingRepository(db)
-	sellerRepo := postgres.NewSellerRepository(db)
-	userRepo := postgres.NewUserRepository(db)
-	orgRepo := postgres.NewOrganizationRepository(db)
-	availabilityProvider := &mockAvailabilityProvider{available: true}
-
-	uc := NewReservationUseCases(
-		reservationRepo,
-		listingRepo,
-		sellerRepo,
-		userRepo,
-		orgRepo,
-		availabilityProvider,
-		nil, // auditLogger
-		ConfirmationPolicy{RequiresConfirmation: false, AutoConfirm: true},
-	)
+	uc := newTestUseCases(db)
+	ctx := context.Background()
 
 	startAt := time.Now().Add(24 * time.Hour).Unix()
 	endAt := time.Now().Add(48 * time.Hour).Unix()
 
-	reservation, err := uc.CreateReservation(context.Background(), userID, listingID, startAt, endAt, 1, 2, "")
+	reservation, err := uc.CreateReservation(ctx, userID, listingID, startAt, endAt, 1, 2, "")
 	require.NoError(t, err)
 	assert.NotEmpty(t, reservation.ID)
 	assert.Equal(t, domain.ReservationStatusConfirmed, reservation.Status)
@@ -137,32 +248,20 @@ func TestReservationUseCases_CreateReservation_Unauthorized(t *testing.T) {
 	defer db.Close()
 
 	orgID := createTestOrg(t, db)
-	userID := createTestUser(t, db, orgID, domain.RoleCustomer) // Customer role, no org membership
-	sellerID := createTestSeller(t, db, orgID, userID)
-	listingID := createTestListing(t, db, orgID, sellerID)
+	userID := createTestUser(t, db, orgID, domain.RoleCustomer)
+	sellerUserID := createTestUser(t, db, orgID, domain.RoleAdmin)
+	sellerID := createTestSeller(t, db, orgID, sellerUserID)
+	storeID := createTestStore(t, db, orgID)
+	categoryID := createTestCategory(t, db)
+	listingID := createTestListing(t, db, orgID, sellerID, storeID, categoryID)
 
-	reservationRepo := postgres.NewReservationRepository(db)
-	listingRepo := postgres.NewListingRepository(db)
-	sellerRepo := postgres.NewSellerRepository(db)
-	userRepo := postgres.NewUserRepository(db)
-	orgRepo := postgres.NewOrganizationRepository(db)
-	availabilityProvider := &mockAvailabilityProvider{available: true}
-
-	uc := NewReservationUseCases(
-		reservationRepo,
-		listingRepo,
-		sellerRepo,
-		userRepo,
-		orgRepo,
-		availabilityProvider,
-		nil,
-		ConfirmationPolicy{RequiresConfirmation: false, AutoConfirm: true},
-	)
+	uc := newTestUseCases(db)
+	ctx := context.Background()
 
 	startAt := time.Now().Add(24 * time.Hour).Unix()
 	endAt := time.Now().Add(48 * time.Hour).Unix()
 
-	_, err := uc.CreateReservation(context.Background(), userID, listingID, startAt, endAt, 1, 2, "")
+	_, err := uc.CreateReservation(ctx, userID, listingID, startAt, endAt, 1, 2, "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "insufficient permissions")
 }
@@ -174,30 +273,18 @@ func TestReservationUseCases_CreateReservation_Unavailable(t *testing.T) {
 	orgID := createTestOrg(t, db)
 	userID := createTestUser(t, db, orgID, domain.RoleAdmin)
 	sellerID := createTestSeller(t, db, orgID, userID)
-	listingID := createTestListing(t, db, orgID, sellerID)
+	storeID := createTestStore(t, db, orgID)
+	categoryID := createTestCategory(t, db)
+	listingID := createTestListing(t, db, orgID, sellerID, storeID, categoryID)
 
-	reservationRepo := postgres.NewReservationRepository(db)
-	listingRepo := postgres.NewListingRepository(db)
-	sellerRepo := postgres.NewSellerRepository(db)
-	userRepo := postgres.NewUserRepository(db)
-	orgRepo := postgres.NewOrganizationRepository(db)
-	availabilityProvider := &mockAvailabilityProvider{available: false}
-
-	uc := NewReservationUseCases(
-		reservationRepo,
-		listingRepo,
-		sellerRepo,
-		userRepo,
-		orgRepo,
-		availabilityProvider,
-		nil,
-		ConfirmationPolicy{RequiresConfirmation: false, AutoConfirm: true},
-	)
+	uc := newTestUseCases(db)
+	uc.provider = &mockAvailabilityProvider{available: false}
+	ctx := context.Background()
 
 	startAt := time.Now().Add(24 * time.Hour).Unix()
 	endAt := time.Now().Add(48 * time.Hour).Unix()
 
-	_, err := uc.CreateReservation(context.Background(), userID, listingID, startAt, endAt, 1, 2, "")
+	_, err := uc.CreateReservation(ctx, userID, listingID, startAt, endAt, 1, 2, "")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unavailable")
 }
@@ -209,33 +296,20 @@ func TestReservationUseCases_GetReservation_Success(t *testing.T) {
 	orgID := createTestOrg(t, db)
 	userID := createTestUser(t, db, orgID, domain.RoleAdmin)
 	sellerID := createTestSeller(t, db, orgID, userID)
-	listingID := createTestListing(t, db, orgID, sellerID)
+	storeID := createTestStore(t, db, orgID)
+	categoryID := createTestCategory(t, db)
+	listingID := createTestListing(t, db, orgID, sellerID, storeID, categoryID)
 
-	reservationRepo := postgres.NewReservationRepository(db)
-	listingRepo := postgres.NewListingRepository(db)
-	sellerRepo := postgres.NewSellerRepository(db)
-	userRepo := postgres.NewUserRepository(db)
-	orgRepo := postgres.NewOrganizationRepository(db)
-	availabilityProvider := &mockAvailabilityProvider{available: true}
-
-	uc := NewReservationUseCases(
-		reservationRepo,
-		listingRepo,
-		sellerRepo,
-		userRepo,
-		orgRepo,
-		availabilityProvider,
-		nil,
-		ConfirmationPolicy{RequiresConfirmation: false, AutoConfirm: true},
-	)
+	uc := newTestUseCases(db)
+	ctx := context.Background()
 
 	startAt := time.Now().Add(24 * time.Hour).Unix()
 	endAt := time.Now().Add(48 * time.Hour).Unix()
 
-	created, err := uc.CreateReservation(context.Background(), userID, listingID, startAt, endAt, 1, 2, "")
+	created, err := uc.CreateReservation(ctx, userID, listingID, startAt, endAt, 1, 2, "")
 	require.NoError(t, err)
 
-	found, err := uc.GetReservation(context.Background(), userID, created.ID)
+	found, err := uc.GetReservation(ctx, userID, created.ID)
 	require.NoError(t, err)
 	assert.Equal(t, created.ID, found.ID)
 	assert.Equal(t, created.Status, found.Status)
@@ -250,34 +324,20 @@ func TestReservationUseCases_GetReservation_Forbidden(t *testing.T) {
 	userID1 := createTestUser(t, db, orgID1, domain.RoleAdmin)
 	userID2 := createTestUser(t, db, orgID2, domain.RoleAdmin)
 	sellerID := createTestSeller(t, db, orgID1, userID1)
-	listingID := createTestListing(t, db, orgID1, sellerID)
+	storeID := createTestStore(t, db, orgID1)
+	categoryID := createTestCategory(t, db)
+	listingID := createTestListing(t, db, orgID1, sellerID, storeID, categoryID)
 
-	reservationRepo := postgres.NewReservationRepository(db)
-	listingRepo := postgres.NewListingRepository(db)
-	sellerRepo := postgres.NewSellerRepository(db)
-	userRepo := postgres.NewUserRepository(db)
-	orgRepo := postgres.NewOrganizationRepository(db)
-	availabilityProvider := &mockAvailabilityProvider{available: true}
-
-	uc := NewReservationUseCases(
-		reservationRepo,
-		listingRepo,
-		sellerRepo,
-		userRepo,
-		orgRepo,
-		availabilityProvider,
-		nil,
-		ConfirmationPolicy{RequiresConfirmation: false, AutoConfirm: true},
-	)
+	uc := newTestUseCases(db)
+	ctx := context.Background()
 
 	startAt := time.Now().Add(24 * time.Hour).Unix()
 	endAt := time.Now().Add(48 * time.Hour).Unix()
 
-	created, err := uc.CreateReservation(context.Background(), userID1, listingID, startAt, endAt, 1, 2, "")
+	created, err := uc.CreateReservation(ctx, userID1, listingID, startAt, endAt, 1, 2, "")
 	require.NoError(t, err)
 
-	// User from different org tries to access
-	_, err = uc.GetReservation(context.Background(), userID2, created.ID)
+	_, err = uc.GetReservation(ctx, userID2, created.ID)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "insufficient permissions")
 }
@@ -289,36 +349,23 @@ func TestReservationUseCases_CancelReservation_Success(t *testing.T) {
 	orgID := createTestOrg(t, db)
 	userID := createTestUser(t, db, orgID, domain.RoleAdmin)
 	sellerID := createTestSeller(t, db, orgID, userID)
-	listingID := createTestListing(t, db, orgID, sellerID)
+	storeID := createTestStore(t, db, orgID)
+	categoryID := createTestCategory(t, db)
+	listingID := createTestListing(t, db, orgID, sellerID, storeID, categoryID)
 
-	reservationRepo := postgres.NewReservationRepository(db)
-	listingRepo := postgres.NewListingRepository(db)
-	sellerRepo := postgres.NewSellerRepository(db)
-	userRepo := postgres.NewUserRepository(db)
-	orgRepo := postgres.NewOrganizationRepository(db)
-	availabilityProvider := &mockAvailabilityProvider{available: true}
-
-	uc := NewReservationUseCases(
-		reservationRepo,
-		listingRepo,
-		sellerRepo,
-		userRepo,
-		orgRepo,
-		availabilityProvider,
-		nil,
-		ConfirmationPolicy{RequiresConfirmation: false, AutoConfirm: true},
-	)
+	uc := newTestUseCases(db)
+	ctx := context.Background()
 
 	startAt := time.Now().Add(24 * time.Hour).Unix()
 	endAt := time.Now().Add(48 * time.Hour).Unix()
 
-	created, err := uc.CreateReservation(context.Background(), userID, listingID, startAt, endAt, 1, 2, "")
+	created, err := uc.CreateReservation(ctx, userID, listingID, startAt, endAt, 1, 2, "")
 	require.NoError(t, err)
 
-	err = uc.CancelReservation(context.Background(), userID, created.ID)
+	err = uc.CancelReservation(ctx, userID, created.ID)
 	require.NoError(t, err)
 
-	found, err := uc.GetReservation(context.Background(), userID, created.ID)
+	found, err := uc.GetReservation(ctx, userID, created.ID)
 	require.NoError(t, err)
 	assert.Equal(t, domain.ReservationStatusCancelled, found.Status)
 }
@@ -330,38 +377,25 @@ func TestReservationUseCases_CancelReservation_AlreadyCancelled(t *testing.T) {
 	orgID := createTestOrg(t, db)
 	userID := createTestUser(t, db, orgID, domain.RoleAdmin)
 	sellerID := createTestSeller(t, db, orgID, userID)
-	listingID := createTestListing(t, db, orgID, sellerID)
+	storeID := createTestStore(t, db, orgID)
+	categoryID := createTestCategory(t, db)
+	listingID := createTestListing(t, db, orgID, sellerID, storeID, categoryID)
 
-	reservationRepo := postgres.NewReservationRepository(db)
-	listingRepo := postgres.NewListingRepository(db)
-	sellerRepo := postgres.NewSellerRepository(db)
-	userRepo := postgres.NewUserRepository(db)
-	orgRepo := postgres.NewOrganizationRepository(db)
-	availabilityProvider := &mockAvailabilityProvider{available: true}
-
-	uc := NewReservationUseCases(
-		reservationRepo,
-		listingRepo,
-		sellerRepo,
-		userRepo,
-		orgRepo,
-		availabilityProvider,
-		nil,
-		ConfirmationPolicy{RequiresConfirmation: false, AutoConfirm: true},
-	)
+	uc := newTestUseCases(db)
+	ctx := context.Background()
 
 	startAt := time.Now().Add(24 * time.Hour).Unix()
 	endAt := time.Now().Add(48 * time.Hour).Unix()
 
-	created, err := uc.CreateReservation(context.Background(), userID, listingID, startAt, endAt, 1, 2, "")
+	created, err := uc.CreateReservation(ctx, userID, listingID, startAt, endAt, 1, 2, "")
 	require.NoError(t, err)
 
-	err = uc.CancelReservation(context.Background(), userID, created.ID)
+	err = uc.CancelReservation(ctx, userID, created.ID)
 	require.NoError(t, err)
 
-	err = uc.CancelReservation(context.Background(), userID, created.ID)
+	err = uc.CancelReservation(ctx, userID, created.ID)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "cannot cancel reservation in terminal status")
+	assert.Contains(t, err.Error(), "reservation cannot be cancelled from current status")
 }
 
 func TestReservationUseCases_Idempotency(t *testing.T) {
@@ -371,34 +405,21 @@ func TestReservationUseCases_Idempotency(t *testing.T) {
 	orgID := createTestOrg(t, db)
 	userID := createTestUser(t, db, orgID, domain.RoleAdmin)
 	sellerID := createTestSeller(t, db, orgID, userID)
-	listingID := createTestListing(t, db, orgID, sellerID)
+	storeID := createTestStore(t, db, orgID)
+	categoryID := createTestCategory(t, db)
+	listingID := createTestListing(t, db, orgID, sellerID, storeID, categoryID)
 
-	reservationRepo := postgres.NewReservationRepository(db)
-	listingRepo := postgres.NewListingRepository(db)
-	sellerRepo := postgres.NewSellerRepository(db)
-	userRepo := postgres.NewUserRepository(db)
-	orgRepo := postgres.NewOrganizationRepository(db)
-	availabilityProvider := &mockAvailabilityProvider{available: true}
-
-	uc := NewReservationUseCases(
-		reservationRepo,
-		listingRepo,
-		sellerRepo,
-		userRepo,
-		orgRepo,
-		availabilityProvider,
-		nil,
-		ConfirmationPolicy{RequiresConfirmation: false, AutoConfirm: true},
-	)
+	uc := newTestUseCases(db)
+	ctx := context.Background()
 
 	startAt := time.Now().Add(24 * time.Hour).Unix()
 	endAt := time.Now().Add(48 * time.Hour).Unix()
-	idempotencyKey := "idem-test-" + fmt.Sprintf("%d", time.Now().UnixNano())
+	idempotencyKey := "idem-test-" + testUUID()
 
-	reservation1, err := uc.CreateReservation(context.Background(), userID, listingID, startAt, endAt, 1, 2, idempotencyKey)
+	reservation1, err := uc.CreateReservation(ctx, userID, listingID, startAt, endAt, 1, 2, idempotencyKey)
 	require.NoError(t, err)
 
-	reservation2, err := uc.CreateReservation(context.Background(), userID, listingID, startAt, endAt, 1, 2, idempotencyKey)
+	reservation2, err := uc.CreateReservation(ctx, userID, listingID, startAt, endAt, 1, 2, idempotencyKey)
 	require.NoError(t, err)
 
 	assert.Equal(t, reservation1.ID, reservation2.ID)
@@ -425,3 +446,90 @@ func (m *mockAvailabilityProvider) CheckAvailability(ctx context.Context, query 
 		EndAt:     query.EndAt,
 	}, nil
 }
+
+type fakeCapacityRepo struct{}
+
+func (f *fakeCapacityRepo) Create(ctx context.Context, unit *domain.CapacityUnit) error { return nil }
+func (f *fakeCapacityRepo) FindByID(ctx context.Context, tenantID, id string) (*domain.CapacityUnit, error) {
+	return nil, domain.ErrCapacityNotFound
+}
+func (f *fakeCapacityRepo) FindByInventoryID(ctx context.Context, tenantID, inventoryID string) ([]*domain.CapacityUnit, error) {
+	return nil, nil
+}
+func (f *fakeCapacityRepo) FindByInventoryIDAndRange(ctx context.Context, tenantID, inventoryID string, startAt, endAt int64) ([]*domain.CapacityUnit, error) {
+	return nil, nil
+}
+func (f *fakeCapacityRepo) FindByInventoryIDAndRangeForUpdate(ctx context.Context, tenantID, inventoryID string, startAt, endAt int64) ([]*domain.CapacityUnit, error) {
+	return nil, nil
+}
+func (f *fakeCapacityRepo) Update(ctx context.Context, unit *domain.CapacityUnit) error { return nil }
+func (f *fakeCapacityRepo) Reserve(ctx context.Context, id string, quantity int64, expectedVersion int64) error {
+	return nil
+}
+func (f *fakeCapacityRepo) Release(ctx context.Context, id string, quantity int64, expectedVersion int64) error {
+	return nil
+}
+func (f *fakeCapacityRepo) ReserveCapacity(ctx context.Context, tenantID, listingID string, startAt, endAt int64, quantity int64, reservationID string) error {
+	return nil
+}
+func (f *fakeCapacityRepo) ReleaseCapacity(ctx context.Context, tenantID, listingID string, startAt, endAt int64, quantity int64, reservationID string) error {
+	return nil
+}
+
+type fakeInventoryRepo struct{}
+
+func (f *fakeInventoryRepo) Create(ctx context.Context, resource *domain.InventoryResource) error {
+	return nil
+}
+func (f *fakeInventoryRepo) FindByID(ctx context.Context, tenantID, id string) (*domain.InventoryResource, error) {
+	return nil, domain.ErrInventoryNotFound
+}
+func (f *fakeInventoryRepo) FindByListingID(ctx context.Context, tenantID, listingID string) (*domain.InventoryResource, error) {
+	return nil, domain.ErrInventoryNotFound
+}
+func (f *fakeInventoryRepo) FindByListingIDForUpdate(ctx context.Context, tenantID, listingID string) (*domain.InventoryResource, error) {
+	return nil, domain.ErrInventoryNotFound
+}
+func (f *fakeInventoryRepo) Update(ctx context.Context, resource *domain.InventoryResource) error {
+	return nil
+}
+func (f *fakeInventoryRepo) FindByTenantID(ctx context.Context, tenantID string, offset, limit int) ([]*domain.InventoryResource, error) {
+	return nil, nil
+}
+func (f *fakeInventoryRepo) Reserve(ctx context.Context, id string, quantity int64, expectedVersion int64) error {
+	return nil
+}
+func (f *fakeInventoryRepo) Release(ctx context.Context, id string, quantity int64, expectedVersion int64) error {
+	return nil
+}
+func (f *fakeInventoryRepo) Consume(ctx context.Context, id string, quantity int64, expectedVersion int64) error {
+	return nil
+}
+
+type fakeFulfillmentRepo struct{}
+
+func (f *fakeFulfillmentRepo) Create(ctx context.Context, fulfillment *domain.Fulfillment) error {
+	return nil
+}
+func (f *fakeFulfillmentRepo) FindByID(ctx context.Context, tenantID, id string) (*domain.Fulfillment, error) {
+	return nil, domain.ErrFulfillmentNotFound
+}
+func (f *fakeFulfillmentRepo) FindByIDForUpdate(ctx context.Context, tenantID, id string) (*domain.Fulfillment, error) {
+	return nil, domain.ErrFulfillmentNotFound
+}
+func (f *fakeFulfillmentRepo) FindByOrderID(ctx context.Context, tenantID, orderID string) (*domain.Fulfillment, error) {
+	return nil, domain.ErrFulfillmentNotFound
+}
+func (f *fakeFulfillmentRepo) FindByReservationID(ctx context.Context, tenantID, reservationID string) (*domain.Fulfillment, error) {
+	return nil, domain.ErrFulfillmentNotFound
+}
+func (f *fakeFulfillmentRepo) FindByAssignedTo(ctx context.Context, tenantID, actorID string, status *domain.FulfillmentStatus) ([]*domain.Fulfillment, error) {
+	return nil, nil
+}
+func (f *fakeFulfillmentRepo) Update(ctx context.Context, fulfillment *domain.Fulfillment) error {
+	return nil
+}
+
+type fakeAuditLogger struct{}
+
+func (f *fakeAuditLogger) Record(ctx context.Context, entry domain.AuditEntry) error { return nil }

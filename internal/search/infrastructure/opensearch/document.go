@@ -103,8 +103,9 @@ func (s *DocumentStore) BulkIndexDocuments(ctx context.Context, docs []*projecti
 	}
 
 	req := opensearchapi.BulkRequest{
-		Index: s.config.Index,
-		Body:  &body,
+		Index:   s.config.Index,
+		Body:    &body,
+		Refresh: "wait_for",
 	}
 
 	resp, err := req.Do(ctx, s.client.client)

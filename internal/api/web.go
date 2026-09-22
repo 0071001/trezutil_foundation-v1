@@ -62,6 +62,136 @@ func (h *WebHandler) handleAPIProxy(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `{"status":"ok","message":"API proxy ready"}`)
 }
 
+// HandleAPIRoutes routes API requests to the appropriate handlers.
+func (h *WebHandler) HandleAPIRoutes(
+	inventoryHandler InventoryHandlerInterface,
+	fulfillmentHandler FulfillmentHandlerInterface,
+	orderHandler OrderHandlerInterface,
+	providerHandler ProviderHandlerInterface,
+	verticalPackHandler VerticalPackHandlerInterface,
+	w http.ResponseWriter, r *http.Request) {
+
+	path := r.URL.Path
+	method := r.Method
+
+	// Inventory routes
+	if strings.HasPrefix(path, "/api/v1/inventory") {
+		switch {
+		case path == "/api/v1/inventory" && method == "GET":
+			inventoryHandler.ListInventory(w, r)
+			return
+		case strings.HasPrefix(path, "/api/v1/inventory/") && method == "GET":
+			inventoryHandler.GetInventory(w, r)
+			return
+		}
+	}
+
+	// Fulfillment routes
+	if strings.HasPrefix(path, "/api/v1/fulfillments") {
+		switch {
+		case strings.HasPrefix(path, "/api/v1/fulfillments/") && strings.HasSuffix(path, "/transition") && method == "POST":
+			fulfillmentHandler.TransitionFulfillment(w, r)
+			return
+		case strings.HasPrefix(path, "/api/v1/fulfillments/") && strings.HasSuffix(path, "/assign") && method == "POST":
+			fulfillmentHandler.AssignFulfillment(w, r)
+			return
+		case strings.HasPrefix(path, "/api/v1/fulfillments/") && strings.HasSuffix(path, "/tracking") && method == "POST":
+			fulfillmentHandler.UpdateTracking(w, r)
+			return
+		case strings.HasPrefix(path, "/api/v1/fulfillments/") && method == "GET":
+			fulfillmentHandler.GetFulfillment(w, r)
+			return
+		}
+	}
+
+	// Order fulfillment route
+	if strings.HasPrefix(path, "/api/v1/orders/") && strings.HasSuffix(path, "/fulfillment") && method == "GET" {
+		fulfillmentHandler.GetFulfillmentByOrder(w, r)
+		return
+	}
+
+	// Order confirm route
+	if strings.HasPrefix(path, "/api/v1/orders/") && strings.HasSuffix(path, "/confirm") && method == "POST" {
+		orderHandler.ConfirmOrder(w, r)
+		return
+	}
+
+	// Reservation fulfillment route
+	if strings.HasPrefix(path, "/api/v1/reservations/") && strings.HasSuffix(path, "/fulfillment") && method == "GET" {
+		fulfillmentHandler.GetFulfillmentByReservation(w, r)
+		return
+	}
+
+	// Provider routes
+	if strings.HasPrefix(path, "/api/v1/providers") {
+		switch {
+		case path == "/api/v1/providers" && method == "GET":
+			providerHandler.ListProvidersH(w, r)
+			return
+		case path == "/api/v1/providers" && method == "POST":
+			providerHandler.CreateProviderH(w, r)
+			return
+		case strings.HasPrefix(path, "/api/v1/providers/") && strings.HasSuffix(path, "/enable") && method == "POST":
+			providerHandler.EnableProviderH(w, r)
+			return
+		case strings.HasPrefix(path, "/api/v1/providers/") && strings.HasSuffix(path, "/disable") && method == "POST":
+			providerHandler.DisableProviderH(w, r)
+			return
+		case strings.HasPrefix(path, "/api/v1/providers/") && strings.HasSuffix(path, "/capabilities") && method == "GET":
+			providerHandler.GetProviderCapabilitiesH(w, r)
+			return
+		case strings.HasPrefix(path, "/api/v1/providers/") && method == "GET":
+			providerHandler.GetProviderH(w, r)
+			return
+		}
+	}
+
+	// Vertical pack routes
+	if strings.HasPrefix(path, "/api/v1/packs") {
+		HandleVerticalPacksRoutes(verticalPackHandler, w, r)
+		return
+	}
+
+	// Not found
+	writeJSON(w, ErrorResponse{Error: Error{Code: "NOT_FOUND", Message: "Route not found"}}, http.StatusNotFound)
+}
+
+// APIHandler is a minimal interface for routing API requests.
+type APIHandler interface {
+	ServeHTTP(w http.ResponseWriter, r *http.Request)
+}
+
+// InventoryHandlerInterface defines inventory API methods.
+type InventoryHandlerInterface interface {
+	ListInventory(w http.ResponseWriter, r *http.Request)
+	GetInventory(w http.ResponseWriter, r *http.Request)
+}
+
+// FulfillmentHandlerInterface defines fulfillment API methods.
+type FulfillmentHandlerInterface interface {
+	GetFulfillment(w http.ResponseWriter, r *http.Request)
+	GetFulfillmentByOrder(w http.ResponseWriter, r *http.Request)
+	GetFulfillmentByReservation(w http.ResponseWriter, r *http.Request)
+	TransitionFulfillment(w http.ResponseWriter, r *http.Request)
+	AssignFulfillment(w http.ResponseWriter, r *http.Request)
+	UpdateTracking(w http.ResponseWriter, r *http.Request)
+}
+
+// OrderHandlerInterface defines order API methods.
+type OrderHandlerInterface interface {
+	ConfirmOrder(w http.ResponseWriter, r *http.Request)
+}
+
+// ProviderHandlerInterface defines provider API methods.
+type ProviderHandlerInterface interface {
+	ListProvidersH(w http.ResponseWriter, r *http.Request)
+	GetProviderH(w http.ResponseWriter, r *http.Request)
+	CreateProviderH(w http.ResponseWriter, r *http.Request)
+	EnableProviderH(w http.ResponseWriter, r *http.Request)
+	DisableProviderH(w http.ResponseWriter, r *http.Request)
+	GetProviderCapabilitiesH(w http.ResponseWriter, r *http.Request)
+}
+
 // WebContext provides web-specific context for handlers.
 type WebContext struct {
 	UserID string

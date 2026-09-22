@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"crypto/rand"
 	"database/sql"
 	"fmt"
 	"os"
@@ -29,7 +30,7 @@ type TestDB struct {
 func NewTestDB(tb *testing.T) *TestDB {
 	tb.Helper()
 
-	dsn := fmt.Sprintf("host=localhost port=5432 user=openpg password=openpgpwd dbname=postgres sslmode=disable")
+	dsn := fmt.Sprintf("host=localhost port=5432 user=trezutil password=trezutil dbname=postgres sslmode=disable")
 	adminDB, err := sql.Open("postgres", dsn)
 	if err != nil {
 		tb.Fatalf("failed to connect to postgres admin DB: %v", err)
@@ -46,7 +47,7 @@ func NewTestDB(tb *testing.T) *TestDB {
 		tb.Fatalf("failed to create test database: %v", err)
 	}
 
-	testDSN := fmt.Sprintf("host=localhost port=5432 user=openpg password=openpgpwd dbname=%s sslmode=disable", testDBName)
+	testDSN := fmt.Sprintf("host=localhost port=5432 user=trezutil password=trezutil dbname=%s sslmode=disable", testDBName)
 	db, err := sql.Open("postgres", testDSN)
 	if err != nil {
 		tb.Fatalf("failed to connect to test database: %v", err)
@@ -65,7 +66,7 @@ func (t *TestDB) Close() {
 		t.DB.Close()
 	}
 
-	dsn := fmt.Sprintf("host=localhost port=5432 user=openpg password=openpgpwd dbname=postgres sslmode=disable")
+	dsn := fmt.Sprintf("host=localhost port=5432 user=trezutil password=trezutil dbname=postgres sslmode=disable")
 	adminDB, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return
@@ -161,4 +162,18 @@ func (t *TestDB) Cleanup(tb *testing.T) {
 			tb.Fatalf("failed to truncate %s: %v", table, err)
 		}
 	}
+}
+
+// uuid generates a random UUID v4 string for use in tests.
+func uuid() string {
+	b := make([]byte, 16)
+	rand.Read(b)
+	b[6] = (b[6] & 0x0f) | 0x40
+	b[8] = (b[8] & 0x3f) | 0x80
+	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:16])
+}
+
+// TestDB helper to get a test UUID for test IDs.
+func testUUID() string {
+	return uuid()
 }

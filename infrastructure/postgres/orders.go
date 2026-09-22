@@ -112,6 +112,30 @@ func (r *OrderRepository) FindByID(ctx context.Context, orderID string) (*domain
 	return unmarshalOrder(u), nil
 }
 
+// FindByIDForUpdate retrieves an order by ID with row-level lock.
+func (r *OrderRepository) FindByIDForUpdate(ctx context.Context, orderID string) (*domain.Order, error) {
+	query := `SELECT id, organization_id, seller_id, customer_id, store_id, items, total_amount, currency, status, pricing_snapshot, payment_reference, delivery_reference, customer_reference, seller_reference, version, created_at, updated_at
+	          FROM orders WHERE id = $1 FOR UPDATE`
+	row := r.db.QueryRowContext(ctx, query, orderID)
+
+	var u orderRow
+	err := row.Scan(
+		&u.ID, &u.OrganizationID, &u.SellerID, &u.CustomerID, &u.StoreID,
+		&u.ItemsJSON, &u.TotalAmount, &u.Currency, &u.Status,
+		&u.PricingSnapshotJSON, &u.PaymentReferenceJSON, &u.DeliveryReferenceJSON,
+		&u.CustomerReferenceJSON, &u.SellerReferenceJSON,
+		&u.Version, &u.CreatedAt, &u.UpdatedAt,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("order not found: %s", orderID)
+		}
+		return nil, fmt.Errorf("failed to find order for update: %w", err)
+	}
+
+	return unmarshalOrder(u), nil
+}
+
 // Update updates an existing order in the database.
 func (r *OrderRepository) Update(ctx context.Context, order *domain.Order) error {
 	itemsJSON, err := json.Marshal(order.Items)

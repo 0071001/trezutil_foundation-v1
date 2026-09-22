@@ -7,19 +7,11 @@ import (
 )
 
 func TestIndexManager_VersionedIndexNaming(t *testing.T) {
-	config := Config{
-		Index:        "trezutil-listings-v1",
-		Alias:        "trezutil-listings",
-		IndexVersion: "v1",
-		URL:          "http://localhost:9200",
-	}
+	config := testConfig
+	config.Alias = "trezutil-listings"
+	config.Index = "trezutil-listings-v1"
 
-	client, err := NewClient(config)
-	if err != nil {
-		t.Skipf("OpenSearch not available: %v", err)
-	}
-
-	manager := NewIndexManager(client, config)
+	manager := NewIndexManager(nil, config)
 
 	if !manager.IsVersionedIndex("trezutil-listings-v1") {
 		t.Error("expected trezutil-listings-v1 to be versioned")
@@ -100,22 +92,27 @@ func TestConfig_FromEnvironment(t *testing.T) {
 }
 
 func TestIndexManager_SwitchAlias(t *testing.T) {
-	config := Config{
-		Index: "trezutil-listings-v1",
-		Alias: "trezutil-listings",
-		URL:   "http://localhost:9200",
-	}
+	adapter := ensureTestIndex(t)
 
-	client, err := NewClient(config)
+	manager := adapter.indexManager
+	oldIndex := adapter.config.Index
+
+	newIndex, err := manager.CreateVersionedIndex(context.Background(), "v2")
 	if err != nil {
-		t.Skipf("OpenSearch not available: %v", err)
+		t.Fatalf("failed to create versioned index: %v", err)
 	}
 
-	manager := NewIndexManager(client, config)
+	if err := manager.SwitchAlias(context.Background(), oldIndex, newIndex); err != nil {
+		t.Fatalf("failed to switch alias: %v", err)
+	}
 
-	err = manager.SwitchAlias(context.Background(), "trezutil-listings-v1", "trezutil-listings-v2")
-	if err == nil {
-		t.Error("expected error when switching to non-existent index")
+	resolvedIndex, err := manager.GetIndexForAlias(context.Background())
+	if err != nil {
+		t.Fatalf("failed to get index for alias: %v", err)
+	}
+
+	if resolvedIndex != newIndex {
+		t.Errorf("expected alias to point to %s, got %s", newIndex, resolvedIndex)
 	}
 }
 
@@ -130,5 +127,57 @@ func TestConfig_NoHardcodedCredentials(t *testing.T) {
 	}
 	if config.URL != "http://localhost:9200" {
 		t.Errorf("unexpected default URL: %s", config.URL)
+	}
+}
+
+func TestIndexManager_EnsureIndex(t *testing.T) {
+	adapter := ensureTestIndex(t)
+
+	exists, err := adapter.client.IndexExists(context.Background(), adapter.config.Index)
+	if err != nil {
+		t.Fatalf("failed to check index existence: %v", err)
+	}
+	if !exists {
+		t.Error("expected index to exist after EnsureIndex")
+	}
+
+	indices, err := adapter.client.GetAlias(context.Background(), adapter.config.AliasName())
+	if err != nil {
+		t.Fatalf("failed to get alias: %v", err)
+	}
+	if len(indices) == 0 {
+		t.Error("expected alias to exist after EnsureIndex")
+	}
+}
+
+func TestIndexManager_EnsureIndex_Idempotent(t *testing.T) {
+	adapter := ensureTestIndex(t)
+
+	if err := adapter.EnsureIndex(context.Background()); err != nil {
+		t.Fatalf("second EnsureIndex should be idempotent: %v", err)
+	}
+}
+
+func TestIndexManager_MappingContainsExpectedFields(t *testing.T) {
+	config := testConfig
+	manager := NewIndexManager(nil, config)
+
+	mapping := manager.buildMapping()
+	props, ok := mapping["properties"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected properties in mapping")
+	}
+
+	requiredFields := []string{
+		"listing_id", "organization_id", "seller_id", "store_id",
+		"title", "description", "price_amount", "price_currency",
+		"availability_status", "category_id", "category_path",
+		"listing_type", "location", "status", "published_at",
+	}
+
+	for _, field := range requiredFields {
+		if _, ok := props[field]; !ok {
+			t.Errorf("expected field %s in mapping", field)
+		}
 	}
 }

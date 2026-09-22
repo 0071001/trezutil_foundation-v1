@@ -675,12 +675,215 @@ paths:
           description: Acknowledged
         '400':
           $ref: '#/components/responses/BadRequest'
+  /admin/ai/providers:
+    get:
+      summary: List AI providers
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: AI providers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIProviderPage'
+  /admin/ai/models:
+    get:
+      summary: List AI models
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: AI models
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIModelPage'
+  /admin/ai/health:
+    get:
+      summary: Check AI provider health
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: AI health status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIHealthResponse'
+  /internal/api/v1/ai/interpret:
+    post:
+      summary: Interpret user message and produce structured intent
+      description: Internal endpoint — requires service-to-service authentication
+      security:
+        - internalService: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AIInterpretRequest'
+      responses:
+        '200':
+          description: Interpretation result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AIInterpretResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+         '429':
+           description: Rate limited or insufficient credits
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
+  /packs:
+    get:
+      summary: List all vertical packs
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of all vertical packs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VerticalPack'
+  /packs/{pack_code}:
+    get:
+      summary: Get a specific vertical pack
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: pack_code
+          required: true
+          schema:
+            type: string
+          description: Pack code (e.g., ECOMMERCE, BOOKING, SERVICES)
+      responses:
+        '200':
+          description: Pack details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerticalPack'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /packs/{pack_code}/enable:
+    post:
+      summary: Enable a pack for an organization
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: pack_code
+          required: true
+          schema:
+            type: string
+          description: Pack code to enable
+        - in: query
+          name: org_id
+          required: true
+          schema:
+            type: string
+          description: Organization ID
+      responses:
+        '200':
+          description: Pack enabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackActionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+  /packs/{pack_code}/disable:
+    post:
+      summary: Disable a pack for an organization
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: pack_code
+          required: true
+          schema:
+            type: string
+          description: Pack code to disable
+        - in: query
+          name: org_id
+          required: true
+          schema:
+            type: string
+          description: Organization ID
+      responses:
+        '200':
+          description: Pack disabled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PackActionResponse'
+  /packs/org:
+    get:
+      summary: List enabled packs for an organization
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: org_id
+          required: true
+          schema:
+            type: string
+          description: Organization ID
+      responses:
+        '200':
+          description: Enabled packs for organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrgPacksResponse'
+  /packs/action:
+    get:
+      summary: Check if an action is supported for an organization
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: org_id
+          required: true
+          schema:
+            type: string
+          description: Organization ID
+        - in: query
+          name: action
+          required: true
+          schema:
+            type: string
+          description: Action type (e.g., CREATE_ORDER, CREATE_RESERVATION)
+      responses:
+        '200':
+          description: Action support check result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ActionCheckResponse'
 components:
   securitySchemes:
     bearerAuth:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    internalService:
+      type: apiKey
+      in: header
+      name: X-Internal-Service-Token
+      description: Service-to-service authentication token for internal endpoints
   parameters:
     ListingId:
       in: path
@@ -804,7 +1007,141 @@ components:
         buyer_id: { type: string, format: uuid }
         status: { type: string }
         total: { $ref: '#/components/schemas/Money' }
-    ErrorResponse:
+    VerticalPack:
+    type: object
+    properties:
+      id:
+        type: string
+        description: Pack identifier
+      code:
+        type: string
+        description: Pack code (ECOMMERCE, BOOKING, SERVICES)
+      name:
+        type: string
+        description: Human-readable pack name
+      description:
+        type: string
+        description: Pack description
+      version:
+        $ref: '#/components/schemas/PackVersion'
+      status:
+        type: string
+        enum: [ACTIVE, INACTIVE, DEPRECATED]
+        description: Pack lifecycle status
+      capabilities:
+        type: array
+        items:
+          type: string
+        description: Capabilities provided by this pack
+      supported_actions:
+        type: array
+        items:
+          type: string
+        description: Action types supported by this pack
+      policies:
+        type: array
+        items:
+          $ref: '#/components/schemas/PackPolicy'
+        description: Pack-level policies
+      workflow:
+        $ref: '#/components/schemas/PackWorkflow'
+        description: Workflow definition for the pack
+      ui_metadata:
+        $ref: '#/components/schemas/PackUIMetadata'
+        description: UI routing and display metadata
+      ai_profile:
+        type: string
+        description: AI specialist code for this pack
+      created_at:
+        type: integer
+        description: Unix timestamp of creation
+      updated_at:
+        type: integer
+        description: Unix timestamp of last update
+  PackVersion:
+    type: object
+    properties:
+      major:
+        type: integer
+      minor:
+        type: integer
+      patch:
+        type: integer
+  PackPolicy:
+    type: object
+    properties:
+      key:
+        type: string
+      value:
+        type: string
+  PackWorkflow:
+    type: object
+    properties:
+      name:
+        type: string
+      entry_step:
+        type: string
+      steps:
+        type: array
+        items:
+          $ref: '#/components/schemas/PackWorkflowStep'
+  PackWorkflowStep:
+    type: object
+    properties:
+      name:
+        type: string
+      description:
+        type: string
+      action:
+        type: string
+      required:
+        type: boolean
+      next_steps:
+        type: array
+        items:
+          type: string
+  PackUIMetadata:
+    type: object
+    properties:
+      route_prefix:
+        type: string
+      icon:
+        type: string
+      color:
+        type: string
+      order:
+        type: integer
+  PackActionResponse:
+    type: object
+    properties:
+      status:
+        type: string
+        example: enabled
+      pack_code:
+        type: string
+      org_id:
+        type: string
+  OrgPacksResponse:
+    type: object
+    properties:
+      org_id:
+        type: string
+      packs:
+        type: array
+        items:
+          type: string
+  ActionCheckResponse:
+    type: object
+    properties:
+      org_id:
+        type: string
+      action:
+        type: string
+      allowed:
+        type: boolean
+      checked_at:
+        type: integer
+  ErrorResponse:
       type: object
       required: [error]
       properties:
@@ -1094,3 +1431,106 @@ components:
         total: { $ref: '#/components/schemas/Money' }
         currency: { type: string }
         created_at: { type: integer, format: int64 }
+    AIProvider:
+      type: object
+      required: [id, name, type, status]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string }
+        name: { type: string }
+        type: { type: string }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    AIProviderPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AIProvider' }
+        total: { type: integer }
+    AIModel:
+      type: object
+      required: [model_id, provider_id, name, capabilities, status]
+      properties:
+        model_id: { type: string }
+        provider_id: { type: string, format: uuid }
+        name: { type: string }
+        capabilities:
+          type: array
+          items: { type: string, enum: [TEXT_GENERATION, TEXT_CLASSIFICATION, STRUCTURED_OUTPUT, VISION] }
+        context_window: { type: integer, minimum: 1024 }
+        supports_tools: { type: boolean }
+        supports_structured: { type: boolean }
+        status: { type: string, enum: [ACTIVE, INACTIVE] }
+        priority: { type: integer, minimum: 0, default: 0 }
+    AIModelPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AIModel' }
+        total: { type: integer }
+    AIHealthStatus:
+      type: object
+      properties:
+        provider_id: { type: string, format: uuid }
+        provider_name: { type: string }
+        status: { type: string, enum: [healthy, unhealthy, unknown] }
+        models:
+          type: array
+          items:
+            type: object
+            properties:
+              model_id: { type: string }
+              status: { type: string, enum: [available, unavailable] }
+    AIHealthResponse:
+      type: object
+      properties:
+        providers:
+          type: array
+          items: { $ref: '#/components/schemas/AIHealthStatus' }
+    AIIntentOutput:
+      type: object
+      required: [intent, confidence, parameters]
+      properties:
+        intent:
+          type: string
+          description: CommerceActionType value
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+        parameters:
+          type: object
+          additionalProperties: true
+        explanation:
+          type: string
+          description: Brief explanation of classification
+    AIInterpretRequest:
+      type: object
+      required: [conversation_id, message]
+      properties:
+        conversation_id: { type: string, format: uuid }
+        message: { type: string }
+    AIInterpretResponse:
+      type: object
+      properties:
+        intent: { type: string }
+        confidence: { type: number }
+        parameters:
+          type: object
+          additionalProperties: true
+        action_result:
+          type: object
+          properties:
+            status: { type: string }
+            message_key: { type: string }
+            data: { type: object, additionalProperties: true }
+            requires_confirmation: { type: boolean }
+        response:
+          type: object
+          properties:
+            text: { type: string }
+            cards: { type: array, items: { type: object } }
+            confirmation: { type: object }

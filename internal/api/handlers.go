@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/trezutil/trezutil/internal/application/provider"
 	"github.com/trezutil/trezutil/internal/domain"
 )
 
@@ -77,6 +78,7 @@ type OrderUseCases interface {
 	CreateOrder(ctx context.Context, actorID string, listingID string, quantity int) (*domain.Order, error)
 	GetOrder(ctx context.Context, actorID string, orderID string) (*domain.Order, error)
 	CancelOrder(ctx context.Context, actorID string, orderID string) error
+	ConfirmOrder(ctx context.Context, actorID string, orderID string) (*domain.Order, error)
 }
 
 // ReservationUseCases interface for reservation operations.
@@ -89,6 +91,16 @@ type ReservationUseCases interface {
 // AvailabilityUseCases interface for availability operations.
 type AvailabilityUseCases interface {
 	CheckAvailability(ctx context.Context, actorID string, query domain.AvailabilityQuery) (domain.AvailabilityResult, error)
+}
+
+// ProviderUseCases interface for provider operations.
+type ProviderUseCases interface {
+	CreateProvider(ctx context.Context, actorID string, orgID string, req provider.CreateProviderRequest) (*provider.ProviderResponse, error)
+	GetProvider(ctx context.Context, actorID string, orgID string, providerID string) (*provider.ProviderResponse, error)
+	ListProviders(ctx context.Context, actorID string, orgID string, offset, limit int) ([]*provider.ProviderResponse, error)
+	EnableProvider(ctx context.Context, actorID string, orgID string, providerID string) error
+	DisableProvider(ctx context.Context, actorID string, orgID string, providerID string) error
+	GetProviderCapabilities(ctx context.Context, actorID string, orgID string, providerID string) ([]string, error)
 }
 
 // OrganizationHandler handles organization HTTP requests.
@@ -502,6 +514,39 @@ func (h *OrderHandler) CancelOrderH(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]string{"order_id": orderID, "status": "cancelled"}, http.StatusOK)
 }
 
+// ConfirmOrderH handles POST /v1/orders/{order_id}/confirm
+func (h *OrderHandler) ConfirmOrderH(w http.ResponseWriter, r *http.Request) {
+	orderID := r.URL.Query().Get("order_id")
+	if orderID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_ORDER_ID", Message: "Order ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	actorID := r.URL.Query().Get("user_id")
+	if actorID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
+		return
+	}
+
+	order, err := h.orderUseCases.ConfirmOrder(r.Context(), actorID, orderID)
+	if err != nil {
+		switch err {
+		case domain.ErrOrderNotFound:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_NOT_FOUND", Message: "Order not found"}}, http.StatusNotFound)
+		case domain.ErrInsufficientPermissions:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
+		default:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "CONFIRM_ORDER_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	writeJSON(w, map[string]interface{}{
+		"order_id": order.ID,
+		"status":   string(order.Status),
+	}, http.StatusOK)
+}
+
 // ListingHandler handles listing HTTP requests.
 type ListingHandler struct {
 	listingUseCases ListingUseCases
@@ -875,4 +920,273 @@ func (h *ReservationHandler) CheckAvailabilityH(w http.ResponseWriter, r *http.R
 	}
 
 	writeJSON(w, result, http.StatusOK)
+}
+
+// InventoryUseCases interface for inventory operations.
+type InventoryUseCases interface {
+	GetInventory(ctx context.Context, tenantID, listingID string) (*domain.InventoryResource, error)
+	GetInventoryByID(ctx context.Context, tenantID, id string) (*domain.InventoryResource, error)
+	ListInventory(ctx context.Context, tenantID string, offset, limit int) ([]*domain.InventoryResource, error)
+	AdjustInventory(ctx context.Context, actorID, tenantID, listingID string, deltaTotal, deltaReserved, deltaConsumed int64, reason string, idempotencyKey string) (*domain.InventoryResource, error)
+}
+
+// CapacityUseCases interface for capacity operations.
+type CapacityUseCases interface {
+	GetCapacityUnits(ctx context.Context, tenantID, inventoryID string, startAt, endAt int64) ([]*domain.CapacityUnit, error)
+	CheckCapacity(ctx context.Context, tenantID, listingID string, startAt, endAt int64, quantity int) (domain.CapacityResult, error)
+	ReserveCapacity(ctx context.Context, tenantID, listingID string, startAt, endAt int64, quantity int64, reservationID string) error
+	ReleaseCapacity(ctx context.Context, tenantID, listingID string, startAt, endAt int64, quantity int64, reservationID string) error
+}
+
+// FulfillmentUseCases interface for fulfillment operations.
+type FulfillmentUseCases interface {
+	GetFulfillment(ctx context.Context, tenantID, id string) (*domain.Fulfillment, error)
+	GetFulfillmentByOrder(ctx context.Context, tenantID, orderID string) (*domain.Fulfillment, error)
+	GetFulfillmentByReservation(ctx context.Context, tenantID, reservationID string) (*domain.Fulfillment, error)
+	TransitionFulfillment(ctx context.Context, actorID, tenantID, fulfillmentID string, targetStatus domain.FulfillmentStatus, idempotencyKey string) (*domain.Fulfillment, error)
+	AssignFulfillment(ctx context.Context, actorID, tenantID, fulfillmentID string, idempotencyKey string) (*domain.Fulfillment, error)
+	UpdateTracking(ctx context.Context, actorID, tenantID, fulfillmentID, trackingRef string, idempotencyKey string) (*domain.Fulfillment, error)
+}
+
+// InventoryHandler handles inventory HTTP requests.
+type InventoryHandler struct {
+	inventoryUseCases InventoryUseCases
+	listingUseCases   ListingUseCases
+}
+
+func NewInventoryHandler(inventoryUseCases InventoryUseCases, listingUseCases ListingUseCases) *InventoryHandler {
+	return &InventoryHandler{
+		inventoryUseCases: inventoryUseCases,
+		listingUseCases:   listingUseCases,
+	}
+}
+
+func (h *InventoryHandler) ListInventory(w http.ResponseWriter, r *http.Request) {
+	tenantID := r.URL.Query().Get("tenant_id")
+	if tenantID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_TENANT_ID", Message: "tenant_id is required"}}, http.StatusBadRequest)
+		return
+	}
+
+	offset, limit := 0, 20
+	fmt.Sscanf(r.URL.Query().Get("offset"), "%d", &offset)
+	fmt.Sscanf(r.URL.Query().Get("limit"), "%d", &limit)
+
+	resources, err := h.inventoryUseCases.ListInventory(r.Context(), tenantID, offset, limit)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVENTORY_LIST_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, map[string]interface{}{
+		"data": resources,
+		"pagination": map[string]interface{}{
+			"offset": offset,
+			"limit":  limit,
+		},
+	}, http.StatusOK)
+}
+
+func (h *InventoryHandler) GetInventory(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/v1/inventory/")
+	tenantID := r.URL.Query().Get("tenant_id")
+	if tenantID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_TENANT_ID", Message: "tenant_id is required"}}, http.StatusBadRequest)
+		return
+	}
+
+	resource, err := h.inventoryUseCases.GetInventoryByID(r.Context(), tenantID, id)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVENTORY_NOT_FOUND", Message: err.Error()}}, http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, resource, http.StatusOK)
+}
+
+// FulfillmentHandler handles fulfillment HTTP requests.
+type FulfillmentHandler struct {
+	fulfillmentUseCases FulfillmentUseCases
+}
+
+func NewFulfillmentHandler(fulfillmentUseCases FulfillmentUseCases) *FulfillmentHandler {
+	return &FulfillmentHandler{
+		fulfillmentUseCases: fulfillmentUseCases,
+	}
+}
+
+func (h *FulfillmentHandler) GetFulfillment(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimPrefix(r.URL.Path, "/v1/fulfillments/")
+	tenantID := r.URL.Query().Get("tenant_id")
+	if tenantID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_TENANT_ID", Message: "tenant_id is required"}}, http.StatusBadRequest)
+		return
+	}
+
+	fulfillment, err := h.fulfillmentUseCases.GetFulfillment(r.Context(), tenantID, id)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "FULFILLMENT_NOT_FOUND", Message: err.Error()}}, http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, fulfillment, http.StatusOK)
+}
+
+func (h *FulfillmentHandler) GetFulfillmentByOrder(w http.ResponseWriter, r *http.Request) {
+	orderID := strings.TrimPrefix(r.URL.Path, "/v1/orders/")
+	orderID = strings.TrimSuffix(orderID, "/fulfillment")
+	tenantID := r.URL.Query().Get("tenant_id")
+	if tenantID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_TENANT_ID", Message: "tenant_id is required"}}, http.StatusBadRequest)
+		return
+	}
+
+	fulfillment, err := h.fulfillmentUseCases.GetFulfillmentByOrder(r.Context(), tenantID, orderID)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "FULFILLMENT_NOT_FOUND", Message: err.Error()}}, http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, fulfillment, http.StatusOK)
+}
+
+func (h *FulfillmentHandler) GetFulfillmentByReservation(w http.ResponseWriter, r *http.Request) {
+	reservationID := strings.TrimPrefix(r.URL.Path, "/v1/reservations/")
+	reservationID = strings.TrimSuffix(reservationID, "/fulfillment")
+	tenantID := r.URL.Query().Get("tenant_id")
+	if tenantID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_TENANT_ID", Message: "tenant_id is required"}}, http.StatusBadRequest)
+		return
+	}
+
+	fulfillment, err := h.fulfillmentUseCases.GetFulfillmentByReservation(r.Context(), tenantID, reservationID)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "FULFILLMENT_NOT_FOUND", Message: err.Error()}}, http.StatusNotFound)
+		return
+	}
+
+	writeJSON(w, fulfillment, http.StatusOK)
+}
+
+func (h *FulfillmentHandler) TransitionFulfillment(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	prefix := "/v1/fulfillments/"
+	suffix := "/transition"
+	id := ""
+	if strings.HasPrefix(path, prefix) && strings.HasSuffix(path, suffix) {
+		id = path[len(prefix) : len(path)-len(suffix)]
+	}
+	if id == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_FULFILLMENT_ID", Message: "Fulfillment ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		TargetStatus   string `json:"target_status"`
+		IdempotencyKey string `json:"idempotency_key"`
+	}
+	if err := readJSONBody(r, &req); err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request body"}}, http.StatusBadRequest)
+		return
+	}
+
+	tenantID := r.URL.Query().Get("tenant_id")
+	actorID := r.URL.Query().Get("user_id")
+	if actorID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
+		return
+	}
+
+	targetStatus := domain.FulfillmentStatus(req.TargetStatus)
+	if !domain.IsValidFulfillmentStatus(targetStatus) {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_STATUS", Message: "Invalid target status"}}, http.StatusBadRequest)
+		return
+	}
+
+	fulfillment, err := h.fulfillmentUseCases.TransitionFulfillment(r.Context(), actorID, tenantID, id, targetStatus, req.IdempotencyKey)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "FULFILLMENT_TRANSITION_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, fulfillment, http.StatusOK)
+}
+
+func (h *FulfillmentHandler) AssignFulfillment(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	prefix := "/v1/fulfillments/"
+	suffix := "/assign"
+	id := ""
+	if strings.HasPrefix(path, prefix) && strings.HasSuffix(path, suffix) {
+		id = path[len(prefix) : len(path)-len(suffix)]
+	}
+	if id == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_FULFILLMENT_ID", Message: "Fulfillment ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		ActorID        string `json:"actor_id"`
+		IdempotencyKey string `json:"idempotency_key"`
+	}
+	if err := readJSONBody(r, &req); err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request body"}}, http.StatusBadRequest)
+		return
+	}
+
+	tenantID := r.URL.Query().Get("tenant_id")
+	actorID := req.ActorID
+	if actorID == "" {
+		actorID = r.URL.Query().Get("user_id")
+	}
+	if actorID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
+		return
+	}
+
+	fulfillment, err := h.fulfillmentUseCases.AssignFulfillment(r.Context(), actorID, tenantID, id, req.IdempotencyKey)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "FULFILLMENT_ASSIGN_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, fulfillment, http.StatusOK)
+}
+
+func (h *FulfillmentHandler) UpdateTracking(w http.ResponseWriter, r *http.Request) {
+	path := r.URL.Path
+	prefix := "/v1/fulfillments/"
+	suffix := "/tracking"
+	id := ""
+	if strings.HasPrefix(path, prefix) && strings.HasSuffix(path, suffix) {
+		id = path[len(prefix) : len(path)-len(suffix)]
+	}
+	if id == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_FULFILLMENT_ID", Message: "Fulfillment ID required"}}, http.StatusBadRequest)
+		return
+	}
+
+	var req struct {
+		TrackingRef    string `json:"tracking_ref"`
+		IdempotencyKey string `json:"idempotency_key"`
+	}
+	if err := readJSONBody(r, &req); err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request body"}}, http.StatusBadRequest)
+		return
+	}
+
+	tenantID := r.URL.Query().Get("tenant_id")
+	actorID := r.URL.Query().Get("user_id")
+	if actorID == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
+		return
+	}
+
+	fulfillment, err := h.fulfillmentUseCases.UpdateTracking(r.Context(), actorID, tenantID, id, req.TrackingRef, req.IdempotencyKey)
+	if err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "FULFILLMENT_TRACKING_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		return
+	}
+
+	writeJSON(w, fulfillment, http.StatusOK)
 }

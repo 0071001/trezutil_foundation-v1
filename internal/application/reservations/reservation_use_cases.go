@@ -24,6 +24,9 @@ type ReservationUseCasesImpl struct {
 	userRepo           domain.UserRepository
 	orgRepo            domain.OrganizationRepository
 	provider           domain.AvailabilityProvider
+	capacityRepo       domain.CapacityRepository
+	inventoryRepo      domain.InventoryRepository
+	fulfillmentRepo    domain.FulfillmentRepository
 	auditLogger        domain.AuditLogger
 	confirmationPolicy ConfirmationPolicy
 }
@@ -42,6 +45,9 @@ func NewReservationUseCases(
 	userRepo domain.UserRepository,
 	orgRepo domain.OrganizationRepository,
 	provider domain.AvailabilityProvider,
+	capacityRepo domain.CapacityRepository,
+	inventoryRepo domain.InventoryRepository,
+	fulfillmentRepo domain.FulfillmentRepository,
 	auditLogger domain.AuditLogger,
 	confirmationPolicy ConfirmationPolicy,
 ) *ReservationUseCasesImpl {
@@ -52,6 +58,9 @@ func NewReservationUseCases(
 		userRepo:           userRepo,
 		orgRepo:            orgRepo,
 		provider:           provider,
+		capacityRepo:       capacityRepo,
+		inventoryRepo:      inventoryRepo,
+		fulfillmentRepo:    fulfillmentRepo,
 		auditLogger:        auditLogger,
 		confirmationPolicy: confirmationPolicy,
 	}
@@ -127,6 +136,32 @@ func (u *ReservationUseCasesImpl) CreateReservation(
 
 	now := time.Now().Unix()
 	reservation := domain.NewReservation(tenantID, actorID, listingID, startAt, endAt, quantity, partySize, now)
+	reservation.IdempotencyKey = idempotencyKey
+
+	// Reserve capacity units if capacity repo is available
+	if u.capacityRepo != nil {
+		if err := u.capacityRepo.ReserveCapacity(ctx, tenantID, listingID, startAt, endAt, int64(quantity), reservation.ID); err != nil {
+			return nil, fmt.Errorf("failed to reserve capacity: %w", err)
+		}
+	}
+
+	// Reserve inventory if inventory repo is available
+	if u.inventoryRepo != nil {
+		inv, err := u.inventoryRepo.FindByListingIDForUpdate(ctx, tenantID, listingID)
+		if err != nil {
+			// If no inventory resource exists, skip (non-inventory-controlled)
+			if err != domain.ErrInventoryNotFound {
+				return nil, err
+			}
+		} else {
+			if err := inv.Reserve(int64(quantity), now); err != nil {
+				return nil, fmt.Errorf("failed to reserve inventory: %w", err)
+			}
+			if err := u.inventoryRepo.Update(ctx, inv); err != nil {
+				return nil, fmt.Errorf("failed to update inventory: %w", err)
+			}
+		}
+	}
 
 	if !u.confirmationPolicy.RequiresConfirmation || u.confirmationPolicy.AutoConfirm {
 		if err := reservation.Confirm(now); err != nil {
@@ -136,6 +171,23 @@ func (u *ReservationUseCasesImpl) CreateReservation(
 
 	if err := u.reservationRepo.Create(ctx, reservation); err != nil {
 		return nil, fmt.Errorf("failed to create reservation: %w", err)
+	}
+
+	// Create fulfillment if needed for confirmed reservations
+	if u.fulfillmentRepo != nil && (reservation.Status == domain.ReservationStatusConfirmed || u.confirmationPolicy.AutoConfirm) {
+		ftype := u.inferFulfillmentType(listing)
+		if ftype != domain.FulfillmentTypeNone {
+			fulfillment := domain.NewFulfillment(
+				tenantID,
+				nil,
+				&reservation.ID,
+				ftype,
+				now,
+			)
+			if err := u.fulfillmentRepo.Create(ctx, fulfillment); err != nil {
+				return nil, fmt.Errorf("failed to create fulfillment: %w", err)
+			}
+		}
 	}
 
 	if u.auditLogger != nil {
@@ -200,6 +252,26 @@ func (u *ReservationUseCasesImpl) CancelReservation(ctx context.Context, actorID
 	now := time.Now().Unix()
 	if err := reservation.Cancel(now); err != nil {
 		return domain.ErrReservationCannotBeCancelled
+	}
+
+	// Release capacity
+	if u.capacityRepo != nil {
+		if err := u.capacityRepo.ReleaseCapacity(ctx, reservation.OrganizationID, reservation.ListingID, reservation.StartAt, reservation.EndAt, int64(reservation.Quantity), reservation.ID); err != nil {
+			return fmt.Errorf("failed to release capacity: %w", err)
+		}
+	}
+
+	// Release inventory if it was reserved
+	if u.inventoryRepo != nil {
+		inv, err := u.inventoryRepo.FindByListingIDForUpdate(ctx, reservation.OrganizationID, reservation.ListingID)
+		if err == nil {
+			if err := inv.Release(int64(reservation.Quantity), now); err != nil {
+				return fmt.Errorf("failed to release inventory: %w", err)
+			}
+			if err := u.inventoryRepo.Update(ctx, inv); err != nil {
+				return fmt.Errorf("failed to update inventory: %w", err)
+			}
+		}
 	}
 
 	if err := u.reservationRepo.Update(ctx, reservation); err != nil {
@@ -285,5 +357,18 @@ func (u *ReservationUseCasesImpl) canAccessReservation(ctx context.Context, rese
 }
 
 func (u *ReservationUseCasesImpl) findIdempotentReservation(ctx context.Context, actorID, listingID, idempotencyKey string) (*domain.Reservation, error) {
-	return nil, nil
+	return u.reservationRepo.FindByIdempotencyKey(ctx, idempotencyKey)
+}
+
+func (u *ReservationUseCasesImpl) inferFulfillmentType(listing *domain.Listing) domain.FulfillmentType {
+	switch listing.ListingType {
+	case domain.ListingTypeService:
+		return domain.FulfillmentTypeAppointment
+	case domain.ListingTypeRealEstate:
+		return domain.FulfillmentTypePropertyVisit
+	case domain.ListingTypeVehicle:
+		return domain.FulfillmentTypePickup
+	default:
+		return domain.FulfillmentTypeNone
+	}
 }

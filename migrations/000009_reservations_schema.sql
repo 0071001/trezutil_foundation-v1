@@ -11,7 +11,8 @@ CREATE TABLE IF NOT EXISTS reservations (
     end_at TIMESTAMP WITH TIME ZONE NOT NULL,
     quantity INTEGER NOT NULL DEFAULT 1,
     party_size INTEGER NOT NULL DEFAULT 1,
-    pricing_snapshot JSONB,
+     pricing_snapshot JSONB,
+    idempotency_key VARCHAR(255) UNIQUE,
     version BIGINT NOT NULL DEFAULT 1,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
@@ -32,7 +33,7 @@ ALTER TABLE reservations
 ADD CONSTRAINT no_overlapping_reservations
 EXCLUDE USING GIST (
     listing_id WITH =,
-    tsrange(start_at, end_at) WITH &&
+    tstzrange(start_at, end_at) WITH &&
 ) WHERE (status <> 'cancelled');
 
 CREATE INDEX IF NOT EXISTS idx_reservations_organization_id ON reservations(organization_id);
@@ -43,11 +44,13 @@ CREATE INDEX IF NOT EXISTS idx_reservations_start_at ON reservations(start_at);
 CREATE INDEX IF NOT EXISTS idx_reservations_end_at ON reservations(end_at);
 CREATE INDEX IF NOT EXISTS idx_reservations_created_at ON reservations(created_at);
 CREATE INDEX IF NOT EXISTS idx_reservations_updated_at ON reservations(updated_at);
+CREATE INDEX IF NOT EXISTS idx_reservations_idempotency_key ON reservations(idempotency_key);
 
 -- +goose Down
 -- SQL in section 'Down' is executed when migration is rolled back
 
 DROP INDEX IF EXISTS idx_reservations_updated_at;
+DROP INDEX IF EXISTS idx_reservations_idempotency_key;
 DROP INDEX IF EXISTS idx_reservations_created_at;
 DROP INDEX IF EXISTS idx_reservations_end_at;
 DROP INDEX IF EXISTS idx_reservations_start_at;

@@ -1,350 +1,323 @@
-/* Trezutil UI Components */
+/* Trezutil UI Components — v2 */
 
 const Components = {
-  Button({ variant = 'primary', size = 'md', disabled = false, children, onclick }) {
+  Button({ variant = 'primary', size = 'md', disabled = false, children = '', onclick = '', icon = '' }) {
     const sizeClass = size !== 'md' ? `btn-${size}` : '';
     const disabledAttr = disabled ? 'disabled' : '';
     const onclickAttr = onclick ? `onclick="${onclick}"` : '';
-    return `<button class="btn btn-${variant} ${sizeClass}" ${disabledAttr} ${onclickAttr}>${children}</button>`;
+    const iconHTML = icon ? `<span class="btn-icon-inline">${icon}</span>` : '';
+    return `<button class="btn btn-${variant} ${sizeClass}" ${disabledAttr} ${onclickAttr}>${iconHTML}<span>${children}</span></button>`;
   },
 
-  Badge(status) {
-    const statusClass = `badge-${status}`;
-    return `<span class="badge ${statusClass}">${status}</span>`;
+  Icon({ name, size = 'md', variant = 'default' }) {
+    const sizeMap = { sm: 16, md: 20, lg: 24, xl: 32 };
+    const s = sizeMap[size] || 20;
+    const icons = {
+      search: '🔍',
+      cart: '🛒',
+      heart: '❤️',
+      star: '⭐',
+      chevron: '›',
+      close: '✕',
+      menu: '☰',
+      check: '✓',
+      plus: '+',
+      minus: '−',
+      chat: '💬',
+      whatsapp: '📱',
+      location: '📍',
+      calendar: '📅',
+      clock: '⏰',
+      user: '👤',
+      package: '📦',
+      rating: '⭐',
+      arrowRight: '→',
+      loading: '⟳',
+    };
+    const content = icons[name] || name;
+    return `<span class="icon icon-${name} icon-${variant}" style="width:${s}px;height:${s}px;display:inline-flex;align-items:center;justify-content:center;font-size:${s * 0.8}px;">${content}</span>`;
   },
 
-  Input({ label, placeholder, value, type = 'text', id }) {
+  Badge({ text, variant = 'primary', size = 'md' }) {
+    const sizeClass = size === 'sm' ? 'badge-sm' : 'badge-md';
+    const variantClass = `badge-${variant}`;
+    return `<span class="badge ${variantClass} ${sizeClass}">${text}</span>`;
+  },
+
+  Card({ variant = 'default', padding = 'lg', onClick = '', children = '', className = '' }) {
+    const variantClass = `card-${variant}`;
+    const paddingStyle = `padding: var(--space-${padding})`;
+    const onClickAttr = onClick ? `onclick="${onClick}"` : '';
+    return `<div class="card ${variantClass} ${className}" ${onClickAttr} style="${paddingStyle}">${children}</div>`;
+  },
+
+  CardHeader({ title, subtitle = '', action = '' }) {
     return `
-      <div style="margin-bottom: 16px;">
-        ${label ? `<label for="${id}" style="display: block; margin-bottom: 4px; font-weight: 500; font-size: 14px;">${label}</label>` : ''}
-        <input id="${id}" type="${type}" placeholder="${placeholder || ''}" value="${value || ''}"
-          style="width: 100%; padding: 12px 16px; font-size: 16px; font-family: var(--font-body); border: 2px solid var(--color-ice-dark); border-radius: var(--radius-md); background: var(--color-ice); outline: none; transition: border-color 150ms;"
-          onfocus="this.style.borderColor='var(--color-blue)'"
-          onblur="this.style.borderColor='var(--color-ice-dark)'"
-        />
+      <div class="card-header">
+        <div>
+          <h3 class="card-title">${title}</h3>
+          ${subtitle ? `<p class="card-subtitle">${subtitle}</p>` : ''}
+        </div>
+        ${action ? `<div class="card-action">${action}</div>` : ''}
       </div>
     `;
   },
 
-  Card({ title, description, children }) {
+  CardBody({ children }) {
+    return `<div class="card-body">${children}</div>`;
+  },
+
+  CardFooter({ children }) {
+    return `<div class="card-footer">${children}</div>`;
+  },
+
+  SearchBar({ placeholder = '', value = '', onSearch = '' }) {
     return `
-      <div class="card">
+      <div class="search-bar-wrapper">
+        <span class="search-bar-icon">🔍</span>
+        <input type="text" class="input input-search" placeholder="${placeholder || I18n.t('search_placeholder')}" value="${value}"
+          onkeyup="if(event.key==='Enter') ${onSearch || 'Search.search(event.target.value)'}">
+        ${value ? `<button class="search-bar-clear" onclick="Search.clear()">✕</button>` : ''}
+      </div>
+    `;
+  },
+
+  Carousel({ items = [], autoSlide = true, interval = 5000, showDots = true, showArrows = true, lazy = true } = {}) {
+    if (!items || items.length === 0) {
+      return `<div class="carousel-empty">No promotions available</div>`;
+    }
+
+    const dots = items.map((_, i) => `<button class="carousel-dot" data-index="${i}" aria-label="Go to slide ${i + 1}"></button>`).join('');
+    const slides = items.map((item, i) => `
+      <div class="carousel-slide" data-index="${i}" style="display: ${i === 0 ? 'block' : 'none'}">
+        ${item.image ? `<img src="${item.image}" alt="${item.title || ''}" class="carousel-image" loading="${lazy && i > 0 ? 'lazy' : 'eager'}">'` : ''}
+        <div class="carousel-content">
+          <h3 class="carousel-title">${item.title || ''}</h3>
+          <p class="carousel-description">${item.description || ''}</p>
+          ${item.cta ? `<button class="btn btn-primary" onclick="${item.cta.onClick}">${item.cta.text}</button>` : ''}
+        </div>
+      </div>
+    `).join('');
+
+    return `
+      <div class="carousel" data-auto="${autoSlide}" data-interval="${interval}">
+        <div class="carousel-container">
+          ${slides}
+        </div>
+        ${showDots ? `<div class="carousel-dots">${dots}</div>` : ''}
+      </div>
+    `;
+  },
+
+  SuggestionChips({ chips = [] }) {
+    if (!chips || chips.length === 0) return '';
+    return `
+      <div class="suggestion-chips">
+        ${chips.map(chip => `<button class="chip" onclick="${chip.onClick}">${chip.label}</button>`).join('')}
+      </div>
+    `;
+  },
+
+  ListingCard({ listing, compact = false, showChat = true } = {}) {
+    if (!listing) return '<div class="skeleton-card"></div>';
+
+    const image = listing.primary_media_url || 'https://via.placeholder.com/400x300?text=No+image';
+    const price = listing.price_amount ? `$${listing.price_amount.toFixed(2)}` : 'Price on request';
+    const badge = listing.availability_status === 'in_stock'
+      ? Components.Badge({ text: 'In Stock', variant: 'success' })
+      : Components.Badge({ text: listing.availability_status, variant: 'warning' });
+
+    return `
+      <div class="card listing-card" onclick="App.navigate('/listings/${listing.listing_id}')">
+        <div class="listing-image-wrapper">
+          <img src="${image}" alt="${listing.title}" class="listing-image" loading="lazy">
+          <div class="listing-badge">${badge}</div>
+        </div>
         <div class="card-body">
-          <h3 class="card-title">${title}</h3>
-          <p class="card-description">${description || ''}</p>
-          ${children || ''}
+          <h3 class="listing-title">${listing.title}</h3>
+          <p class="listing-price">${price}</p>
+          ${compact ? '' : `<p class="listing-description" style="-webkit-line-clamp:2;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-box-orient:vertical">${listing.description || ''}</p>`}
+          ${showChat ? `<button class="btn btn-sm btn-ghost listing-chat" onclick="event.stopPropagation();App.navigate('/chat?l=${listing.listing_id}')">💬</button>` : ''}
         </div>
       </div>
     `;
   },
 
-  Skeleton({ lines = 3 }) {
-    return Array(lines).fill(0).map(() => `<div class="skeleton" style="height: 20px; margin-bottom: 8px; width: 100%;"></div>`).join('');
+  Skeleton({ lines = 3, variant = 'text' }) {
+    if (variant === 'card') {
+      return `
+        <div class="skeleton" style="aspect-ratio: 1/1; width: 100%; border-radius: var(--radius-lg); margin-bottom: 12px;"></div>
+        <div class="skeleton" style="height: 16px; margin-bottom: 8px; width: 100%; border-radius: var(--radius-sm);"></div>
+        <div class="skeleton" style="height: 16px; margin-bottom: 8px; width: 80%; border-radius: var(--radius-sm);"></div>
+        <div class="skeleton" style="height: 16px; width: 60%; border-radius: var(--radius-sm);"></div>
+      `;
+    }
+    return Array(lines).fill(0).map((_, i) =>
+      `<div class="skeleton" style="height: 16px; margin-bottom: 8px; width: ${100 - i * 10}%; border-radius: var(--radius-sm);"></div>`
+    ).join('');
   },
 
   Spinner({ size = 'md' }) {
-    return `<div class="loading"><div class="spinner"></div></div>`;
+    const sizeMap = { sm: 24, md: 32, lg: 48 };
+    const s = sizeMap[size] || 32;
+    return `<div class="spinner-container" style="width:${s}px;height:${s}px;"><div class="spinner"></div></div>`;
   },
 
   EmptyState({ icon = '📦', title = 'No results', description = 'Try adjusting your search terms', action = '' }) {
     return `
-      <div class="empty-state">
-        <div class="empty-state-icon">${icon}</div>
-        <h3 class="empty-state-title">${title}</h3>
-        <p class="empty-state-description">${description}</p>
-        ${action}
+      <div class="empty-state" style="text-align: center; padding: var(--space-3xl) var(--space-lg);">
+        <div style="font-size: 48px; margin-bottom: var(--space-lg);">${icon}</div>
+        <h3 style="font-size: var(--text-h3); margin-bottom: var(--space-sm);">${title}</h3>
+        <p style="color: var(--color-text-secondary); margin-bottom: var(--space-lg); max-width: 400px; margin-left: auto; margin-right: auto;">${description}</p>
+        ${action ? `<div>${action}</div>` : ''}
       </div>
     `;
   },
 
   ErrorState({ code = 'ERROR', message = 'Something went wrong', retry = '' }) {
     return `
-      <div class="error-state">
-        <h3 class="error-state-title">${message}</h3>
-        <p class="error-state-description">Code: ${code}</p>
-        ${retry}
+      <div class="error-state" style="text-align: center; padding: var(--space-3xl) var(--space-lg);">
+        <div style="font-size: 48px; margin-bottom: var(--space-lg);">⚠️</div>
+        <h3 style="font-size: var(--text-h3); margin-bottom: var(--space-sm);">${message}</h3>
+        <p style="color: var(--color-text-secondary); margin-bottom: var(--space-lg);">${code}</p>
+        ${retry ? `<div>${retry}</div>` : ''}
       </div>
     `;
   },
 
-  Message({ text, sender = 'bot', time = '' }) {
-    const senderClass = sender === 'user' ? 'message-user' : 'message-bot';
+  WhatsAppCTA({ position = 'bottom' }) {
+    const posClass = position === 'bottom' ? 'whatsapp-cta-bottom' : 'whatsapp-cta-side';
     return `
-      <div class="message ${senderClass}">
-        <div class="message-text">${text}</div>
-        ${time ? `<div class="message-time">${time}</div>` : ''}
+      <div class="whatsapp-cta ${posClass}">
+        <a href="https://wa.me/243XXXXXXXXX?text=Hi%20Trezutil" target="_blank" rel="noopener" class="whatsapp-cta-link">
+          <span class="whatsapp-icon">📱</span>
+          <span class="whatsapp-text">${I18n.t('cta_open_whatsapp')}</span>
+        </a>
       </div>
     `;
   },
 
-  Modal({ title, body = '', footer = '' }) {
+  ChatDrawer({ compact = false, showWhatsApp = true }) {
+    const width = compact ? '320px' : 'var(--chat-width)';
+    const title = I18n.t('chat_title');
     return `
-      <div class="modal-overlay" onclick="if(event.target===this) this.remove()">
-        <div class="modal">
-          <div class="modal-header">
-            <h3>${title}</h3>
-            <button onclick="this.closest('.modal-overlay').remove()" style="font-size: 20px; padding: 4px 8px;">&times;</button>
-          </div>
-          <div class="modal-body">${body}</div>
-          ${footer ? `<div class="modal-footer">${footer}</div>` : ''}
+      <div class="chat-drawer" style="--chat-width: ${width};">
+        <div class="chat-header">
+          <span class="chat-status">🟢 ${I18n.t('chat_connected')}</span>
+          <h3 class="chat-title">${title}</h3>
+          ${showWhatsApp ? Components.WhatsAppCTA({ position: 'inline' }) : ''}
+          <button class="btn-icon chat-close" onclick="App.navigate('/')" aria-label="Close chat">✕</button>
         </div>
       </div>
     `;
   },
 
-  ListingCard({ listing }) {
+  CategoryFilter({ categories = [], active = '', onChange = '' }) {
+    const allItems = [{ id: '', label: I18n.t('section_discover') || 'All' }, ...categories]
+      .map(cat => `
+        <button class="category-chip ${cat.id === active ? 'active' : ''}"
+          onclick="${onChange || ''}('${cat.id}')">
+          ${cat.label}
+        </button>
+      `).join('');
+    return `<div class="category-filters">${allItems}</div>`;
+  },
+
+  Section({ title, subtitle = '', action = '', children = '', className = '' }) {
     return `
-      <div class="card listing-card" onclick="App.navigate('/listings/${listing.id}')">
-        <div class="listing-card-image">Image</div>
-        <div class="listing-card-body">
-          <div class="listing-card-title">${listing.title || 'Untitled'}</div>
-          <div class="listing-card-seller">${listing.sellerName || listing.seller || 'Unknown'}</div>
-          <div class="listing-card-price">${listing.price || '—'}</div>
-          <div class="listing-card-meta">
-            ${Components.Badge(listing.status || 'draft')}
-            <span style="color: var(--color-text-secondary); font-size: var(--text-small);">${listing.category || ''}</span>
-          </div>
+      <section class="section ${className}">
+        <div class="section-header">
+          <h2 class="section-title">${title}</h2>
+          ${subtitle ? `<p class="section-subtitle">${subtitle}</p>` : ''}
+          ${action ? `<a href="${action.href || '#'}" class="section-action">${action.text || 'View all'}</a>` : ''}
         </div>
+        <div class="section-content">
+          ${children}
+        </div>
+      </section>
+    `;
+  },
+
+  LocationSelector({ locations = [] }) {
+    if (!locations || locations.length === 0) return '';
+    return `
+      <div class="location-selector">
+        <span class="location-icon">📍</span>
+        <select class="location-select">
+          ${locations.map(loc => `<option value="${loc.value}">${loc.label}</option>`).join('')}
+        </select>
       </div>
     `;
   },
 
-  // Reservation Components
-  AvailabilityPicker({ listingId, startAt, endAt, quantity, partySize, onChange, onSubmit }) {
-    const isDateRange = listingId && (listingId.includes('hotel') || listingId.includes('stay') || listingId.includes('rental'));
-    const isTimeSlot = listingId && (listingId.includes('restaurant') || listingId.includes('appointment') || listingId.includes('service'));
-    
-    const formatDate = (ts) => ts ? new Date(ts * 1000).toLocaleDateString() : '';
-    const formatTime = (ts) => ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-
+  Loading({ title = 'Loading...' }) {
     return `
-      <div class="availability-picker" style="margin: 16px 0;">
-        <div style="display: grid; gap: 16px;">
-          <div style="display: grid; gap: 12px; grid-template-columns: 1fr 1fr;">
-            <div>
-              <label style="display: block; margin-bottom: 4px; font-weight: 500;">${isTimeSlot ? 'Date' : 'Check-in'}</label>
-              <input type="${isTimeSlot ? 'date' : 'datetime-local'}" id="avail-start" 
-                value="${startAt ? new Date(startAt * 1000).toISOString().slice(0, 16) : ''}"
-                onchange="AvailabilityPicker.onChange('startAt', this.value)"
-                style="width: 100%; padding: 12px 16px; border: 2px solid var(--color-ice-dark); border-radius: var(--radius-md); background: var(--color-ice); outline: none;"
-              />
-            </div>
-            <div>
-              <label style="display: block; margin-bottom: 4px; font-weight: 500;">${isTimeSlot ? 'Time Slot' : 'Check-out'}</label>
-              <input type="${isTimeSlot ? 'time' : 'datetime-local'}" id="avail-end"
-                value="${endAt ? new Date(endAt * 1000).toISOString().slice(0, 16) : ''}"
-                onchange="AvailabilityPicker.onChange('endAt', this.value)"
-                style="width: 100%; padding: 12px 16px; border: 2px solid var(--color-ice-dark); border-radius: var(--radius-md); background: var(--color-ice); outline: none;"
-              />
-            </div>
-          </div>
-          <div style="display: grid; gap: 12px; grid-template-columns: 1fr 1fr;">
-            <div>
-              <label style="display: block; margin-bottom: 4px; font-weight: 500;">Quantity</label>
-              <input type="number" id="avail-quantity" min="1" value="${quantity || 1}"
-                onchange="AvailabilityPicker.onChange('quantity', this.value)"
-                style="width: 100%; padding: 12px 16px; border: 2px solid var(--color-ice-dark); border-radius: var(--radius-md); background: var(--color-ice); outline: none;"
-              />
-            </div>
-            <div>
-              <label style="display: block; margin-bottom: 4px; font-weight: 500;">Party Size</label>
-              <input type="number" id="avail-party" min="0" value="${partySize || 0}"
-                onchange="AvailabilityPicker.onChange('partySize', this.value)"
-                style="width: 100%; padding: 12px 16px; border: 2px solid var(--color-ice-dark); border-radius: var(--radius-md); background: var(--color-ice); outline: none;"
-              />
-            </div>
-          </div>
-          <div style="display: flex; gap: 12px; margin-top: 8px;">
-            <button class="btn btn-primary btn-lg" onclick="AvailabilityPicker.check()"
-              style="flex: 1;">Check Availability</button>
-            <button class="btn btn-secondary btn-lg" onclick="AvailabilityPicker.submit()"
-              style="flex: 1;" ${startAt && endAt ? '' : 'disabled'}>Reserve</button>
-          </div>
-        </div>
-        <div id="availability-result" style="margin-top: 16px; min-height: 40px;"></div>
+      <div class="loading-state" style="text-align: center; padding: var(--space-3xl);">
+        ${this.Spinner()}
+        <p style="margin-top: var(--space-md); color: var(--color-text-secondary);">${title}</p>
       </div>
     `;
   },
 
-  AvailabilityResult({ available, capacity, remaining, reason, startAt, endAt }) {
-    if (available === undefined) return '';
-    
-    const formatDate = (ts) => ts ? new Date(ts * 1000).toLocaleDateString() : '';
-    const formatTime = (ts) => ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-    const formatDateTime = (ts) => ts ? `${formatDate(ts)} at ${formatTime(ts)}` : '';
+  AvailabilityPicker({ listingId = '', minDate = '', maxDate = '', onCheck = '', onSubmit = '' } = {}) {
+    return `
+      <div class="availability-picker" id="availability-picker" data-listing="${listingId}">
+        <div class="availability-picker-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap: var(--space-sm);">
+          <div>
+            <label style="font-size: var(--text-small); font-weight: var(--weight-medium);">Check-in</label>
+            <input type="date" class="input" id="checkin-date" min="${minDate}">
+          </div>
+          <div>
+            <label style="font-size: var(--text-small); font-weight: var(--weight-medium);">Check-out</label>
+            <input type="date" class="input" id="checkout-date" min="${minDate}">
+          </div>
+        </div>
+        <div style="margin-top: var(--space-md);">
+          <label style="font-size: var(--text-small); font-weight: var(--weight-medium);">Guests</label>
+          <input type="number" class="input" id="guest-count" min="1" value="2" style="max-width: 120px;">
+        </div>
+        <button class="btn btn-primary" style="width:100%; margin-top: var(--space-md);" onclick="${onCheck || ''}">
+          ${I18n.t('cta_view')} ${I18n.t('state_loading').toLowerCase()}
+        </button>
+        <div id="availability-result"></div>
+      </div>
+    `;
+  },
 
-    if (available) {
+  AvailabilityResult({ available = false, capacity = 0, remaining = 0, reason = '', startAt = '', endAt = '', onBook = '' }) {
+    if (!available) {
       return `
-        <div class="availability-result available" style="padding: 16px; background: var(--color-mint-light); border: 1px solid var(--color-mint); border-radius: var(--radius-md);">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <span style="font-size: 24px;">✅</span>
-            <div>
-              <div style="font-weight: 600; color: var(--color-mint-dark);">Available</div>
-              <div style="font-size: var(--text-small); color: var(--color-text-secondary);">
-                ${capacity !== undefined ? `Capacity: ${capacity} | Remaining: ${remaining}` : ''}
-              </div>
-            </div>
-          </div>
-        </div>
-      `;
-    } else {
-      return `
-        <div class="availability-result unavailable" style="padding: 16px; background: var(--color-coral-light); border: 1px solid var(--color-coral); border-radius: var(--radius-md);">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <span style="font-size: 24px;">❌</span>
-            <div>
-              <div style="font-weight: 600; color: var(--color-coral-dark);">Not Available</div>
-              <div style="font-size: var(--text-small); color: var(--color-text-secondary);">${reason || 'No capacity for the requested period'}</div>
-            </div>
-          </div>
+        <div class="availability-unavailable" style="margin-top: var(--space-md); padding: var(--space-md); background: var(--color-neutral-100); border-radius: var(--radius-md);">
+          <p style="color: var(--color-text-secondary);">${reason || I18n.t('state_error')}</p>
         </div>
       `;
     }
+    return `
+      <div class="availability-available" style="margin-top: var(--space-md); padding: var(--space-md); background: var(--color-mint-light); border-radius: var(--radius-md);">
+        <p style="color: var(--color-mint-dark); font-weight: var(--weight-semibold);">
+          ${I18n.t('cta_book')} ${remaining > 0 ? remaining + ' ' + I18n.t('state_loading') : ''}
+        </p>
+        <button class="btn btn-sm btn-primary" style="margin-top: var(--space-sm);" onclick="${onBook || ''}">
+          ${I18n.t('cta_book')}
+        </button>
+      </div>
+    `;
   },
 
-  ReservationSummary({ reservation, listing, showActions = true, onCancel }) {
+  ReservationSummary({ reservation = null, listing = null, showActions = false, onCancel = '' } = {}) {
     if (!reservation) return '';
-    
-    const formatDate = (ts) => ts ? new Date(ts * 1000).toLocaleDateString() : '';
-    const formatTime = (ts) => ts ? new Date(ts * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-    const formatDateTime = (ts) => ts ? `${formatDate(ts)} at ${formatTime(ts)}` : '';
-    
-    const statusColors = {
-      pending: 'var(--color-blue)',
-      confirmed: 'var(--color-mint)',
-      completed: 'var(--color-text-secondary)',
-      cancelled: 'var(--color-coral)'
-    };
-    
-    const statusColor = statusColors[reservation.status] || 'var(--color-text-secondary)';
-
     return `
-      <div class="reservation-summary card" style="margin: 16px 0;">
+      <div class="reservation-summary card">
+        <div class="card-header">
+          <h3>${listing?.title || I18n.t('nav_bookings')}</h3>
+          ${Components.Badge({ text: reservation.status, variant: reservation.status === 'confirmed' ? 'success' : 'warning' })}
+        </div>
         <div class="card-body">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
-            <div>
-              <h3 class="card-title" style="margin: 0;">${listing?.title || 'Reservation'}</h3>
-              <div style="font-size: var(--text-small); color: var(--color-text-secondary);">Reservation #${reservation.id?.slice(0, 8) || '—'}</div>
-            </div>
-            <span class="badge" style="background: ${statusColor}20; color: ${statusColor};">${reservation.status || '—'}</span>
-          </div>
-          
-          <div style="display: grid; gap: 8px; font-size: var(--text-base);">
-            <div style="display: flex; justify-content: space-between;">
-              <span style="color: var(--color-text-secondary);">Period</span>
-              <span>${formatDateTime(reservation.start_at)} – ${formatDateTime(reservation.end_at)}</span>
-            </div>
-            ${reservation.quantity > 1 ? `
-            <div style="display: flex; justify-content: space-between;">
-              <span style="color: var(--color-text-secondary);">Quantity</span>
-              <span>${reservation.quantity}</span>
-            </div>` : ''}
-            ${reservation.party_size > 0 ? `
-            <div style="display: flex; justify-content: space-between;">
-              <span style="color: var(--color-text-secondary);">Party Size</span>
-              <span>${reservation.party_size}</span>
-            </div>` : ''}
-            ${reservation.pricing_snapshot ? `
-            <div style="display: flex; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--color-ice-dark);">
-              <span style="font-weight: 600;">Total</span>
-              <span style="font-weight: 600;">${reservation.pricing_snapshot.total?.amount_minor ? (reservation.pricing_snapshot.total.amount_minor / 100).toFixed(2) : '—'} ${reservation.pricing_snapshot.currency || ''}</span>
-            </div>` : ''}
-          </div>
-          
-          ${showActions && (reservation.status === 'pending' || reservation.status === 'confirmed') ? `
-            <div style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--color-ice-dark);">
-              <button class="btn btn-danger" onclick="${onCancel || `ReservationsPage.cancel('${reservation.id}')`}">Cancel Reservation</button>
-            </div>
-          ` : ''}
+          <p><strong>${I18n.t('state_loading')}</strong> ${reservation.id || ''}</p>
+          <p><strong>Status</strong> ${reservation.status || ''}</p>
         </div>
+        ${showActions ? `<div class="card-footer"><button class="btn btn-danger btn-sm" onclick="${onCancel}">${I18n.t('cta_cancel')}</button></div>` : ''}
       </div>
     `;
   },
-
-  ReservationList({ reservations, onClick }) {
-    if (!reservations || reservations.length === 0) {
-      return Components.EmptyState({
-        icon: '📅',
-        title: 'No reservations',
-        description: 'Your reservations will appear here.',
-      });
-    }
-    
-    return `
-      <div class="reservation-list">
-        ${reservations.map(r => `
-          <div class="card" style="margin-bottom: 12px; cursor: pointer;" onclick="${onClick || `ReservationsPage.view('${r.id}')`}">
-            <div class="card-body">
-              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px;">
-                <div>
-                  <div style="font-weight: 600;">${r.listing_title || r.title || 'Reservation'}</div>
-                  <div style="font-size: var(--text-small); color: var(--color-text-secondary);">#${r.id?.slice(0, 8) || '—'}</div>
-                </div>
-                <span class="badge" style="background: ${r.status === 'confirmed' ? 'var(--color-mint)20' : r.status === 'cancelled' ? 'var(--color-coral)20' : 'var(--color-blue)20'}; color: ${r.status === 'confirmed' ? 'var(--color-mint)' : r.status === 'cancelled' ? 'var(--color-coral)' : 'var(--color-blue)'};">
-                  ${r.status}
-                </span>
-              </div>
-              <div style="font-size: var(--text-small); color: var(--color-text-secondary);">
-                ${new Date(r.start_at * 1000).toLocaleDateString()} – ${new Date(r.end_at * 1000).toLocaleDateString()}
-                ${r.party_size ? ` • ${r.party_size} guests` : ''}
-              </div>
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    `;
-  },
-
-  ConfirmationSheet({ title, details, onConfirm, onCancel }) {
-    return `
-      <div class="modal-overlay" onclick="if(event.target===this) this.remove()">
-        <div class="modal" style="max-width: 480px;">
-          <div class="modal-header">
-            <h3>${title}</h3>
-            <button onclick="this.closest('.modal-overlay').remove()" style="font-size: 20px; padding: 4px 8px;">&times;</button>
-          </div>
-          <div class="modal-body">
-            ${details}
-          </div>
-          <div class="modal-footer" style="display: flex; gap: 12px; justify-content: flex-end; padding-top: 16px; border-top: 1px solid var(--color-ice-dark);">
-            <button class="btn btn-secondary" onclick="this.closest('.modal-overlay').remove()">Cancel</button>
-            <button class="btn btn-primary" onclick="${onConfirm}">Confirm</button>
-          </div>
-        </div>
-      </div>
-    `;
-  },
-};
-
-// AvailabilityPicker handlers
-window.AvailabilityPicker = {
-  state: { startAt: null, endAt: null, quantity: 1, partySize: 0, listingId: null },
-  onChange(field, value) {
-    const ts = value ? new Date(value).getTime() / 1000 : null;
-    this.state[field] = ts;
-    if (typeof AvailabilityPicker.onChangeCallback === 'function') {
-      AvailabilityPicker.onChangeCallback(this.state);
-    }
-  },
-  setListing(listingId) {
-    this.state.listingId = listingId;
-  },
-  check() {
-    if (!this.state.startAt || !this.state.endAt) {
-      alert('Please select dates');
-      return;
-    }
-    if (this.state.endAt <= this.state.startAt) {
-      alert('End must be after start');
-      return;
-    }
-    if (typeof AvailabilityPicker.onCheckCallback === 'function') {
-      AvailabilityPicker.onCheckCallback(this.state);
-    }
-  },
-  submit() {
-    if (typeof AvailabilityPicker.onSubmitCallback === 'function') {
-      AvailabilityPicker.onSubmitCallback(this.state);
-    }
-  }
 };
