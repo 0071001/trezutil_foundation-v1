@@ -3,20 +3,19 @@ package application
 import (
 	"context"
 	"fmt"
-	"sync"
+	"time"
 
 	"github.com/trezutil/trezutil/internal/domain"
 )
 
 // UsageService implements domain.UsageService for usage and credits management.
 type UsageService struct {
-	planRepo     domain.PlanRepository
-	accountRepo  domain.CreditAccountRepository
-	ledgerRepo   domain.UsageLedgerRepository
-	policyRepo   domain.UsagePolicyRepository
-	clock        domain.Clock
-	reservations map[string]*domain.UsageReservation
-	mu           sync.RWMutex
+	planRepo        domain.PlanRepository
+	accountRepo     domain.CreditAccountRepository
+	ledgerRepo      domain.UsageLedgerRepository
+	policyRepo      domain.UsagePolicyRepository
+	reservationRepo domain.UsageReservationRepository
+	clock           domain.Clock
 }
 
 // NewUsageService creates a new UsageService.
@@ -25,15 +24,16 @@ func NewUsageService(
 	accountRepo domain.CreditAccountRepository,
 	ledgerRepo domain.UsageLedgerRepository,
 	policyRepo domain.UsagePolicyRepository,
+	reservationRepo domain.UsageReservationRepository,
 	clock domain.Clock,
 ) *UsageService {
 	return &UsageService{
-		planRepo:     planRepo,
-		accountRepo:  accountRepo,
-		ledgerRepo:   ledgerRepo,
-		policyRepo:   policyRepo,
-		clock:        clock,
-		reservations: make(map[string]*domain.UsageReservation),
+		planRepo:        planRepo,
+		accountRepo:     accountRepo,
+		ledgerRepo:      ledgerRepo,
+		policyRepo:      policyRepo,
+		reservationRepo: reservationRepo,
+		clock:           clock,
 	}
 }
 
@@ -73,169 +73,45 @@ func (s *UsageService) Check(ctx context.Context, accountID string, cost int64) 
 	return account.CanAfford(cost), nil
 }
 
-// Reserve credits for an action.
-func (s *UsageService) Reserve(ctx context.Context, accountID string, actionType domain.CommerceActionType, cost int64) (*domain.UsageReservation, error) {
+// Reserve credits for an action. Delegates to the durable, atomic
+// ReserveCreditsTx primitive (F2/F4/F5/F6): UUID reservation id generated
+// server-side, idempotent via idempotency_key, and balance-guard UPDATE
+// prevents negative credits under concurrent access.
+func (s *UsageService) Reserve(ctx context.Context, accountID string, actionType domain.CommerceActionType, cost int64, idempotencyKey string, tenantID string) (*domain.UsageReservation, error) {
 	if accountID == "" {
 		return nil, fmt.Errorf("accountID is required")
 	}
 	if cost <= 0 {
 		return nil, fmt.Errorf("cost must be positive")
 	}
-
-	account, err := s.accountRepo.FindByID(ctx, accountID)
-	if err != nil {
-		return nil, domain.ErrUsageAccountNotFound
+	if s.reservationRepo == nil {
+		return nil, domain.ErrNotImplemented
 	}
-
-	if !account.CanAfford(cost) {
-		return nil, domain.ErrInsufficientCredits
-	}
-
-	now := s.clock.Now()
-	reservationID := fmt.Sprintf("res-%s-%d", accountID, now)
-
-	reservation := &domain.UsageReservation{
-		ReservationID: reservationID,
-		AccountID:     accountID,
-		ActionType:    actionType,
-		Amount:        cost,
-		ReservedAt:    now,
-		Status:        domain.UsageReservationActive,
-	}
-
-	account.Reserved += cost
-	if err := s.accountRepo.Update(ctx, account); err != nil {
-		return nil, fmt.Errorf("failed to update account: %w", err)
-	}
-
-	event := domain.NewUsageEvent(
-		reservationID,
-		accountID,
-		actionType,
-		account.OwnerID,
-		account.TenantID,
-		domain.UsageReserve,
-		cost,
-		account.Remaining()+cost,
-		account.Remaining(),
-		account.PeriodID,
-		now,
-	)
-	if err := s.ledgerRepo.Record(ctx, &event); err != nil {
-		return nil, fmt.Errorf("failed to record usage event: %w", err)
-	}
-
-	s.mu.Lock()
-	s.reservations[reservationID] = reservation
-	s.mu.Unlock()
-
-	return reservation, nil
+	return s.reservationRepo.ReserveCreditsTx(ctx, accountID, actionType, cost, idempotencyKey, tenantID, s.clock.Now())
 }
 
 // Consume a reservation, permanently using the reserved credits.
+// Delegates to the durable, atomic ConsumeReservation primitive.
 func (s *UsageService) Consume(ctx context.Context, reservationID string) error {
-	reservation, err := s.getReservation(reservationID)
-	if err != nil {
-		return domain.ErrUsageReservationNotFound
+	if reservationID == "" {
+		return fmt.Errorf("reservationID is required")
 	}
-
-	if reservation.Status != domain.UsageReservationActive {
-		if reservation.Status == domain.UsageReservationConsumed {
-			return domain.ErrUsageAlreadyConsumed
-		}
-		if reservation.Status == domain.UsageReservationReleased {
-			return domain.ErrUsageAlreadyReleased
-		}
-		return domain.ErrUsageReservationConflict
+	if s.reservationRepo == nil {
+		return domain.ErrNotImplemented
 	}
-
-	account, err := s.accountRepo.FindByID(ctx, reservation.AccountID)
-	if err != nil {
-		return domain.ErrUsageAccountNotFound
-	}
-
-	now := s.clock.Now()
-	account.Reserved -= reservation.Amount
-	account.Consumed += reservation.Amount
-	if account.Granted < account.Reserved+account.Consumed {
-		account.Granted = account.Reserved + account.Consumed
-	}
-	account.UpdatedAt = now
-
-	if err := s.accountRepo.Update(ctx, account); err != nil {
-		return fmt.Errorf("failed to update account: %w", err)
-	}
-
-	event := domain.NewUsageEvent(
-		reservationID,
-		reservation.AccountID,
-		reservation.ActionType,
-		account.OwnerID,
-		account.TenantID,
-		domain.UsageConsume,
-		reservation.Amount,
-		account.Remaining()+reservation.Amount,
-		account.Remaining(),
-		account.PeriodID,
-		now,
-	)
-	if err := s.ledgerRepo.Record(ctx, &event); err != nil {
-		return fmt.Errorf("failed to record usage event: %w", err)
-	}
-
-	reservation.Status = domain.UsageReservationConsumed
-	return nil
+	return s.reservationRepo.ConsumeReservation(ctx, reservationID, s.clock.Now())
 }
 
 // Release a reservation, returning the reserved credits to the account.
+// Delegates to the durable, atomic ReleaseReservation primitive.
 func (s *UsageService) Release(ctx context.Context, reservationID string) error {
-	reservation, err := s.getReservation(reservationID)
-	if err != nil {
-		return domain.ErrUsageReservationNotFound
+	if reservationID == "" {
+		return fmt.Errorf("reservationID is required")
 	}
-
-	if reservation.Status != domain.UsageReservationActive {
-		if reservation.Status == domain.UsageReservationConsumed {
-			return domain.ErrUsageAlreadyConsumed
-		}
-		if reservation.Status == domain.UsageReservationReleased {
-			return domain.ErrUsageAlreadyReleased
-		}
-		return domain.ErrUsageReservationConflict
+	if s.reservationRepo == nil {
+		return domain.ErrNotImplemented
 	}
-
-	account, err := s.accountRepo.FindByID(ctx, reservation.AccountID)
-	if err != nil {
-		return domain.ErrUsageAccountNotFound
-	}
-
-	now := s.clock.Now()
-	account.Reserved -= reservation.Amount
-	account.UpdatedAt = now
-
-	if err := s.accountRepo.Update(ctx, account); err != nil {
-		return fmt.Errorf("failed to update account: %w", err)
-	}
-
-	event := domain.NewUsageEvent(
-		reservationID,
-		reservation.AccountID,
-		reservation.ActionType,
-		account.OwnerID,
-		account.TenantID,
-		domain.UsageRelease,
-		reservation.Amount,
-		account.Remaining()+reservation.Amount,
-		account.Remaining(),
-		account.PeriodID,
-		now,
-	)
-	if err := s.ledgerRepo.Record(ctx, &event); err != nil {
-		return fmt.Errorf("failed to record usage event: %w", err)
-	}
-
-	reservation.Status = domain.UsageReservationReleased
-	return nil
+	return s.reservationRepo.ReleaseReservation(ctx, reservationID, s.clock.Now())
 }
 
 // Grant adds credits to an account.
@@ -281,12 +157,21 @@ func (s *UsageService) Grant(ctx context.Context, accountID string, amount int64
 	return nil
 }
 
-func (s *UsageService) getReservation(reservationID string) (*domain.UsageReservation, error) {
-	s.mu.RLock()
-	r, ok := s.reservations[reservationID]
-	s.mu.RUnlock()
-	if !ok {
-		return nil, fmt.Errorf("reservation not found")
+// FindOrCreateCreditAccountByOwner finds or creates a credit account for the given owner.
+// Delegates to the atomic FindOrCreateByOwnerAndPeriod to fix the check-then-act race
+// and the legacy string-ID bug (F1/F4).
+func (s *UsageService) FindOrCreateCreditAccountByOwner(ctx context.Context, ownerType domain.ActorType, ownerID string, tenantID string, planID string, periodID string) (*domain.CreditAccount, error) {
+	if ownerID == "" {
+		return nil, fmt.Errorf("ownerID is required")
 	}
-	return r, nil
+	if tenantID == "" {
+		return nil, fmt.Errorf("tenantID is required")
+	}
+	if periodID == "" {
+		periodID = time.Now().Format("2006-01")
+	}
+	if s.accountRepo == nil {
+		return nil, domain.ErrNotImplemented
+	}
+	return s.accountRepo.FindOrCreateByOwnerAndPeriod(ctx, ownerType, ownerID, tenantID, planID, periodID)
 }

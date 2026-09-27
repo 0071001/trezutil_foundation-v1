@@ -225,6 +225,7 @@ type OrderRepository interface {
 	Create(ctx context.Context, order *Order) error
 	FindByID(ctx context.Context, orderID string) (*Order, error)
 	FindByIDForUpdate(ctx context.Context, orderID string) (*Order, error)
+	FindByIDAndOrg(ctx context.Context, orgID, orderID string) (*Order, error)
 	Update(ctx context.Context, order *Order) error
 }
 
@@ -340,4 +341,65 @@ var (
 	ErrProviderNotUsable     = fmt.Errorf("provider is not usable")
 	ErrNoProvidersAvailable  = fmt.Errorf("no providers available for capability")
 	ErrUnsupportedCapability = fmt.Errorf("unsupported capability")
+
+	// Payment errors
+	ErrPaymentNotFound              = fmt.Errorf("payment not found")
+	ErrPaymentAlreadyExists         = fmt.Errorf("payment already exists")
+	ErrIdempotencyConflict          = fmt.Errorf("idempotency key conflict")
+	ErrPaymentInvalidTransition     = fmt.Errorf("invalid payment state transition")
+	ErrPaymentNotCapturable         = fmt.Errorf("payment is not in a capturable state")
+	ErrPaymentNotCancellable        = fmt.Errorf("payment is not in a cancellable state")
+	ErrPaymentNotRefundable         = fmt.Errorf("payment is not in a refundable state")
+	ErrRefundNotFound               = fmt.Errorf("refund not found")
+	ErrRefundAlreadyExists          = fmt.Errorf("refund already exists")
+	ErrRefundExceedsCapturedAmount  = fmt.Errorf("refund amount exceeds captured amount")
+	ErrRefundInvalidTransition      = fmt.Errorf("invalid refund state transition")
+	ErrPaymentOperationNotSupported = fmt.Errorf("payment operation not supported by provider")
+	ErrWebhookSignatureInvalid      = fmt.Errorf("webhook signature verification failed")
+	ErrWebhookEventDuplicate        = fmt.Errorf("webhook event already processed")
+	ErrLedgerAlreadyPosted          = fmt.Errorf("ledger entry already posted")
 )
+
+// PaymentRepository defines the interface for payment persistence.
+// All query methods are scoped by tenantID to enforce tenant isolation.
+type PaymentRepository interface {
+	Create(ctx context.Context, payment *Payment) error
+	FindByID(ctx context.Context, tenantID, paymentID string) (*Payment, error)
+	FindByIDForUpdate(ctx context.Context, tenantID, paymentID string) (*Payment, error)
+	FindByOrderID(ctx context.Context, tenantID, orderID string) (*Payment, error)
+	FindByProviderPaymentID(ctx context.Context, tenantID, providerID, providerPaymentID string) (*Payment, error)
+	FindByIdempotencyKey(ctx context.Context, tenantID, idempotencyKey string) (*Payment, error)
+	Update(ctx context.Context, payment *Payment) error
+}
+
+// RefundRepository defines the interface for refund persistence.
+// All query methods are scoped by tenantID to enforce tenant isolation.
+type RefundRepository interface {
+	Create(ctx context.Context, refund *Refund) error
+	FindByID(ctx context.Context, tenantID, refundID string) (*Refund, error)
+	FindByPaymentID(ctx context.Context, tenantID, paymentID string, offset, limit int) ([]*Refund, error)
+	FindByProviderRefundID(ctx context.Context, tenantID, providerID, providerRefundID string) (*Refund, error)
+	FindByIdempotencyKey(ctx context.Context, tenantID, idempotencyKey string) (*Refund, error)
+	Update(ctx context.Context, refund *Refund) error
+}
+
+// AggregateRefundSummary returns the total refunded amount for a payment.
+func AggregateRefundSummary(refunds []*Refund) Money {
+	var total Money
+	for _, r := range refunds {
+		if r.Status == RefundStatusSucceeded || r.Status == RefundStatusPending {
+			if total.Currency == "" {
+				total.Currency = r.Amount.Currency
+			}
+			total.AmountMinor += r.Amount.AmountMinor
+		}
+	}
+	return total
+}
+
+// WebhookSignatureVerifier defines the interface for verifying payment provider
+// webhook signatures. Provider-specific implementations must NOT leak into
+// the domain/application core.
+type WebhookSignatureVerifier interface {
+	Verify(providerCode string, payload []byte, signature string) error
+}

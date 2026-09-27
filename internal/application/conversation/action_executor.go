@@ -106,7 +106,8 @@ func isSupportedAction(t domain.CommerceActionType) bool {
 		domain.ActionCreateListing, domain.ActionUpdateListing, domain.ActionPublishListing, domain.ActionPauseListing, domain.ActionResumeListing,
 		domain.ActionCreateOrder, domain.ActionGetOrder, domain.ActionCancelOrder,
 		domain.ActionCheckInventory,
-		domain.ActionInitiatePayment, domain.ActionGetPaymentStatus,
+		domain.ActionInitiatePayment, domain.ActionGetPaymentStatus, domain.ActionCancelPayment,
+		domain.ActionRefundPayment, domain.ActionAuthorizePayment, domain.ActionCapturePayment,
 		domain.ActionGetDeliveryStatus,
 		domain.ActionCreateCampaign, domain.ActionGetSellerReport:
 		return true

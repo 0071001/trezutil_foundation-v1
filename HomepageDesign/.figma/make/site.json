@@ -1,0 +1,10 @@
+{
+  "description": "Enables users to find, compare, and book products, services, real estate, and reservations through a seamless conversational commerce experience.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

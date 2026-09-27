@@ -16,6 +16,11 @@ const (
 	ConfirmationNotRequired ConfirmationState = "not_required"
 )
 
+// IsTerminal returns true if the confirmation state is terminal (approved or rejected).
+func (s ConfirmationState) IsTerminal() bool {
+	return s == ConfirmationApproved || s == ConfirmationRejected
+}
+
 // CommerceAction represents a canonical commerce action.
 type CommerceAction struct {
 	ActionID          string

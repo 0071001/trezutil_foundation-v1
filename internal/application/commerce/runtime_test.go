@@ -642,7 +642,7 @@ func (f *fakeUsageService) Check(ctx context.Context, accountID string, cost int
 	return false, domain.ErrUsageAccountNotFound
 }
 
-func (f *fakeUsageService) Reserve(ctx context.Context, accountID string, actionType domain.CommerceActionType, cost int64) (*domain.UsageReservation, error) {
+func (f *fakeUsageService) Reserve(ctx context.Context, accountID string, actionType domain.CommerceActionType, cost int64, idempotencyKey string, tenantID string) (*domain.UsageReservation, error) {
 	if f.reserveErr != nil {
 		return nil, f.reserveErr
 	}
@@ -712,12 +712,48 @@ func (f *fakeUsageService) Grant(ctx context.Context, accountID string, amount i
 	return nil
 }
 
+func (f *fakeUsageService) FindOrCreateCreditAccountByOwner(ctx context.Context, ownerType domain.ActorType, ownerID string, tenantID string, planID string, periodID string) (*domain.CreditAccount, error) {
+	if ownerID == "" {
+		return nil, fmt.Errorf("ownerID is required")
+	}
+	if tenantID == "" {
+		tenantID = "default"
+	}
+	if periodID == "" {
+		periodID = time.Now().Format("2006-01")
+	}
+
+	key := fmt.Sprintf("%s:%s:%s", ownerType, ownerID, tenantID)
+	if acc, ok := f.accounts[key]; ok {
+		return acc, nil
+	}
+
+	acc := &domain.CreditAccount{
+		AccountID: fmt.Sprintf("acc-%s", key),
+		OwnerType: ownerType,
+		OwnerID:   ownerID,
+		TenantID:  tenantID,
+		PlanID:    planID,
+		PeriodID:  periodID,
+		Granted:   1000,
+		Reserved:  0,
+		Consumed:  0,
+		CreatedAt: time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
+	}
+	f.accounts[key] = acc
+	f.accounts[acc.AccountID] = acc // Also index by accountID for Check/Reserve
+	return acc, nil
+}
+
 func TestExecute_UsageReserveAndConsume(t *testing.T) {
 	usage := newFakeUsageService()
 	usage.policies[domain.ActionSearchListings] = domain.UsagePolicy{
 		ActionType: domain.ActionSearchListings, Cost: 2, Active: true,
 	}
-	usage.accounts["user-1"] = &domain.CreditAccount{AccountID: "user-1", Granted: 100, Reserved: 0}
+	// Use the same key format that FindOrCreateCreditAccountByOwner uses (actor type is "customer")
+	usage.accounts["customer:user-1:default"] = &domain.CreditAccount{AccountID: "acc-customer:user-1:default", Granted: 100, Reserved: 0}
+	usage.accounts["acc-customer:user-1:default"] = &domain.CreditAccount{AccountID: "acc-customer:user-1:default", Granted: 100, Reserved: 0}
 
 	rt := NewCommerceActionRuntime(RuntimeConfig{
 		Logger:             zerolog.Nop(),
@@ -730,6 +766,7 @@ func TestExecute_UsageReserveAndConsume(t *testing.T) {
 	rt.registry.Register(&fakeHandler{actionType: domain.ActionSearchListings})
 
 	authenticated := domain.NewCommerceActor("user-1", domain.ActorTypeCustomer)
+	authenticated.OrgID = "default"
 	action := domain.NewCommerceAction(domain.ActionSearchListings, authenticated, "conv-1")
 	action.WithIdempotencyKey("test-usage")
 	action.Parameters["text"] = "test"
@@ -741,7 +778,7 @@ func TestExecute_UsageReserveAndConsume(t *testing.T) {
 	if result.Status != domain.ActionResultSuccess {
 		t.Fatalf("expected SUCCESS, got %s", result.Status)
 	}
-	acc := usage.accounts["user-1"]
+	acc := usage.accounts["acc-customer:user-1:default"]
 	if acc.Reserved != 0 {
 		t.Errorf("expected Reserved=0 after consume, got %d", acc.Reserved)
 	}
@@ -752,7 +789,8 @@ func TestExecute_UsageReserveAndRelease(t *testing.T) {
 	usage.policies[domain.ActionSearchListings] = domain.UsagePolicy{
 		ActionType: domain.ActionSearchListings, Cost: 2, Active: true,
 	}
-	usage.accounts["user-1"] = &domain.CreditAccount{AccountID: "user-1", Granted: 100, Reserved: 0}
+	usage.accounts["customer:user-1:default"] = &domain.CreditAccount{AccountID: "acc-customer:user-1:default", Granted: 100, Reserved: 0}
+	usage.accounts["acc-customer:user-1:default"] = &domain.CreditAccount{AccountID: "acc-customer:user-1:default", Granted: 100, Reserved: 0}
 
 	rt := NewCommerceActionRuntime(RuntimeConfig{
 		Logger:             zerolog.Nop(),
@@ -765,6 +803,7 @@ func TestExecute_UsageReserveAndRelease(t *testing.T) {
 	rt.registry.Register(&fakeHandler{actionType: domain.ActionSearchListings})
 
 	authenticated := domain.NewCommerceActor("user-1", domain.ActorTypeCustomer)
+	authenticated.OrgID = "default"
 	action := domain.NewCommerceAction(domain.ActionSearchListings, authenticated, "conv-1")
 	action.WithIdempotencyKey("test-usage-release")
 	action.Parameters["text"] = "test"
@@ -776,7 +815,7 @@ func TestExecute_UsageReserveAndRelease(t *testing.T) {
 	if result.Status != domain.ActionResultSuccess {
 		t.Fatalf("expected SUCCESS, got %s", result.Status)
 	}
-	acc := usage.accounts["user-1"]
+	acc := usage.accounts["acc-customer:user-1:default"]
 	if acc.Reserved != 0 {
 		t.Errorf("expected Reserved=0 after consume, got %d", acc.Reserved)
 	}
@@ -787,7 +826,8 @@ func TestExecute_UsageReserveAndReleaseOnFailure(t *testing.T) {
 	usage.policies[domain.ActionSearchListings] = domain.UsagePolicy{
 		ActionType: domain.ActionSearchListings, Cost: 2, Active: true,
 	}
-	usage.accounts["user-1"] = &domain.CreditAccount{AccountID: "user-1", Granted: 100, Reserved: 0}
+	usage.accounts["customer:user-1:default"] = &domain.CreditAccount{AccountID: "acc-customer:user-1:default", Granted: 100, Reserved: 0}
+	usage.accounts["acc-customer:user-1:default"] = &domain.CreditAccount{AccountID: "acc-customer:user-1:default", Granted: 100, Reserved: 0}
 
 	rt := NewCommerceActionRuntime(RuntimeConfig{
 		Logger:             zerolog.Nop(),
@@ -800,6 +840,7 @@ func TestExecute_UsageReserveAndReleaseOnFailure(t *testing.T) {
 	rt.registry.Register(&fakeHandlerFail{actionType: domain.ActionSearchListings})
 
 	authenticated := domain.NewCommerceActor("user-1", domain.ActorTypeCustomer)
+	authenticated.OrgID = "default"
 	action := domain.NewCommerceAction(domain.ActionSearchListings, authenticated, "conv-1")
 	action.WithIdempotencyKey("test-usage-release")
 	action.Parameters["text"] = "test"
@@ -811,7 +852,7 @@ func TestExecute_UsageReserveAndReleaseOnFailure(t *testing.T) {
 	if result.Status != domain.ActionResultFailed {
 		t.Fatalf("expected FAILED, got %s", result.Status)
 	}
-	acc := usage.accounts["user-1"]
+	acc := usage.accounts["acc-customer:user-1:default"]
 	if acc.Reserved != 0 {
 		t.Errorf("expected Reserved=0 after release, got %d", acc.Reserved)
 	}
@@ -822,7 +863,8 @@ func TestExecute_UsageInsufficientCredits(t *testing.T) {
 	usage.policies[domain.ActionSearchListings] = domain.UsagePolicy{
 		ActionType: domain.ActionSearchListings, Cost: 200, Active: true,
 	}
-	usage.accounts["user-1"] = &domain.CreditAccount{AccountID: "user-1", Granted: 100, Reserved: 0}
+	usage.accounts["customer:user-1:default"] = &domain.CreditAccount{AccountID: "acc-customer:user-1:default", Granted: 100, Reserved: 0}
+	usage.accounts["acc-customer:user-1:default"] = &domain.CreditAccount{AccountID: "acc-customer:user-1:default", Granted: 100, Reserved: 0}
 
 	rt := NewCommerceActionRuntime(RuntimeConfig{
 		Logger:             zerolog.Nop(),
@@ -835,6 +877,7 @@ func TestExecute_UsageInsufficientCredits(t *testing.T) {
 	rt.registry.Register(&fakeHandler{actionType: domain.ActionSearchListings})
 
 	authenticated := domain.NewCommerceActor("user-1", domain.ActorTypeCustomer)
+	authenticated.OrgID = "default"
 	action := domain.NewCommerceAction(domain.ActionSearchListings, authenticated, "conv-1")
 	action.Parameters["text"] = "test"
 
@@ -853,7 +896,7 @@ func TestExecute_UsageInsufficientCredits(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Error("expected INSUFFICIENT_CREDITS error in result")
+		t.Errorf("expected INSUFFICIENT_CREDITS error")
 	}
 }
 
@@ -862,7 +905,8 @@ func TestExecute_UsageSystemActorSkips(t *testing.T) {
 	usage.policies[domain.ActionSearchListings] = domain.UsagePolicy{
 		ActionType: domain.ActionSearchListings, Cost: 2, Active: true,
 	}
-	usage.accounts["system-1"] = &domain.CreditAccount{AccountID: "system-1", Granted: 100, Reserved: 0}
+	usage.accounts["system:system-1:default"] = &domain.CreditAccount{AccountID: "acc-system:system-1:default", Granted: 100, Reserved: 0}
+	usage.accounts["acc-system:system-1:default"] = &domain.CreditAccount{AccountID: "acc-system:system-1:default", Granted: 100, Reserved: 0}
 
 	rt := NewCommerceActionRuntime(RuntimeConfig{
 		Logger:             zerolog.Nop(),
@@ -886,7 +930,7 @@ func TestExecute_UsageSystemActorSkips(t *testing.T) {
 	if result.Status != domain.ActionResultSuccess {
 		t.Errorf("expected SUCCESS for system actor, got %s", result.Status)
 	}
-	acc := usage.accounts["system-1"]
+	acc := usage.accounts["system:system-1:default"]
 	if acc.Reserved != 0 {
 		t.Errorf("expected Reserved=0 for system actor (no reserve), got %d", acc.Reserved)
 	}

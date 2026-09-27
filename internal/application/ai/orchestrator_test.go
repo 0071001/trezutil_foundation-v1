@@ -3,7 +3,9 @@ package ai
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -105,7 +107,7 @@ func (m *MockUsageService) Check(ctx context.Context, accountID string, cost int
 	return m.canAfford, nil
 }
 
-func (m *MockUsageService) Reserve(ctx context.Context, accountID string, actionType domain.CommerceActionType, cost int64) (*domain.UsageReservation, error) {
+func (m *MockUsageService) Reserve(ctx context.Context, accountID string, actionType domain.CommerceActionType, cost int64, idempotencyKey string, tenantID string) (*domain.UsageReservation, error) {
 	m.reservationCtr++
 	res := &domain.UsageReservation{
 		ReservationID: "res-" + string(rune(m.reservationCtr)),
@@ -137,6 +139,22 @@ func (m *MockUsageService) Release(ctx context.Context, reservationID string) er
 
 func (m *MockUsageService) Grant(ctx context.Context, accountID string, amount int64, reason string) error {
 	return nil
+}
+
+func (m *MockUsageService) FindOrCreateCreditAccountByOwner(ctx context.Context, ownerType domain.ActorType, ownerID string, tenantID string, planID string, periodID string) (*domain.CreditAccount, error) {
+	return &domain.CreditAccount{
+		AccountID: fmt.Sprintf("acc-%s", ownerID),
+		OwnerType: ownerType,
+		OwnerID:   ownerID,
+		TenantID:  tenantID,
+		PlanID:    planID,
+		PeriodID:  periodID,
+		Granted:   1000,
+		Reserved:  0,
+		Consumed:  0,
+		CreatedAt: time.Now().Unix(),
+		UpdatedAt: time.Now().Unix(),
+	}, nil
 }
 
 func TestOrchestrator_ActorOverride(t *testing.T) {

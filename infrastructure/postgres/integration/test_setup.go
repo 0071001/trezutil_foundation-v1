@@ -36,12 +36,18 @@ func NewTestDB(tb *testing.T) *TestDB {
 		tb.Fatalf("failed to connect to postgres admin DB: %v", err)
 	}
 	defer adminDB.Close()
+	adminDB.SetMaxOpenConns(1)
+	adminDB.SetMaxIdleConns(1)
 
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	adminDB.ExecContext(ctx, fmt.Sprintf("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '%s' AND pid <> pg_backend_pid()", testDBName))
-	adminDB.ExecContext(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", testDBName))
+	if _, err := adminDB.ExecContext(ctx, fmt.Sprintf("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '%s' AND pid <> pg_backend_pid()", testDBName)); err != nil {
+		tb.Fatalf("failed to terminate existing connections: %v", err)
+	}
+	if _, err := adminDB.ExecContext(ctx, fmt.Sprintf("DROP DATABASE IF EXISTS %s", testDBName)); err != nil {
+		tb.Fatalf("failed to drop test database: %v", err)
+	}
 
 	if _, err := adminDB.ExecContext(ctx, fmt.Sprintf("CREATE DATABASE %s", testDBName)); err != nil {
 		tb.Fatalf("failed to create test database: %v", err)
@@ -52,6 +58,8 @@ func NewTestDB(tb *testing.T) *TestDB {
 	if err != nil {
 		tb.Fatalf("failed to connect to test database: %v", err)
 	}
+	db.SetMaxOpenConns(10)
+	db.SetConnMaxLifetime(30 * time.Second)
 
 	if err := applyMigrations(ctx, db); err != nil {
 		tb.Fatalf("failed to apply migrations: %v", err)
@@ -72,8 +80,10 @@ func (t *TestDB) Close() {
 		return
 	}
 	defer adminDB.Close()
+	adminDB.SetMaxOpenConns(1)
+	adminDB.SetMaxIdleConns(1)
 
-	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	adminDB.ExecContext(ctx, fmt.Sprintf("SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '%s' AND pid <> pg_backend_pid()", testDBName))
@@ -132,6 +142,14 @@ func (t *TestDB) Cleanup(tb *testing.T) {
 	defer cancel()
 
 	tables := []string{
+		"payment_ledger",
+		"payment_webhook_events",
+		"refunds",
+		"payments",
+		"payment_methods",
+		"orders",
+		"provider_executions",
+		"providers",
 		"role_permissions",
 		"user_roles",
 		"permissions",
@@ -151,6 +169,9 @@ func (t *TestDB) Cleanup(tb *testing.T) {
 		"organization_members",
 		"organizations",
 		"users",
+		"conversation_confirmations",
+		"conversation_result_items",
+		"conversation_contexts",
 		"conversations",
 		"webhook_events",
 		"channel_accounts",

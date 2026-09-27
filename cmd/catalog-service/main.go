@@ -23,7 +23,7 @@ func main() {
 	cfg := &config.Config{
 		AppEnv:   getEnv("APP_ENV", "development"),
 		LogLevel: getEnv("LOG_LEVEL", "info"),
-		HTTPPort: getEnv("HTTP_PORT", "8080"),
+		HTTPPort: getEnv("HTTP_PORT", "8082"),
 	}
 
 	// Initialize database connection

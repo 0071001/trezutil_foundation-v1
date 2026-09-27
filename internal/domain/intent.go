@@ -1,5 +1,7 @@
 package domain
 
+import "fmt"
+
 // CommerceActionType represents the type of a commerce action.
 type CommerceActionType string
 
@@ -35,6 +37,11 @@ const (
 
 	ActionInitiatePayment  CommerceActionType = "INITIATE_PAYMENT"
 	ActionGetPaymentStatus CommerceActionType = "GET_PAYMENT_STATUS"
+	ActionCancelPayment    CommerceActionType = "CANCEL_PAYMENT"
+	ActionRefundPayment    CommerceActionType = "REFUND_PAYMENT"
+	ActionAuthorizePayment CommerceActionType = "AUTHORIZE_PAYMENT"
+	ActionCapturePayment   CommerceActionType = "CAPTURE_PAYMENT"
+	ActionGetRefundStatus  CommerceActionType = "GET_REFUND_STATUS"
 
 	ActionGetDeliveryStatus CommerceActionType = "GET_DELIVERY_STATUS"
 
@@ -65,7 +72,8 @@ func (t CommerceActionType) GetCategory() ActionCategory {
 		ActionGetDeliveryStatus, ActionGetSellerReport, ActionSuggest,
 		ActionGetFulfillmentStatus:
 		return ActionCategoryRead
-	case ActionInitiatePayment:
+	case ActionInitiatePayment, ActionCancelPayment, ActionRefundPayment,
+		ActionAuthorizePayment, ActionCapturePayment:
 		return ActionCategoryFinancial
 	default:
 		return ActionCategoryRead
@@ -74,11 +82,16 @@ func (t CommerceActionType) GetCategory() ActionCategory {
 
 // ConversationIntent represents an extracted intent from a conversation.
 type ConversationIntent struct {
-	Name       string
-	Confidence float64
-	Source     string // USER, SYSTEM, AI, APPLICATION
-	Entities   []ConversationEntity
-	ActionType CommerceActionType
+	Name                 string
+	Confidence           float64
+	Source               string // USER, SYSTEM, AI, APPLICATION
+	Entities             []ConversationEntity
+	ActionType           CommerceActionType
+	Specialist           AISpecialistCode
+	VerticalPack         PackCode
+	RequiresConfirmation bool
+	MissingParameters    []MissingParameter
+	Explanation          string
 }
 
 // ConversationEntity represents an extracted entity from a conversation.
@@ -113,4 +126,92 @@ func (i ConversationIntent) GetEntity(name string) (*ConversationEntity, bool) {
 		}
 	}
 	return nil, false
+}
+
+// ToAction converts a ConversationIntent into a CommerceAction.
+func (i ConversationIntent) ToAction(conversationID string, actor CommerceActor, tenantID string) *CommerceAction {
+	action := NewCommerceAction(i.ActionType, actor, conversationID)
+	action.WithTenant(tenantID)
+	action.WithSource(i.Source)
+
+	for _, entity := range i.Entities {
+		action.Parameters[entity.Name] = entity.NormalizedValue
+		if entity.NormalizedValue == "" {
+			action.Parameters[entity.Name] = entity.Value
+		}
+	}
+
+	if i.RequiresConfirmation {
+		action.ConfirmationState = ConfirmationPending
+	}
+
+	return action
+}
+
+// EntitiesFromParams converts a parameter map to conversation entities.
+func EntitiesFromParams(params map[string]interface{}) []ConversationEntity {
+	entities := make([]ConversationEntity, 0, len(params))
+	for k, v := range params {
+		entity := ConversationEntity{
+			Name:            k,
+			Value:           fmt.Sprintf("%v", v),
+			NormalizedValue: fmt.Sprintf("%v", v),
+			Source:          "AI",
+		}
+		entities = append(entities, entity)
+	}
+	return entities
+}
+
+// MissingRequiredParams checks the intent against known required parameters and returns any that are missing.
+func (i ConversationIntent) MissingRequiredParams() []MissingParameter {
+	required := RequiredParamsForAction[i.ActionType]
+	var missing []MissingParameter
+	for _, reqParam := range required {
+		found := false
+		for _, entity := range i.Entities {
+			if entity.Name == reqParam {
+				found = true
+				break
+			}
+		}
+		if !found {
+			missing = append(missing, MissingParameter{
+				Name:        reqParam,
+				Description: reqParam + " is required",
+			})
+		}
+	}
+	return missing
+}
+
+// RequiredParamsForAction maps action types to their required parameter names.
+var RequiredParamsForAction = map[CommerceActionType][]string{
+	ActionCreateOrder:           {"listing_id"},
+	ActionGetOrder:              {"order_id"},
+	ActionCancelOrder:           {"order_id"},
+	ActionCreateListing:         {"listing"},
+	ActionPublishListing:        {"listing_id"},
+	ActionPauseListing:          {"listing_id"},
+	ActionResumeListing:         {"listing_id"},
+	ActionCreateReservation:     {"listing_id", "start_at", "end_at"},
+	ActionGetReservation:        {"reservation_id"},
+	ActionCancelReservation:     {"reservation_id"},
+	ActionModifyReservation:     {"reservation_id"},
+	ActionCheckAvailability:     {"listing_id", "start_at", "end_at"},
+	ActionInitiatePayment:       {"order_id"},
+	ActionGetPaymentStatus:      {"order_id"},
+	ActionCancelPayment:         {"payment_id"},
+	ActionRefundPayment:         {"payment_id", "amount_minor"},
+	ActionAuthorizePayment:      {"payment_id"},
+	ActionCapturePayment:        {"payment_id"},
+	ActionGetRefundStatus:       {"refund_id"},
+	ActionGetFulfillmentStatus:  {"order_id"},
+	ActionAssignFulfillment:     {"fulfillment_id"},
+	ActionTransitionFulfillment: {"fulfillment_id", "target_status"},
+}
+
+// IsReadAction returns true if the action is a read operation.
+func (i ConversationIntent) IsReadAction() bool {
+	return i.ActionType.GetCategory() == ActionCategoryRead
 }

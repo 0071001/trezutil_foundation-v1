@@ -68,6 +68,7 @@ func (h *WebHandler) HandleAPIRoutes(
 	fulfillmentHandler FulfillmentHandlerInterface,
 	orderHandler OrderHandlerInterface,
 	providerHandler ProviderHandlerInterface,
+	paymentHandler PaymentHttpHandlerInterface,
 	verticalPackHandler VerticalPackHandlerInterface,
 	w http.ResponseWriter, r *http.Request) {
 
@@ -149,6 +150,39 @@ func (h *WebHandler) HandleAPIRoutes(
 	// Vertical pack routes
 	if strings.HasPrefix(path, "/api/v1/packs") {
 		HandleVerticalPacksRoutes(verticalPackHandler, w, r)
+		return
+	}
+
+	// Payment routes
+	if strings.HasPrefix(path, "/api/v1/payments") {
+		switch {
+		case path == "/api/v1/payments" && method == "POST":
+			paymentHandler.CreatePaymentH(w, r)
+			return
+		case strings.HasPrefix(path, "/api/v1/payments/") && strings.HasSuffix(path, "/cancel") && method == "POST":
+			paymentHandler.CancelPaymentH(w, r)
+			return
+		case strings.HasPrefix(path, "/api/v1/payments/") && strings.HasSuffix(path, "/capture") && method == "POST":
+			paymentHandler.CapturePaymentH(w, r)
+			return
+		case strings.HasPrefix(path, "/api/v1/payments/") && strings.HasSuffix(path, "/refund") && method == "POST":
+			paymentHandler.RefundPaymentH(w, r)
+			return
+		case strings.HasPrefix(path, "/api/v1/payments/") && strings.HasSuffix(path, "/status") && method == "GET":
+			paymentHandler.GetPaymentStatusH(w, r)
+			return
+		case strings.HasPrefix(path, "/api/v1/payments/") && strings.HasSuffix(path, "/refunds") && method == "GET":
+			paymentHandler.GetRefundH(w, r)
+			return
+		case strings.HasPrefix(path, "/api/v1/payments/") && method == "GET":
+			paymentHandler.GetPaymentH(w, r)
+			return
+		}
+	}
+
+	// Payment webhook routes
+	if strings.HasPrefix(path, "/api/v1/webhooks/payments/") && method == "POST" {
+		paymentHandler.WebhookPaymentH(w, r)
 		return
 	}
 

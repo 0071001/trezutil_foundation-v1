@@ -117,7 +117,7 @@ func (o *AIOrchestrator) Interpret(ctx context.Context, req *AIInterpretRequest)
 				result.LatencyMs = time.Since(startTime).Milliseconds()
 				return result, nil
 			}
-			res, rerr := o.usageService.Reserve(ctx, req.AuthenticatedActor.ID, "AI_INTERPRETATION", policy.Cost)
+			res, rerr := o.usageService.Reserve(ctx, req.AuthenticatedActor.ID, "AI_INTERPRETATION", policy.Cost, requestID, req.TenantID)
 			if rerr == nil {
 				reservationID = res.ReservationID
 			}

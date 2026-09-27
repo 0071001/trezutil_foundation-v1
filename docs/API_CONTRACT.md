@@ -84,6 +84,19 @@ Natural-language requests may arrive as text, but the resulting structured query
 - `GET /v1/conversations/{conversation_id}`
 - `POST /v1/conversations/{conversation_id}/handoff`
 
+### Conversations (Sprint 18 — Conversational Commerce)
+- `POST /api/v1/conversations/message` — process an inbound message
+- `POST /api/v1/conversations/{conversation_id}/confirm` — confirm a pending action
+- `POST /api/v1/conversations/{conversation_id}/reject` — reject a pending action
+- `POST /api/v1/conversations/{conversation_id}/token` — generate a session token
+
+Conversation endpoints accept a channel-neutral message payload and return a
+channel-neutral `ConversationResponse` containing text, cards, action prompts,
+clarification (missing parameters), or confirmation state.
+
+Idempotency: each inbound message carries a `MessageIdempotencyKey`. Duplicate
+delivery produces the same logical response without duplicate side effects.
+
 ### Orders
 - `POST /v1/orders`
 - `GET /v1/orders/{order_id}`

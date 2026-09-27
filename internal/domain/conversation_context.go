@@ -2,16 +2,71 @@ package domain
 
 // ConversationContext represents the structured context of a conversation.
 type ConversationContext struct {
-	CurrentIntent          *ConversationIntent
-	CurrentEntities        []ConversationEntity
-	CurrentListing         *ListingRef
-	CurrentOrder           *OrderRef
-	CurrentSearchQuery     *DiscoveryQuery
-	CurrentLocation        *SearchLocation
-	CurrentListingLocation *GeoPoint
-	PendingAction          *CommerceAction
-	Language               string
-	LastActivityAt         int64
+	CurrentIntent          *ConversationIntent   `json:"current_intent,omitempty"`
+	CurrentEntities        []ConversationEntity  `json:"current_entities,omitempty"`
+	CurrentListing         *ListingRef           `json:"current_listing,omitempty"`
+	CurrentOrder           *OrderRef             `json:"current_order,omitempty"`
+	CurrentReservation     *ReservationRef       `json:"current_reservation,omitempty"`
+	CurrentSearchQuery     *DiscoveryQuery       `json:"current_search_query,omitempty"`
+	CurrentLocation        *SearchLocation       `json:"current_location,omitempty"`
+	CurrentListingLocation *GeoPoint             `json:"current_listing_location,omitempty"`
+	PendingAction          *CommerceAction       `json:"pending_action,omitempty"`
+	PendingParameters      []PendingParameter    `json:"pending_parameters,omitempty"`
+	MissingParameters      []MissingParameter    `json:"missing_parameters,omitempty"`
+	ConfirmationState      ConfirmationFlowState `json:"confirmation_state"`
+	LastActionID           string                `json:"last_action_id,omitempty"`
+	LastActionResult       *CommerceActionResult `json:"last_action_result,omitempty"`
+	ResultItems            []ResultItemRef       `json:"result_items,omitempty"`
+	SpecialistCode         AISpecialistCode      `json:"specialist_code,omitempty"`
+	PackCode               PackCode              `json:"pack_code,omitempty"`
+	Language               string                `json:"language,omitempty"`
+	LastActivityAt         int64                 `json:"last_activity_at"`
+}
+
+// PendingParameter represents a parameter the system is waiting for the user to provide.
+type PendingParameter struct {
+	Name        string
+	Description string
+	Required    bool
+}
+
+// MissingParameter represents a parameter required for an action that the user has not yet provided.
+type MissingParameter struct {
+	Name        string
+	Description string
+	EntityName  string
+	Examples    []string
+}
+
+// ConfirmationFlowState tracks the multi-step confirmation flow for an action.
+type ConfirmationFlowState struct {
+	ActionID          string
+	State             ConfirmationState
+	Summary           string
+	Details           map[string]interface{}
+	RequestedAt       int64
+	ConfirmationToken string
+}
+
+// ResultItemRef is a reference to a result item (listing, order, reservation)
+// stored in context for resolution of follow-up questions like "the first one".
+type ResultItemRef struct {
+	RefType  string      // "listing", "order", "reservation"
+	ID       string      // canonical ID of the referenced entity
+	Index    int         // 0-based position in the original result list
+	Title    string      // human-readable title for display
+	Subtitle string      // secondary text (price, status, etc.)
+	Data     interface{} // full entity data if needed for context
+}
+
+// HasPendingConfirmation returns true if the context has a pending confirmation flow.
+func (c ConversationContext) HasPendingConfirmation() bool {
+	return c.ConfirmationState.ActionID != "" && !c.ConfirmationState.State.IsTerminal()
+}
+
+// HasMissingParameters returns true if the context has unresolved missing parameters.
+func (c ConversationContext) HasMissingParameters() bool {
+	return len(c.MissingParameters) > 0
 }
 
 // ListingRef is a lightweight reference to a listing.
@@ -30,4 +85,14 @@ type OrderRef struct {
 	Status      string
 	TotalAmount int64
 	Currency    string
+}
+
+// ReservationRef is a lightweight reference to a reservation.
+type ReservationRef struct {
+	ID        string
+	Status    string
+	StartAt   int64
+	EndAt     int64
+	PartySize int
+	Quantity  int
 }

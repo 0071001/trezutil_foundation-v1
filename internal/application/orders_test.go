@@ -31,6 +31,15 @@ func (f *fakeOrderRepo) FindByID(ctx context.Context, orderID string) (*domain.O
 func (f *fakeOrderRepo) FindByIDForUpdate(ctx context.Context, orderID string) (*domain.Order, error) {
 	return f.FindByID(ctx, orderID)
 }
+func (f *fakeOrderRepo) FindByIDAndOrg(ctx context.Context, orgID, orderID string) (*domain.Order, error) {
+	if f.err != nil {
+		return nil, f.err
+	}
+	if f.order != nil && f.order.ID == orderID && f.order.OrganizationID == orgID {
+		return f.order, nil
+	}
+	return nil, domain.ErrOrderNotFound
+}
 func (f *fakeOrderRepo) Update(ctx context.Context, order *domain.Order) error {
 	if f.err != nil {
 		return f.err

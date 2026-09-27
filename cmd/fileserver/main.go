@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 	"path/filepath"
 )
 
@@ -13,10 +14,20 @@ func main() {
 	}
 
 	fs := http.FileServer(http.Dir(webDir))
-	http.Handle("/", fs)
+	mux := http.NewServeMux()
 
-	log.Printf("Serving web app on http://localhost:8080 (dir: %s)", webDir)
-	if err := http.ListenAndServe("localhost:8080", nil); err != nil {
+	// Legacy static fallback: the gateway now serves the SPA. Direct file
+	// serving remains as a fallback for local development / unproxied runs.
+	mux.Handle("/", fs)
+
+	port := os.Getenv("HTTP_PORT")
+	if port == "" {
+		port = "8084"
+	}
+
+	log.Printf("gateway now serves the SPA on http://localhost:%s (dir: %s)", port, webDir)
+	log.Printf("legacy static fallback still attached at / (dir: %s)", webDir)
+	if err := http.ListenAndServe(":"+port, mux); err != nil {
 		log.Fatalf("server failed: %v", err)
 	}
 }

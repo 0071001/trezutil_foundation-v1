@@ -2,6 +2,8 @@ package application
 
 import (
 	"context"
+	"fmt"
+	"sync"
 	"testing"
 
 	"github.com/trezutil/trezutil/internal/domain"
@@ -17,6 +19,18 @@ func (f *fakePlanRepo) FindActive(ctx context.Context) (*domain.Plan, error) {
 }
 func (f *fakePlanRepo) FindByID(ctx context.Context, id string) (*domain.Plan, error) {
 	if f.plan != nil && f.plan.ID == id {
+		return f.plan, nil
+	}
+	return nil, domain.ErrUsagePlanNotFound
+}
+func (f *fakePlanRepo) ListByTenant(ctx context.Context, tenantID string) ([]*domain.Plan, error) {
+	if f.plan != nil && f.plan.TenantID == tenantID {
+		return []*domain.Plan{f.plan}, nil
+	}
+	return nil, nil
+}
+func (f *fakePlanRepo) FindByTenantAndSlug(ctx context.Context, tenantID, slug string) (*domain.Plan, error) {
+	if f.plan != nil && f.plan.TenantID == tenantID && f.plan.Slug == slug {
 		return f.plan, nil
 	}
 	return nil, domain.ErrUsagePlanNotFound
@@ -46,6 +60,38 @@ func (f *fakeAccountRepo) FindByOwner(ctx context.Context, ownerType domain.Acto
 	}
 	return nil, domain.ErrUsageAccountNotFound
 }
+
+func (f *fakeAccountRepo) FindByOwnerAndPeriod(ctx context.Context, ownerType domain.ActorType, ownerID string, tenantID string, periodID string) (*domain.CreditAccount, error) {
+	if f.account != nil && f.account.OwnerID == ownerID && f.account.TenantID == tenantID && f.account.PeriodID == periodID {
+		return f.account, nil
+	}
+	return nil, domain.ErrUsageAccountNotFound
+}
+
+func (f *fakeAccountRepo) FindOrCreateByOwnerAndPeriod(ctx context.Context, ownerType domain.ActorType, ownerID string, tenantID string, planID string, periodID string) (*domain.CreditAccount, error) {
+	if f.account != nil && f.account.OwnerID == ownerID && f.account.TenantID == tenantID && f.account.PeriodID == periodID {
+		return f.account, nil
+	}
+	now := int64(1000000)
+	if f.account != nil {
+		now = f.account.CreatedAt
+	}
+	f.account = &domain.CreditAccount{
+		AccountID: "acc-" + ownerID,
+		OwnerType: ownerType,
+		OwnerID:   ownerID,
+		TenantID:  tenantID,
+		PlanID:    planID,
+		PeriodID:  periodID,
+		Granted:   0,
+		Reserved:  0,
+		Consumed:  0,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	return f.account, nil
+}
+
 func (f *fakeAccountRepo) Update(ctx context.Context, account *domain.CreditAccount) error {
 	f.account = account
 	return nil
@@ -99,7 +145,188 @@ func NewTestUsageService(
 	ledgerRepo *fakeLedgerRepo,
 	policyRepo *fakePolicyRepo,
 ) *UsageService {
-	return NewUsageService(planRepo, accountRepo, ledgerRepo, policyRepo, &fakeClock{})
+	fakeResRepo := newFakeReservationRepo(accountRepo, ledgerRepo, &fakeClock{})
+	return NewUsageService(planRepo, accountRepo, ledgerRepo, policyRepo, fakeResRepo, &fakeClock{})
+}
+
+type fakeReservationRepo struct {
+	accountRepo  *fakeAccountRepo
+	ledgerRepo   *fakeLedgerRepo
+	clock        domain.Clock
+	reservations map[string]*domain.UsageReservation
+	mu           sync.RWMutex
+}
+
+func newFakeReservationRepo(accountRepo *fakeAccountRepo, ledgerRepo *fakeLedgerRepo, clock domain.Clock) *fakeReservationRepo {
+	return &fakeReservationRepo{
+		accountRepo:  accountRepo,
+		ledgerRepo:   ledgerRepo,
+		clock:        clock,
+		reservations: make(map[string]*domain.UsageReservation),
+	}
+}
+
+func (f *fakeReservationRepo) Record(ctx context.Context, reservation *domain.UsageReservation) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reservations[reservation.ReservationID] = reservation
+	return nil
+}
+
+func (f *fakeReservationRepo) FindByID(ctx context.Context, reservationID string) (*domain.UsageReservation, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	if r, ok := f.reservations[reservationID]; ok {
+		return r, nil
+	}
+	return nil, domain.ErrUsageReservationNotFound
+}
+
+func (f *fakeReservationRepo) FindByAccount(ctx context.Context, accountID string) ([]domain.UsageReservation, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	var out []domain.UsageReservation
+	for _, r := range f.reservations {
+		if r.AccountID == accountID {
+			out = append(out, *r)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeReservationRepo) UpdateStatus(ctx context.Context, reservationID string, status domain.UsageReservationStatus) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if r, ok := f.reservations[reservationID]; ok {
+		r.Status = status
+		return nil
+	}
+	return domain.ErrUsageReservationNotFound
+}
+
+func (f *fakeReservationRepo) ReserveCreditsTx(ctx context.Context, accountID string, actionType domain.CommerceActionType, cost int64, idempotencyKey, tenantID string, now int64) (*domain.UsageReservation, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	for _, r := range f.reservations {
+		if r.IdempotencyKey == idempotencyKey && r.Status == domain.UsageReservationActive {
+			return r, nil
+		}
+	}
+
+	account, err := f.accountRepo.FindByID(ctx, accountID)
+	if err != nil {
+		return nil, domain.ErrUsageAccountNotFound
+	}
+	if !account.CanAfford(cost) {
+		return nil, domain.ErrInsufficientCredits
+	}
+
+	resID := fmt.Sprintf("res-%s-%d", accountID, now)
+	reservation := &domain.UsageReservation{
+		ReservationID:   resID,
+		AccountID:       accountID,
+		ActionType:      actionType,
+		Amount:          cost,
+		ReservedAt:      now,
+		Status:          domain.UsageReservationActive,
+		IdempotencyKey:  idempotencyKey,
+		TenantID:        tenantID,
+	}
+
+	account.Reserved += cost
+	_ = f.accountRepo.Update(ctx, account)
+
+	event := domain.NewUsageEvent(
+		resID, accountID, actionType,
+		account.OwnerID, account.TenantID,
+		domain.UsageReserve, cost,
+		account.Remaining()+cost, account.Remaining(),
+		account.PeriodID, now,
+	)
+	_ = f.ledgerRepo.Record(ctx, &event)
+
+	f.reservations[resID] = reservation
+	return reservation, nil
+}
+
+func (f *fakeReservationRepo) ConsumeReservation(ctx context.Context, reservationID string, now int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	res, ok := f.reservations[reservationID]
+	if !ok {
+		return domain.ErrUsageReservationNotFound
+	}
+	if res.Status != domain.UsageReservationActive {
+		if res.Status == domain.UsageReservationConsumed {
+			return domain.ErrUsageAlreadyConsumed
+		}
+		if res.Status == domain.UsageReservationReleased {
+			return domain.ErrUsageReservationConflict
+		}
+		return domain.ErrUsageReservationConflict
+	}
+
+	account, err := f.accountRepo.FindByID(ctx, res.AccountID)
+	if err != nil {
+		return domain.ErrUsageAccountNotFound
+	}
+
+	account.Reserved -= res.Amount
+	account.Consumed += res.Amount
+	_ = f.accountRepo.Update(ctx, account)
+
+	res.Status = domain.UsageReservationConsumed
+
+	event := domain.NewUsageEvent(
+		reservationID, res.AccountID, res.ActionType,
+		account.OwnerID, account.TenantID,
+		domain.UsageConsume, res.Amount,
+		account.Remaining()+res.Amount, account.Remaining(),
+		account.PeriodID, now,
+	)
+	_ = f.ledgerRepo.Record(ctx, &event)
+	return nil
+}
+
+func (f *fakeReservationRepo) ReleaseReservation(ctx context.Context, reservationID string, now int64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	res, ok := f.reservations[reservationID]
+	if !ok {
+		return domain.ErrUsageReservationNotFound
+	}
+	if res.Status != domain.UsageReservationActive {
+		if res.Status == domain.UsageReservationReleased {
+			return domain.ErrUsageAlreadyReleased
+		}
+		if res.Status == domain.UsageReservationConsumed {
+			return domain.ErrUsageReservationConflict
+		}
+		return domain.ErrUsageReservationConflict
+	}
+
+	account, err := f.accountRepo.FindByID(ctx, res.AccountID)
+	if err != nil {
+		return domain.ErrUsageAccountNotFound
+	}
+
+	account.Reserved -= res.Amount
+	_ = f.accountRepo.Update(ctx, account)
+
+	res.Status = domain.UsageReservationReleased
+
+	event := domain.NewUsageEvent(
+		reservationID, res.AccountID, res.ActionType,
+		account.OwnerID, account.TenantID,
+		domain.UsageRelease, res.Amount,
+		account.Remaining()+res.Amount, account.Remaining(),
+		account.PeriodID, now,
+	)
+	_ = f.ledgerRepo.Record(ctx, &event)
+	return nil
 }
 
 func TestUsageService_GetBalance_Success(t *testing.T) {
@@ -197,7 +424,7 @@ func TestUsageService_Reserve_Success(t *testing.T) {
 	ledger := &fakeLedgerRepo{}
 	svc := NewTestUsageService(&fakePlanRepo{}, repo, ledger, &fakePolicyRepo{})
 
-	reservation, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 20)
+	reservation, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 20, "test-key", "tenant-1")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -220,7 +447,7 @@ func TestUsageService_Reserve_InsufficientCredits(t *testing.T) {
 	repo := &fakeAccountRepo{account: account}
 	svc := NewTestUsageService(&fakePlanRepo{}, repo, &fakeLedgerRepo{}, &fakePolicyRepo{})
 
-	_, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 10)
+	_, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 10, "test-key", "tenant-1")
 	if err != domain.ErrInsufficientCredits {
 		t.Errorf("expected ErrInsufficientCredits, got %v", err)
 	}
@@ -229,7 +456,7 @@ func TestUsageService_Reserve_InsufficientCredits(t *testing.T) {
 func TestUsageService_Reserve_InvalidCost(t *testing.T) {
 	svc := NewTestUsageService(&fakePlanRepo{}, &fakeAccountRepo{}, &fakeLedgerRepo{}, &fakePolicyRepo{})
 
-	_, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 0)
+	_, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 0, "test-key", "tenant-1")
 	if err == nil {
 		t.Error("expected error for zero cost")
 	}
@@ -241,7 +468,7 @@ func TestUsageService_Consume_Success(t *testing.T) {
 	ledger := &fakeLedgerRepo{}
 	svc := NewTestUsageService(&fakePlanRepo{}, repo, ledger, &fakePolicyRepo{})
 
-	reservation, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 20)
+	reservation, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 20, "test-key", "tenant-1")
 	if err != nil {
 		t.Fatalf("reserve failed: %v", err)
 	}
@@ -272,7 +499,7 @@ func TestUsageService_Consume_AlreadyConsumed(t *testing.T) {
 	ledger := &fakeLedgerRepo{}
 	svc := NewTestUsageService(&fakePlanRepo{}, repo, ledger, &fakePolicyRepo{})
 
-	reservation, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 20)
+	reservation, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 20, "test-key", "tenant-1")
 	if err != nil {
 		t.Fatalf("reserve failed: %v", err)
 	}
@@ -293,7 +520,7 @@ func TestUsageService_Release_Success(t *testing.T) {
 	ledger := &fakeLedgerRepo{}
 	svc := NewTestUsageService(&fakePlanRepo{}, repo, ledger, &fakePolicyRepo{})
 
-	reservation, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 20)
+	reservation, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 20, "test-key", "tenant-1")
 	if err != nil {
 		t.Fatalf("reserve failed: %v", err)
 	}
@@ -312,7 +539,7 @@ func TestUsageService_Release_AlreadyReleased(t *testing.T) {
 	ledger := &fakeLedgerRepo{}
 	svc := NewTestUsageService(&fakePlanRepo{}, repo, ledger, &fakePolicyRepo{})
 
-	reservation, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 20)
+	reservation, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 20, "test-key", "tenant-1")
 	if err != nil {
 		t.Fatalf("reserve failed: %v", err)
 	}
@@ -357,7 +584,7 @@ func TestUsageService_Reserve_Consume_Release_Workflow(t *testing.T) {
 	svc := NewTestUsageService(&fakePlanRepo{}, repo, ledger, &fakePolicyRepo{})
 
 	// Reserve
-	reservation, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 20)
+	reservation, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 20, "test-key", "tenant-1")
 	if err != nil {
 		t.Fatalf("reserve failed: %v", err)
 	}
@@ -374,7 +601,7 @@ func TestUsageService_Reserve_Consume_Release_Workflow(t *testing.T) {
 	}
 
 	// Reserve again
-	reservation2, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 20)
+	reservation2, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 20, "test-key", "tenant-1")
 	if err != nil {
 		t.Fatalf("second reserve failed: %v", err)
 	}
@@ -396,7 +623,7 @@ func TestUsageService_NegativeBalancePrevention(t *testing.T) {
 	repo := &fakeAccountRepo{account: account}
 	svc := NewTestUsageService(&fakePlanRepo{}, repo, &fakeLedgerRepo{}, &fakePolicyRepo{})
 
-	_, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 20)
+	_, err := svc.Reserve(context.Background(), "acc-1", domain.ActionSearchListings, 20, "test-key", "tenant-1")
 	if err != domain.ErrInsufficientCredits {
 		t.Errorf("expected ErrInsufficientCredits, got %v", err)
 	}

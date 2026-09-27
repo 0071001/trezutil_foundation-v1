@@ -188,6 +188,10 @@ func TestIntegration_VersionAndIdentity(t *testing.T) {
 func TestIntegration_HealthEndpoint(t *testing.T) {
 	cfg := setupIntegrationConfig()
 
+	if !isIntegrationEnabled() {
+		t.Skip("Skipping: set TREZUTIL_OPENSEARCH_INTEGRATION=true to enable real OpenSearch integration tests")
+	}
+
 	resp, err := http.Get(cfg.URL + "/_cluster/health")
 	if err != nil {
 		t.Fatalf("failed to get cluster health: %v", err)

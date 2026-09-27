@@ -72,20 +72,28 @@ const Pages = {
         return Components.Loading({ title: I18n.t('state_loading') });
       }
 
+      const suggestionChips = this.suggestions.map(s => ({
+        label: s.label || s.value,
+        onClick: `App.navigate("/search?q=${encodeURIComponent(s.value || s.label)}")`,
+      }));
+
       const hero = `
-        <section class="hero">
-          <h1>${I18n.t('app_title')}</h1>
-          <p>${I18n.t('app_subtitle')}</p>
-          ${Components.SearchBar({
-            placeholder: I18n.t('search_placeholder'),
-            onSearch: 'Search.search',
-          })}
-          ${Components.SuggestionChips({
-            chips: this.suggestions.map(s => ({
-              label: s.label || s.value,
-              onClick: `App.navigate("/search?q=${encodeURIComponent(s.value || s.label)}")`,
-            })),
-          })}
+        <section class="hero hero--conversational">
+          <div class="hero-logo">
+            <span class="logo-text">TREZUTIL</span><span class="logo-dot">.</span>
+          </div>
+          <h1 class="hero-title">${I18n.t('home_hero_title')}</h1>
+          <p class="hero-subtitle">${I18n.t('home_hero_subtitle')}</p>
+          <div class="hero-cta">
+            <button class="btn btn-primary hero-cta-btn" onclick="App.navigate('/chat')">
+              <span aria-hidden="true">💬</span>
+              <span>${I18n.t('cta_start_chat')}</span>
+            </button>
+          </div>
+          ${Components.ConversationPrompt({ onPrompt: "App.navigate('/chat')" })}
+          <div class="hero-suggestions">
+            ${Components.SuggestionChips({ chips: suggestionChips })}
+          </div>
         </section>
       `;
 
@@ -510,7 +518,10 @@ const Pages = {
     messages: [],
     loading: false,
     input: '',
+    conversationId: null,
     listingId: '',
+    pendingConfirmation: null,
+    pendingMissingParam: false,
 
     render() {
       return `
@@ -528,12 +539,32 @@ const Pages = {
       const lIndex = hash.indexOf('?l=');
       this.listingId = lIndex >= 0 ? hash.slice(lIndex + 3) : '';
 
+      if (this.messages.length === 0) {
+        this.showSuggestions();
+      }
+
       const container = document.getElementById('chat-container');
       if (container) {
         container.innerHTML = this.renderContent();
       }
 
       this.scrollToBottom();
+    },
+
+    showSuggestions() {
+      const suggestions = [
+        { text: I18n.t('chat_suggestion_search'), icon: '🔍' },
+        { text: I18n.t('chat_suggestion_availability'), icon: '📅' },
+        { text: I18n.t('chat_suggestion_order'), icon: '📦' },
+        { text: I18n.t('chat_suggestion_reservation'), icon: '🎫' },
+      ];
+      const html = suggestions.map(s =>
+        `<button class="chat-suggestion" onclick="Chat.sendSuggested('${s.text}')">
+          <span class="suggestion-icon">${s.icon}</span>
+          <span>${s.text}</span>
+        </button>`
+      ).join('');
+      this.messages.push({ role: 'assistant', content: html, isHtml: true, isSuggestions: true });
     },
 
     renderContent() {
@@ -543,32 +574,113 @@ const Pages = {
             <div style="font-size: 48px; margin-bottom: var(--space-lg);">💬</div>
             <h3 style="font-size: var(--text-h3); margin-bottom: var(--space-sm);">${I18n.t('chat_title')}</h3>
             <p class="text-secondary">${I18n.t('search_placeholder_suggestions')}</p>
+            <div class="chat-suggestions" style="display: flex; flex-wrap: wrap; gap: var(--space-sm); justify-content: center; margin-top: var(--space-lg);">
+              <button class="chat-suggestion" onclick="Chat.sendSuggested('${I18n.t('chat_suggestion_search')}')">🔍 ${I18n.t('chat_suggestion_search')}</button>
+              <button class="chat-suggestion" onclick="Chat.sendSuggested('${I18n.t('chat_suggestion_availability')}')">📅 ${I18n.t('chat_suggestion_availability')}</button>
+              <button class="chat-suggestion" onclick="Chat.sendSuggested('${I18n.t('chat_suggestion_order')}')">📦 ${I18n.t('chat_suggestion_order')}</button>
+            </div>
           </div>
         `;
       }
       return `
-        <div class="chat-messages">
+        <div class="chat-messages" id="chat-messages">
           ${this.messages.map(m => this.renderMessage(m)).join('')}
         </div>
-        <div class="chat-input-bar">
-          <input type="text" class="input" placeholder="${I18n.t('chat_input_placeholder')}" id="chat-input" onkeypress="if(event.key==='Enter') Chat.sendMessage()">
+        <div class="chat-input-bar" id="chat-input-bar">
+          ${this.renderConfirmationBar()}
+          <input type="text" class="input chat-input" placeholder="${I18n.t('chat_input_placeholder')}" id="chat-input" onkeypress="if(event.key==='Enter') Chat.sendMessage()">
           <button class="btn btn-primary btn-icon" onclick="Chat.sendMessage()" aria-label="${I18n.t('chat_send')}">➤</button>
         </div>
       `;
     },
 
+    renderConfirmationBar() {
+      if (this.pendingConfirmation) {
+        return `
+          <div class="chat-confirmation-bar" style="background: var(--color-warning-bg, #fffbeb); border: 1px solid var(--color-warning, #f59e0b); border-radius: var(--radius-lg); padding: var(--space-sm); margin-bottom: var(--space-sm);">
+            <div style="font-weight: var(--weight-medium); margin-bottom: var(--space-xs);">
+              ${this.pendingConfirmation.summary || I18n.t('chat_confirmation')}
+            </div>
+            <div>
+              <button class="btn btn-sm btn-success" onclick="Chat.confirmAction()">${I18n.t('chat_confirm_yes')}</button>
+              <button class="btn btn-sm btn-secondary" onclick="Chat.rejectAction()">${I18n.t('chat_confirm_no')}</button>
+            </div>
+          </div>
+        `;
+      }
+      return '';
+    },
+
     renderMessage(msg) {
+      if (msg.isSuggestions) {
+        return `
+          <div class="chat-bubble assistant" style="display:flex;justify-content:flex-start;margin-bottom:var(--space-sm);">
+            <div class="chat-bubble-content chat-suggestions-bubble">
+              ${msg.content}
+            </div>
+          </div>
+        `;
+      }
+
+      if (msg.isConfirmation) {
+        return `
+          <div class="chat-bubble assistant" style="display:flex;justify-content:flex-start;margin-bottom:var(--space-sm);">
+            <div class="chat-bubble-content" style="background: var(--color-warning-bg, #fffbeb); border-radius: var(--radius-lg);">
+              <div style="font-weight: var(--weight-medium);">🔔 ${msg.content}</div>
+              <div style="margin-top: var(--space-xs);">
+                <button class="btn btn-sm btn-success" onclick="Chat.confirmAction()">${I18n.t('chat_confirm_yes')}</button>
+                <button class="btn btn-sm btn-secondary" onclick="Chat.rejectAction()">${I18n.t('chat_confirm_no')}</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      if (msg.isClarification) {
+        return `
+          <div class="chat-bubble assistant" style="display:flex;justify-content:flex-start;margin-bottom:var(--space-sm);">
+            <div class="chat-bubble-content" style="background: var(--color-info-bg, #eff6ff); border-radius: var(--radius-lg);">
+              <div style="font-weight: var(--weight-medium);">❓ ${msg.content}</div>
+              ${msg.examples ? `<div style="margin-top: var(--space-xs); font-size: 0.85em;">${msg.examples.join(', ')}</div>` : ''}
+            </div>
+          </div>
+        `;
+      }
+
       const isUser = msg.role === 'user';
       const align = isUser ? 'flex-end' : 'flex-start';
       const bg = isUser ? 'var(--color-blue)' : 'var(--color-bg-surface)';
       const color = isUser ? 'white' : 'var(--color-text-primary)';
+
       return `
-        <div class="chat-bubble" style="display:flex;justify-content:${align};margin-bottom:var(--space-sm);">
+        <div class="chat-bubble ${isUser ? 'user' : 'assistant'}" style="display:flex;justify-content:${align};margin-bottom:var(--space-sm);">
           <div class="chat-bubble-content" style="max-width:70%;background:${bg};color:${color};padding:var(--space-md);border-radius:var(--radius-lg);border:1px solid var(--color-border);">
             ${msg.content}
           </div>
         </div>
       `;
+    },
+
+    renderContentEl() {
+      const el = document.getElementById('chat-container');
+      if (el) el.innerHTML = this.renderContent();
+      const messagesEl = document.getElementById('chat-messages');
+      if (messagesEl) {
+        messagesEl.innerHTML = this.messages.map(m => this.renderMessage(m)).join('');
+      }
+      this.scrollToBottom();
+    },
+
+    scrollToBottom() {
+      setTimeout(() => {
+        const el = document.getElementById('chat-messages') || document.getElementById('chat-container');
+        if (el) el.scrollTop = el.scrollHeight;
+      }, 10);
+    },
+
+    sendSuggested(text) {
+      this.input = text;
+      this.sendMessage();
     },
 
     async sendMessage() {
@@ -584,43 +696,123 @@ const Pages = {
       input.disabled = true;
 
       try {
-        const resp = await API.post('/search', {
-          text: text,
-          user_id: Auth.getUserId(),
+        const resp = await API.post('/conversations/message', {
+          channel: 'web',
+          message_text: text,
+          sender_id: this.conversationId || Auth.getUserId() || 'anonymous',
+          actor: {
+            id: Auth.getUserId() || 'anonymous',
+            type: Auth.getUser() ? 'customer' : 'guest',
+          },
           listing_id: this.listingId,
         });
 
-        let reply = '';
-        if (resp.response?.text) {
-          reply = resp.response.text;
-        } else if (resp.explanation) {
-          reply = resp.explanation;
-        } else {
-          reply = I18n.t('chat_typing') + '...';
+        if (resp.conversation_id && !this.conversationId) {
+          this.conversationId = resp.conversation_id;
         }
 
-        this.messages.push({ role: 'assistant', content: reply });
+        if (resp.response?.text) {
+          this.messages.push({ role: 'assistant', content: resp.response.text });
+        }
+
+        if (resp.is_confirmation && resp.response?.confirmation) {
+          this.pendingConfirmation = resp.response.confirmation;
+          this.messages.push({
+            role: 'assistant',
+            content: resp.response.confirmation.summary || I18n.t('chat_confirmation'),
+            isConfirmation: true,
+          });
+        }
+
+        if (resp.is_clarification) {
+          const promptText = resp.response.text || I18n.t('chat_clarification');
+          const examples = resp.missing_params?.flatMap(p => p.examples || []) || [];
+          this.messages.push({
+            role: 'assistant',
+            content: promptText,
+            isClarification: true,
+            examples: examples.length > 0 ? examples : undefined,
+          });
+          this.pendingMissingParam = true;
+        }
+
+        this.loading = false;
+        input.disabled = false;
+        this.renderContentEl();
+        this.scrollToBottom();
+      } catch (err) {
+        this.loading = false;
+        input.disabled = false;
+        this.messages.push({
+          role: 'assistant',
+          content: err.message || I18n.t('state_error'),
+        });
+        this.renderContentEl();
+        this.scrollToBottom();
+      }
+    },
+
+    async confirmAction() {
+      if (!this.pendingConfirmation) return;
+
+      try {
+        const resp = await API.post(`/conversations/${this.conversationId}/confirm`, {
+          token: this.pendingConfirmation.confirmation_token,
+        });
+
+        this.pendingConfirmation = null;
+        this.pendingMissingParam = false;
+
+        if (resp.response?.text) {
+          this.messages.push({ role: 'assistant', content: resp.response.text });
+        }
+
+        if (resp.is_confirmation && resp.response?.confirmation) {
+          this.pendingConfirmation = resp.response.confirmation;
+          this.messages.push({
+            role: 'assistant',
+            content: resp.response.confirmation.summary || I18n.t('chat_confirmation'),
+            isConfirmation: true,
+          });
+        }
+
+        this.renderContentEl();
+        this.scrollToBottom();
+      } catch (err) {
+        this.messages.push({
+          role: 'assistant',
+          content: 'Confirmation failed: ' + (err.message || I18n.t('state_error')),
+        });
+        this.renderContentEl();
+        this.scrollToBottom();
+      }
+    },
+
+    async rejectAction() {
+      if (!this.pendingConfirmation) return;
+
+      try {
+        const resp = await API.post(`/conversations/${this.conversationId}/reject`, {
+          token: this.pendingConfirmation.confirmation_token,
+        });
+
+        this.pendingConfirmation = null;
+        this.pendingMissingParam = false;
+
+        if (resp.response?.text) {
+          this.messages.push({ role: 'assistant', content: resp.response.text });
+        }
+
+        this.renderContentEl();
+        this.scrollToBottom();
       } catch (err) {
         this.messages.push({
           role: 'assistant',
           content: err.message || I18n.t('state_error'),
         });
+        this.renderContentEl();
+        this.scrollToBottom();
       }
-
-      this.loading = false;
-      input.disabled = false;
-      this.renderContentEl();
-      this.scrollToBottom();
-    },
-
-    renderContentEl() {
-      const el = document.getElementById('chat-container');
-      if (el) el.innerHTML = this.renderContent();
-    },
-
-    scrollToBottom() {
-      const el = document.getElementById('chat-container');
-      if (el) el.scrollTop = el.scrollHeight;
     },
   },
 

@@ -30,7 +30,8 @@ func (p *DefaultConfirmationPolicy) RequiresConfirmation(ctx context.Context, ac
 	case domain.ActionCreateListing, domain.ActionUpdateListing, domain.ActionPublishListing, domain.ActionPauseListing,
 		domain.ActionCreateOrder, domain.ActionCancelOrder, domain.ActionCreateCampaign:
 		return true, "This action requires confirmation before execution"
-	case domain.ActionInitiatePayment:
+	case domain.ActionInitiatePayment, domain.ActionCancelPayment, domain.ActionRefundPayment,
+		domain.ActionAuthorizePayment, domain.ActionCapturePayment:
 		return true, "Payment action requires confirmation before execution"
 	default:
 		return false, ""

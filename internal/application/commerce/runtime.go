@@ -132,7 +132,16 @@ func (r *CommerceActionRuntime) Execute(
 	if r.usageService != nil && authenticatedActor.IsAuthenticated() {
 		policy, err := r.usageService.ResolvePolicy(ctx, action.ActionType, domain.ChannelOther, authenticatedActor.Type)
 		if err == nil && policy.IsMetered() {
-			ok, err := r.usageService.Check(ctx, authenticatedActor.ID, policy.Cost)
+			// Find or create credit account for the authenticated actor
+			account, err := r.usageService.FindOrCreateCreditAccountByOwner(ctx, authenticatedActor.Type, authenticatedActor.ID, action.TenantID, "", "")
+			if err != nil {
+				result.Status = domain.ActionResultFailed
+				result.MessageKey = "USAGE_ACCOUNT_FAILED"
+				result.Errors = append(result.Errors, domain.NewActionError("USAGE_ACCOUNT_FAILED", err.Error(), ""))
+				return result, nil
+			}
+
+			ok, err := r.usageService.Check(ctx, account.AccountID, policy.Cost)
 			if err != nil {
 				result.Status = domain.ActionResultFailed
 				result.MessageKey = "USAGE_CHECK_FAILED"
@@ -145,7 +154,7 @@ func (r *CommerceActionRuntime) Execute(
 				result.Errors = append(result.Errors, domain.NewActionError("INSUFFICIENT_CREDITS", "Insufficient credits for this action", ""))
 				return result, nil
 			}
-			res, err := r.usageService.Reserve(ctx, authenticatedActor.ID, action.ActionType, policy.Cost)
+			res, err := r.usageService.Reserve(ctx, account.AccountID, action.ActionType, policy.Cost, action.ActionID, action.TenantID)
 			if err != nil {
 				result.Status = domain.ActionResultFailed
 				result.MessageKey = "USAGE_RESERVE_FAILED"
