@@ -1,7 +1,16 @@
-.PHONY: build test vet fmt lint up down logs tidy govulncheck opensearch-tests infra-up infra-down infra-status test-integration
+.PHONY: build test vet fmt lint up down logs tidy govulncheck opensearch-tests infra-up infra-down infra-status test-integration build-frontend frontend-dev frontend-typecheck
 
 build:
 	go build ./...
+
+build-frontend:
+	cd web/frontend && pnpm install --frozen-lockfile && pnpm run build
+
+frontend-dev:
+	cd web/frontend && pnpm install && pnpm run dev
+
+frontend-typecheck:
+	cd web/frontend && pnpm run typecheck
 
 test:
 	go test ./...

@@ -45,7 +45,7 @@ type Config struct {
 func LoadConfig() Config {
 	return Config{
 		Addr:            env("GATEWAY_PORT", ":8080"),
-		WebRoot:         env("WEB_ROOT", "./web"),
+		WebRoot:         env("WEB_ROOT", "./web/frontend/dist"),
 		AllowedOrigins:  splitCSV(env("CORS_ALLOWED_ORIGINS", "http://localhost:8080")),
 		RequestTimeout:  durationEnv("GATEWAY_TIMEOUT", 30*time.Second),
 		UpstreamTimeout: durationEnv("GATEWAY_UPSTREAM_TIMEOUT", 30*time.Second),
