@@ -51,14 +51,14 @@ type UsageService interface {
 
 // UsageReservation represents a credit reservation.
 type UsageReservation struct {
-	ReservationID    string
-	AccountID        string
-	ActionType       CommerceActionType
-	Amount           int64
-	ReservedAt       int64
-	Status           UsageReservationStatus
-	IdempotencyKey   string
-	TenantID         string
+	ReservationID  string
+	AccountID      string
+	ActionType     CommerceActionType
+	Amount         int64
+	ReservedAt     int64
+	Status         UsageReservationStatus
+	IdempotencyKey string
+	TenantID       string
 }
 
 // UsageReservationStatus represents the status of a reservation.

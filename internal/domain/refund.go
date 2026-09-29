@@ -91,6 +91,14 @@ func (r *Refund) Succeed(providerRefundID string, at int64, now int64) error {
 }
 
 // Fail transitions the refund to FAILED.
+// MarkSubmitted records the provider's reference for a refund that the
+// provider is still processing asynchronously (status stays pending).
+func (r *Refund) MarkSubmitted(providerRefundID string, now int64) {
+	r.ProviderRefundID = providerRefundID
+	r.UpdatedAt = now
+	r.Version++
+}
+
 func (r *Refund) Fail(reason string, now int64) error {
 	if err := r.ValidateTransition(RefundStatusFailed); err != nil {
 		return err

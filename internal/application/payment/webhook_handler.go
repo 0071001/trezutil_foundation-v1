@@ -3,6 +3,7 @@ package payment
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/rs/zerolog"
@@ -13,13 +14,22 @@ import (
 // It implements signature verification, idempotency, and reconciliation
 // between provider-reported status and internal payment state.
 type WebhookHandler struct {
+	orders            domain.OrderRepository
 	payments          domain.PaymentRepository
 	refunds           domain.RefundRepository
 	ledger            domain.LedgerRepository
 	events            domain.PaymentWebhookEventStore
 	providers         domain.ProviderRepository
 	signatureVerifier domain.WebhookSignatureVerifier
+	normalizers       map[string]WebhookNormalizer
 	logger            zerolog.Logger
+}
+
+// WebhookNormalizer verifies a provider's own signature scheme and maps its
+// raw event onto WebhookPayload. Returning (nil, nil) acknowledges an event
+// type that needs no processing.
+type WebhookNormalizer interface {
+	Normalize(orgID, signature string, body []byte) (*WebhookPayload, error)
 }
 
 type WebhookHandlerConfig struct {
@@ -29,17 +39,26 @@ type WebhookHandlerConfig struct {
 	Events            domain.PaymentWebhookEventStore
 	Providers         domain.ProviderRepository
 	SignatureVerifier domain.WebhookSignatureVerifier
-	Logger            zerolog.Logger
+	// Orders, when set, keeps the order lifecycle in step with provider
+	// callbacks (captured -> order paid, fully refunded -> order refunded).
+	Orders domain.OrderRepository
+	// Normalizers maps provider codes (e.g. "stripe") to provider-specific
+	// signature verification + payload mapping. Providers without one use
+	// SignatureVerifier and the generic WebhookPayload JSON body.
+	Normalizers map[string]WebhookNormalizer
+	Logger      zerolog.Logger
 }
 
 func NewWebhookHandler(config WebhookHandlerConfig) *WebhookHandler {
 	return &WebhookHandler{
+		orders:            config.Orders,
 		payments:          config.Payments,
 		refunds:           config.Refunds,
 		ledger:            config.Ledger,
 		events:            config.Events,
 		providers:         config.Providers,
 		signatureVerifier: config.SignatureVerifier,
+		normalizers:       config.Normalizers,
 		logger:            config.Logger,
 	}
 }
@@ -68,16 +87,30 @@ func (h *WebhookHandler) ProcessWebhook(
 	signature string,
 	body []byte,
 ) error {
-	if h.signatureVerifier != nil {
-		if err := h.signatureVerifier.Verify(providerCode, body, signature); err != nil {
-			h.logger.Warn().Err(err).Str("provider", providerCode).Msg("webhook signature verification failed")
-			return domain.ErrWebhookSignatureInvalid
-		}
-	}
-
 	var payload WebhookPayload
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return fmt.Errorf("failed to parse webhook payload: %w", err)
+	if normalizer, ok := h.normalizers[providerCode]; ok {
+		normalized, err := normalizer.Normalize(orgID, signature, body)
+		if err != nil {
+			if errors.Is(err, domain.ErrWebhookSignatureInvalid) {
+				h.logger.Warn().Str("provider", providerCode).Msg("webhook signature verification failed")
+				return domain.ErrWebhookSignatureInvalid
+			}
+			return err
+		}
+		if normalized == nil {
+			return nil // event type not relevant to Payment Core
+		}
+		payload = *normalized
+	} else {
+		if h.signatureVerifier != nil {
+			if err := h.signatureVerifier.Verify(providerCode, body, signature); err != nil {
+				h.logger.Warn().Err(err).Str("provider", providerCode).Msg("webhook signature verification failed")
+				return domain.ErrWebhookSignatureInvalid
+			}
+		}
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return fmt.Errorf("failed to parse webhook payload: %w", err)
+		}
 	}
 	if payload.ProviderMessageID == "" {
 		return fmt.Errorf("provider_message_id is required in webhook payload")
@@ -170,6 +203,15 @@ func (h *WebhookHandler) reconcilePayment(ctx context.Context, payload *WebhookP
 		p.ProviderPaymentID = payload.ProviderPaymentID
 	}
 
+	// Replays and late events: providers deliver at least once and out of
+	// order. An event describing the state the payment is already in, or an
+	// "authorized" event after capture, needs no change — failing it would
+	// make the provider retry forever.
+	if p.Status == target || (target == domain.PaymentStatusAuthorized && p.IsProcessingOrLater() && p.Status != domain.PaymentStatusAuthorized) || p.IsTerminal() && target != domain.PaymentStatusRefunded {
+		syncOrderWithPayment(ctx, h.orders, p, h.logger)
+		return nil
+	}
+
 	switch target {
 	case domain.PaymentStatusAuthorized:
 		if err := p.Authorize(payload.ProviderPaymentID, now, now); err != nil {
@@ -203,6 +245,7 @@ func (h *WebhookHandler) reconcilePayment(ctx context.Context, payload *WebhookP
 	if err := h.payments.Update(ctx, p); err != nil {
 		return fmt.Errorf("failed to persist payment after webhook: %w", err)
 	}
+	syncOrderWithPayment(ctx, h.orders, p, h.logger)
 
 	return nil
 }
@@ -249,23 +292,40 @@ func (h *WebhookHandler) reconcileRefund(ctx context.Context, payload *WebhookPa
 	now := unixNow()
 	targetStatus, _ := parseProviderStatus(payload.Status)
 
+	if targetRefund.Status.IsTerminal() {
+		return nil // replay of an already settled refund
+	}
+
 	if targetStatus == domain.PaymentStatusFailed {
 		if err := targetRefund.Fail("provider webhook: "+payload.Status, now); err != nil {
 			return fmt.Errorf("failed to fail refund: %w", err)
 		}
-	} else {
-		if err := targetRefund.Succeed(payload.ProviderRefundID, now, now); err != nil {
-			return fmt.Errorf("failed to succeed refund: %w", err)
+		if err := h.refunds.Update(ctx, targetRefund); err != nil {
+			return fmt.Errorf("failed to persist refund after webhook: %w", err)
 		}
-		if err := h.postLedgerForRefund(ctx, targetRefund); err != nil {
-			h.logger.Warn().Err(err).Str("refund", targetRefund.ID).
-				Msg("ledger posting for webhook refund failed")
-		}
+		return nil
 	}
 
+	if err := targetRefund.Succeed(payload.ProviderRefundID, now, now); err != nil {
+		return fmt.Errorf("failed to succeed refund: %w", err)
+	}
+	// The refund was pending at request time, so the payment's refunded
+	// amount was not yet updated: apply it now, exactly once (the refund row
+	// transitions pending -> succeeded only once).
+	if err := p.MarkPartiallyRefunded(targetRefund.Amount, now); err != nil {
+		return fmt.Errorf("failed to apply refund to payment: %w", err)
+	}
 	if err := h.refunds.Update(ctx, targetRefund); err != nil {
 		return fmt.Errorf("failed to persist refund after webhook: %w", err)
 	}
+	if err := h.payments.Update(ctx, p); err != nil {
+		return fmt.Errorf("failed to persist payment after refund webhook: %w", err)
+	}
+	if err := h.postLedgerForRefund(ctx, targetRefund); err != nil {
+		h.logger.Warn().Err(err).Str("refund", targetRefund.ID).
+			Msg("ledger posting for webhook refund failed")
+	}
+	syncOrderWithPayment(ctx, h.orders, p, h.logger)
 
 	return nil
 }

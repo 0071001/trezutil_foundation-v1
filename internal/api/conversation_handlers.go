@@ -2,27 +2,28 @@ package api
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/trezutil/trezutil/internal/application/conversation"
 	"github.com/trezutil/trezutil/internal/domain"
+	"github.com/trezutil/trezutil/packages/auth"
 )
 
 // ConversationUseCases interface for conversation operations.
 // Implemented by conversation.ProcessorService.
 type ConversationUseCases interface {
 	ProcessMessage(ctx context.Context, req *conversation.ProcessConversationRequest) (*conversation.ProcessConversationResponse, error)
-	ConfirmAction(ctx context.Context, convID string, token string) (*conversation.ProcessConversationResponse, error)
-	RejectAction(ctx context.Context, convID string, token string) (*conversation.ProcessConversationResponse, error)
+	ConfirmAction(ctx context.Context, convID string, token string, actor domain.CommerceActor) (*conversation.ProcessConversationResponse, error)
+	RejectAction(ctx context.Context, convID string, token string, actor domain.CommerceActor) (*conversation.ProcessConversationResponse, error)
 }
 
 // conversationMessageRequest is the JSON payload for a conversation message.
+// Actor and OrganizationID are accepted for backward compatibility but are
+// ignored: identity comes only from the verified access token.
 type conversationMessageRequest struct {
 	Channel               string                 `json:"channel"`
 	SenderID              string                 `json:"sender_id"`
@@ -79,26 +80,29 @@ func (h *ConversationHandler) HandleProcessMessage(w http.ResponseWriter, r *htt
 		return
 	}
 
-	actorType := domain.ActorType(strings.ToLower(httpReq.Actor.Type))
-	if actorType == "" {
-		actorType = domain.ActorTypeCustomer
+	if len(httpReq.MessageText) > maxMessageTextLength {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "MESSAGE_TOO_LONG", Message: "message_text is too long"}}, http.StatusRequestEntityTooLarge)
+		return
 	}
 
 	req := &conversation.ProcessConversationRequest{
-		Channel:          channel,
-		SenderID:         httpReq.SenderID,
-		SenderExternalID: httpReq.SenderExternalID,
-		MessageText:      httpReq.MessageText,
-		Locale:           httpReq.Locale,
-		TenantID:         httpReq.OrganizationID,
-		Actor:            domain.NewCommerceActor(httpReq.Actor.ID, actorType),
+		Channel:               channel,
+		SenderID:              httpReq.SenderID,
+		SenderExternalID:      httpReq.SenderExternalID,
+		MessageText:           httpReq.MessageText,
+		MessageIdempotencyKey: httpReq.MessageIdempotencyKey,
+		Locale:                httpReq.Locale,
+		Actor:                 principalActor(r),
 	}
-	req.Actor.OrgID = httpReq.OrganizationID
 
 	resp, err := h.useCases.ProcessMessage(r.Context(), req)
 	if err != nil {
+		if errors.Is(err, domain.ErrConversationForbidden) {
+			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "This conversation belongs to another user"}}, http.StatusForbidden)
+			return
+		}
 		h.logger.Error().Err(err).Msg("Failed to process message")
-		writeJSON(w, ErrorResponse{Error: Error{Code: "PROCESSING_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeJSON(w, ErrorResponse{Error: Error{Code: "PROCESSING_FAILED", Message: "The assistant could not process this message"}}, http.StatusInternalServerError)
 		return
 	}
 
@@ -126,8 +130,17 @@ func (h *ConversationHandler) HandleConfirmAction(w http.ResponseWriter, r *http
 		return
 	}
 
-	resp, err := h.useCases.ConfirmAction(r.Context(), convID, req.Token)
+	actor := principalActor(r)
+	if !actor.IsAuthenticated() {
+		auth.WriteUnauthorized(w, "AUTHENTICATION_REQUIRED", "Sign in to confirm this action")
+		return
+	}
+	resp, err := h.useCases.ConfirmAction(r.Context(), convID, req.Token, actor)
 	if err != nil {
+		if errors.Is(err, domain.ErrConversationForbidden) {
+			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "This conversation belongs to another user"}}, http.StatusForbidden)
+			return
+		}
 		writeJSON(w, ErrorResponse{Error: Error{Code: "CONFIRMATION_FAILED", Message: err.Error()}}, http.StatusBadRequest)
 		return
 	}
@@ -156,29 +169,19 @@ func (h *ConversationHandler) HandleRejectAction(w http.ResponseWriter, r *http.
 		return
 	}
 
-	resp, err := h.useCases.RejectAction(r.Context(), convID, req.Token)
+	actor := principalActor(r)
+	if !actor.IsAuthenticated() {
+		auth.WriteUnauthorized(w, "AUTHENTICATION_REQUIRED", "Sign in to reject this action")
+		return
+	}
+	resp, err := h.useCases.RejectAction(r.Context(), convID, req.Token, actor)
 	if err != nil {
+		if errors.Is(err, domain.ErrConversationForbidden) {
+			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "This conversation belongs to another user"}}, http.StatusForbidden)
+			return
+		}
 		writeJSON(w, ErrorResponse{Error: Error{Code: "REJECTION_FAILED", Message: err.Error()}}, http.StatusBadRequest)
 		return
-	}
-
-	writeJSON(w, resp, http.StatusOK)
-}
-
-// HandleGenerateToken handles POST /api/v1/conversations/{id}/token
-func (h *ConversationHandler) HandleGenerateToken(w http.ResponseWriter, r *http.Request) {
-	convID := strings.TrimPrefix(r.URL.Path, "/api/v1/conversations/")
-	convID = strings.TrimSuffix(convID, "/token")
-	if convID == "" {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_CONVERSATION_ID", Message: "Conversation ID required in path"}}, http.StatusBadRequest)
-		return
-	}
-
-	token := generateToken()
-	resp := map[string]interface{}{
-		"conversation_id": convID,
-		"token":           token,
-		"expires_at":      time.Now().Add(60 * time.Minute).Unix(),
 	}
 
 	writeJSON(w, resp, http.StatusOK)
@@ -191,10 +194,15 @@ func extractIDFromPath(path, prefix, suffix string) string {
 	return ""
 }
 
-func generateToken() string {
-	bytes := make([]byte, 16)
-	_, _ = rand.Read(bytes)
-	return hex.EncodeToString(bytes)
+// maxMessageTextLength bounds a single chat message.
+const maxMessageTextLength = 4000
+
+// principalActor returns the verified caller as a commerce actor, or a guest.
+func principalActor(r *http.Request) domain.CommerceActor {
+	if id := auth.UserID(r.Context()); id != "" {
+		return domain.NewCommerceActor(id, domain.ActorTypeCustomer)
+	}
+	return domain.NewCommerceActor("", domain.ActorTypeGuest)
 }
 
 // HandleConversationRoutes routes conversation-related API requests.
@@ -211,9 +219,6 @@ func HandleConversationRoutes(handler *ConversationHandler, w http.ResponseWrite
 		return
 	case strings.HasPrefix(path, "/api/v1/conversations/") && strings.HasSuffix(path, "/reject") && method == "POST":
 		handler.HandleRejectAction(w, r)
-		return
-	case strings.HasPrefix(path, "/api/v1/conversations/") && strings.HasSuffix(path, "/token") && method == "POST":
-		handler.HandleGenerateToken(w, r)
 		return
 	case path == "/api/v1/conversations" && method == "POST":
 		handler.HandleProcessMessage(w, r)

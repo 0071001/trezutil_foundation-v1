@@ -2,7 +2,9 @@ package conversation
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -133,23 +135,53 @@ func (p *ConversationProcessor) ProcessMessage(ctx context.Context, req *Process
 		Str("sender", req.SenderID).
 		Msg("Processing inbound message")
 
-	// 1. Find or create conversation
+	// 1. Find or create conversation (enforces ownership)
 	conv, err := p.findOrCreateConversation(ctx, req)
 	if err != nil {
+		if errors.Is(err, domain.ErrConversationForbidden) {
+			return nil, err
+		}
 		return nil, fmt.Errorf("failed to resolve conversation: %w", err)
 	}
 
-	// 2. Persist inbound message
-	if p.messageStore != nil && req.MessageIdempotencyKey != "" {
+	// Guests act under a conversation-scoped pseudo identity: they can browse
+	// but never reach use cases that require a real account.
+	if !req.Actor.IsAuthenticated() {
+		req.Actor = domain.NewCommerceActor("guest:"+conv.ID, domain.ActorTypeGuest)
+	}
+
+	// 2. Persist inbound message; a redelivered message (same idempotency key)
+	// is answered from the stored reply and never re-executes its action.
+	messageKey := req.MessageIdempotencyKey
+	if messageKey == "" {
+		messageKey = "in:" + domain.NewID()
+	}
+	if p.messageStore != nil {
 		inbound := domain.NewMessage(conv.ID, domain.MessageDirectionInbound, domain.MessageTypeText, req.SenderID, &domain.MessageContent{
 			Text: req.MessageText,
 			Data: map[string]interface{}{"locale": req.Locale},
 		})
 		inbound.ExternalRef = req.MessageExternalRef
-		inbound.IdempotencyKey = req.MessageIdempotencyKey
-		_ = p.messageStore.Create(ctx, inbound)
+		inbound.IdempotencyKey = messageKey
+		inbound.CreatedAt = time.Now().Unix()
+		if err := p.messageStore.Create(ctx, inbound); err != nil {
+			if errors.Is(err, domain.ErrDuplicateMessage) {
+				return p.replayReply(ctx, conv, messageKey), nil
+			}
+			p.logger.Warn().Err(err).Str("conversation_id", conv.ID).Msg("Failed to persist inbound message")
+		}
 	}
 
+	result, err := p.dispatch(ctx, conv, req)
+	if err != nil {
+		return nil, err
+	}
+	p.persistReply(ctx, conv, messageKey, result)
+	return result, nil
+}
+
+// dispatch routes the message according to the persisted conversation context.
+func (p *ConversationProcessor) dispatch(ctx context.Context, conv *domain.Conversation, req *ProcessRequest) (*ProcessResult, error) {
 	// 3. Load conversation context
 	cx, err := p.loadContext(ctx, conv.ID)
 	if err != nil {
@@ -163,9 +195,15 @@ func (p *ConversationProcessor) ProcessMessage(ctx context.Context, req *Process
 		}
 	}
 
-	// 4. Check for pending confirmation
+	// 4. Check for pending confirmation (expired confirmations are dropped)
 	if cx.HasPendingConfirmation() {
-		return p.handlePendingConfirmation(ctx, conv, cx, req)
+		if p.confirmationExpired(cx) {
+			cx.ConfirmationState = domain.ConfirmationFlowState{}
+			cx.PendingAction = nil
+			_ = p.saveContext(ctx, conv.ID, cx)
+		} else {
+			return p.handlePendingConfirmation(ctx, conv, cx, req)
+		}
 	}
 
 	// 5. Check for missing parameters
@@ -177,15 +215,74 @@ func (p *ConversationProcessor) ProcessMessage(ctx context.Context, req *Process
 	return p.handleNewMessage(ctx, conv, cx, req)
 }
 
+// replayReply returns the reply stored for an already-processed message.
+func (p *ConversationProcessor) replayReply(ctx context.Context, conv *domain.Conversation, messageKey string) *ProcessResult {
+	text := "I already received that message."
+	if p.messageStore != nil {
+		if history, err := p.messageStore.FindByConversationID(ctx, conv.ID); err == nil {
+			for _, m := range history {
+				if m != nil && m.IdempotencyKey == "reply:"+messageKey && m.Content != nil {
+					text = m.Content.Text
+				}
+			}
+		}
+	}
+	resp := domain.NewConversationResponse(text, conv.Language)
+	resp.Metadata["duplicate"] = true
+	return &ProcessResult{ConversationID: conv.ID, Response: resp}
+}
+
+// persistReply stores the outbound reply so the transcript is complete and
+// redeliveries can be answered without re-executing.
+func (p *ConversationProcessor) persistReply(ctx context.Context, conv *domain.Conversation, messageKey string, result *ProcessResult) {
+	if p.messageStore == nil || result == nil || result.Response == nil {
+		return
+	}
+	out := domain.NewMessage(conv.ID, domain.MessageDirectionOutbound, domain.MessageTypeText, "trezutil", &domain.MessageContent{
+		Text: result.Response.Text,
+	})
+	out.IdempotencyKey = "reply:" + messageKey
+	out.Language = result.Response.Language
+	out.CreatedAt = time.Now().Unix()
+	if err := p.messageStore.Create(ctx, out); err != nil && !errors.Is(err, domain.ErrDuplicateMessage) {
+		p.logger.Warn().Err(err).Str("conversation_id", conv.ID).Msg("Failed to persist reply")
+	}
+}
+
+func (p *ConversationProcessor) confirmationExpired(cx *domain.ConversationContext) bool {
+	requested := cx.ConfirmationState.RequestedAt
+	return requested > 0 && time.Now().Unix()-requested > int64(p.confirmationExpiry/time.Second)
+}
+
 func (p *ConversationProcessor) findOrCreateConversation(ctx context.Context, req *ProcessRequest) (*domain.Conversation, error) {
 	if req.SenderExternalID != "" {
 		conv, err := p.convStore.FindByChannelExternalID(ctx, req.Channel, req.SenderExternalID)
 		if err == nil && conv != nil {
+			switch {
+			case conv.CustomerID == "" && req.Actor.IsAuthenticated():
+				// A guest conversation is claimed when its visitor signs in.
+				conv.CustomerID = req.Actor.ID
+				conv.UpdatedAt = time.Now().Unix()
+				if err := p.convStore.Update(ctx, conv); err != nil {
+					return nil, err
+				}
+			case conv.CustomerID != "" && conv.CustomerID != req.Actor.ID:
+				// Never let one caller continue (or confirm actions in) another
+				// person's conversation by presenting its external ID.
+				return nil, domain.ErrConversationForbidden
+			}
 			return conv, nil
 		}
 	}
 
-	conv := domain.NewConversation(req.Channel, req.SenderExternalID, req.Actor.ID, req.TenantID)
+	customerID := ""
+	if req.Actor.IsAuthenticated() {
+		customerID = req.Actor.ID
+	}
+	conv := domain.NewConversation(req.Channel, req.SenderExternalID, customerID, req.TenantID)
+	if conv.ExternalID == "" {
+		conv.ExternalID = conv.ID
+	}
 	if err := p.convStore.Create(ctx, conv); err != nil {
 		return nil, fmt.Errorf("failed to create conversation: %w", err)
 	}
@@ -223,11 +320,12 @@ func (p *ConversationProcessor) handlePendingConfirmation(
 		cx.ConfirmationState = flow
 		_ = p.saveContext(ctx, conv.ID, cx)
 
-		return p.executePendingAction(ctx, conv, cx, flow.ActionID, true)
+		return p.executePendingAction(ctx, conv, cx, req.Actor)
 
 	case isNegative(text):
 		flow.State = domain.ConfirmationRejected
 		cx.ConfirmationState = flow
+		cx.PendingAction = nil
 		_ = p.saveContext(ctx, conv.ID, cx)
 
 		resp := domain.NewConversationResponse("I've cancelled that action.", cx.Language)
@@ -265,7 +363,11 @@ func (p *ConversationProcessor) handleMissingParameterReply(
 	}
 
 	param := missing[0]
-	resolvedValue, _ := domain.ResolveParameterValue(param.Name, req.MessageText, cx)
+	resolvedValue := strings.TrimSpace(req.MessageText)
+	if strings.HasSuffix(param.Name, "_id") {
+		// "the second one" -> the ID of the second listed result.
+		resolvedValue, _ = domain.ResolveParameterValue(param.Name, req.MessageText, cx)
+	}
 
 	if cx.PendingAction != nil {
 		cx.PendingAction.Parameters[param.Name] = resolvedValue
@@ -333,6 +435,13 @@ func (p *ConversationProcessor) handleNewMessage(
 
 	// Build and execute the action
 	action := intent.ToAction(conv.ID, req.Actor, req.TenantID)
+	if listingScopedActions[action.ActionType] {
+		if v, ok := action.Parameters["listing_id"]; !ok || v == "" {
+			if id := currentListingID(cx); id != "" {
+				action.Parameters["listing_id"] = id
+			}
+		}
+	}
 	if action.IdempotencyKey == "" {
 		action.IdempotencyKey = fmt.Sprintf("action_%s_%d", conv.ID, time.Now().UnixNano())
 	}
@@ -347,6 +456,18 @@ func (p *ConversationProcessor) interpretIntent(
 	req *ProcessRequest,
 	messages []domain.Message,
 ) (*domain.ConversationIntent, error) {
+	// A short reply pointing at a previous result ("2", "the second one")
+	// opens that listing.
+	if id := referencedResultID(req.MessageText, cx); id != "" {
+		return &domain.ConversationIntent{
+			Name:       "RESULT_REFERENCE",
+			Confidence: 1.0,
+			Source:     "SYSTEM",
+			ActionType: domain.ActionGetListing,
+			Entities:   []domain.ConversationEntity{{Name: "listing_id", Value: id, NormalizedValue: id, Source: "CONTEXT"}},
+		}, nil
+	}
+
 	// Try AI classification if available
 	if p.classifier != nil {
 		classReq := &IntentClassificationRequest{
@@ -360,16 +481,13 @@ func (p *ConversationProcessor) interpretIntent(
 		}
 
 		classResult, err := p.classifier.ClassifyIntent(ctx, classReq)
-		if err != nil {
-			return nil, err
-		}
-
-		if classResult.Fallback != nil {
-			return nil, nil
-		}
-
-		if classResult.Intent == nil {
-			return nil, nil
+		if err != nil || classResult == nil || classResult.Fallback != nil || classResult.Intent == nil {
+			// The model is unavailable or unsure: degrade to deterministic
+			// keyword routing instead of failing the conversation.
+			if err != nil {
+				p.logger.Warn().Err(err).Msg("AI classification failed; using keyword routing")
+			}
+			return keywordIntent(p, ctx, conv, req), nil
 		}
 
 		// Resolve specialist and pack
@@ -394,15 +512,21 @@ func (p *ConversationProcessor) interpretIntent(
 	}
 
 	// Fall back to keyword-based resolution
+	return keywordIntent(p, ctx, conv, req), nil
+}
+
+// keywordIntent is the deterministic, AI-free intent resolver. For searches
+// the user's own words are the query text.
+func keywordIntent(p *ConversationProcessor, ctx context.Context, conv *domain.Conversation, req *ProcessRequest) *domain.ConversationIntent {
 	actionType := resolveActionTypeKeyword(req.MessageText)
 	if actionType == "" {
-		return nil, nil
+		return nil
 	}
 
 	specialist := p.resolveSpecialist(actionType)
 	packCode, _ := p.resolvePack(ctx, conv.OrganizationID, actionType)
 
-	return &domain.ConversationIntent{
+	intent := &domain.ConversationIntent{
 		Name:                 "KEYWORD_CLASSIFIED",
 		Confidence:           1.0,
 		Source:               "SYSTEM",
@@ -410,7 +534,11 @@ func (p *ConversationProcessor) interpretIntent(
 		Specialist:           specialist,
 		VerticalPack:         packCode,
 		RequiresConfirmation: domain.AIActionRequiresConfirmation(actionType),
-	}, nil
+	}
+	if actionType == domain.ActionSearchListings {
+		intent.Entities = []domain.ConversationEntity{{Name: "text", Value: req.MessageText, NormalizedValue: req.MessageText, Source: "USER"}}
+	}
+	return intent
 }
 
 func (p *ConversationProcessor) resolvePack(ctx context.Context, orgID string, action domain.CommerceActionType) (domain.PackCode, bool) {
@@ -434,6 +562,14 @@ func (p *ConversationProcessor) executeAction(
 	action *domain.CommerceAction,
 	actor domain.CommerceActor,
 ) (*ProcessResult, error) {
+	if !actor.IsAuthenticated() && !guestAllowedActions[action.ActionType] {
+		resp := domain.NewConversationResponse("Please sign in with your phone number to continue — browsing is open to everyone, but orders, bookings and payments need an account.", cx.Language)
+		resp.Metadata["requires_authentication"] = true
+		resp.Metadata["action_type"] = string(action.ActionType)
+		_ = p.saveContext(ctx, conv.ID, cx)
+		return &ProcessResult{ConversationID: conv.ID, Response: resp, RequiresUserInput: true}, nil
+	}
+
 	execResult, err := p.runtime.Execute(ctx, action, actor)
 	if err != nil {
 		return nil, fmt.Errorf("action execution failed: %w", err)
@@ -459,7 +595,12 @@ func (p *ConversationProcessor) executeAction(
 		result.RequiresUserInput = true
 		result.Response = p.buildConfirmationResponse(action, execResult, cx.Language)
 
-		token := fmt.Sprintf("confirm_%s_%d", action.ActionID, time.Now().UnixNano())
+		// Unguessable, single-use token; confirming also requires being the
+		// conversation owner, so disclosing it to that owner is safe.
+		token := "confirm_" + domain.NewID()
+		if result.Response.Confirmation != nil {
+			result.Response.Confirmation.Details["confirmation_token"] = token
+		}
 		cx.ConfirmationState = domain.ConfirmationFlowState{
 			ActionID:          action.ActionID,
 			State:             domain.ConfirmationRequested,
@@ -483,6 +624,10 @@ func (p *ConversationProcessor) executeAction(
 	case domain.ActionResultNotFound:
 		result.Response = domain.NewConversationResponse("I couldn't find what you're looking for. Please check the details and try again.", cx.Language)
 
+	case domain.ActionResultNotImplemented:
+		result.Response = domain.NewConversationResponse("I can't do that from the chat yet. You can do it from the listing page in the Trezutil app.", cx.Language)
+		cx.PendingAction = nil
+
 	default:
 		result.Response = domain.NewConversationResponse("Something went wrong processing your request. Please try again.", cx.Language)
 	}
@@ -495,19 +640,21 @@ func (p *ConversationProcessor) executePendingAction(
 	ctx context.Context,
 	conv *domain.Conversation,
 	cx *domain.ConversationContext,
-	actionID string,
-	confirmed bool,
+	actor domain.CommerceActor,
 ) (*ProcessResult, error) {
 	if cx.PendingAction == nil {
 		return nil, fmt.Errorf("no pending action found for confirmation")
 	}
 
 	action := cx.PendingAction
-	if confirmed {
-		action.ConfirmationState = domain.ConfirmationApproved
+	// Only the person who requested the action may confirm it, and it always
+	// executes as the currently authenticated actor.
+	if action.Actor.ID != actor.ID {
+		return nil, domain.ErrConversationForbidden
 	}
+	action.ConfirmationState = domain.ConfirmationApproved
 
-	execResult, err := p.runtime.Execute(ctx, action, action.Actor)
+	execResult, err := p.runtime.Execute(ctx, action, actor)
 	if err != nil {
 		return nil, fmt.Errorf("action execution failed: %w", err)
 	}
@@ -535,16 +682,87 @@ func (p *ConversationProcessor) buildSuccessResponse(
 	result *commerce.ExecuteResult,
 	language string,
 ) *domain.ConversationResponse {
-	resp := domain.NewConversationResponse("I've completed that for you.", language)
+	data := result.Data["data"]
+	resp := domain.NewConversationResponse(successText(action.ActionType, data), language)
 	resp.Metadata["action_type"] = string(action.ActionType)
 	resp.Metadata["source"] = "conversation_processor"
 	resp.Metadata["action_id"] = action.ActionID
-
-	if data, ok := result.Data["data"]; ok {
+	if data != nil {
 		resp.Metadata["result_data"] = data
 	}
-
+	for _, item := range extractResultItems(data) {
+		if len(resp.Cards) >= 10 {
+			break
+		}
+		if item.ID == "" {
+			continue
+		}
+		resp.AddCard(domain.ConversationCard{
+			ID:          item.ID,
+			Type:        item.RefType,
+			Title:       item.Title,
+			Description: item.Subtitle,
+			Data:        map[string]interface{}{"listing_id": item.ID, "position": item.Index + 1},
+		})
+	}
 	return resp
+}
+
+// successText renders a channel-neutral, human reply (WhatsApp shows only text).
+func successText(actionType domain.CommerceActionType, data interface{}) string {
+	switch actionType {
+	case domain.ActionSearchListings:
+		items := extractResultItems(data)
+		if len(items) == 0 {
+			return "I couldn't find anything matching that yet. Try other words, a neighbourhood, or a category."
+		}
+		var b strings.Builder
+		fmt.Fprintf(&b, "Here is what I found (%d):", len(items))
+		for i, it := range items {
+			if i == 5 {
+				b.WriteString("\n…and more.")
+				break
+			}
+			fmt.Fprintf(&b, "\n%d. %s", i+1, it.Title)
+			if it.Subtitle != "" {
+				fmt.Fprintf(&b, " — %s", it.Subtitle)
+			}
+		}
+		b.WriteString("\nReply with the number of the one you like.")
+		return b.String()
+	case domain.ActionGetListing:
+		if l, ok := data.(*domain.Listing); ok && l != nil {
+			text := l.Title
+			if price := formatPrice(l.PriceAmount, l.PriceCurrency); price != "" {
+				text += " — " + price
+			}
+			if l.Description != nil && *l.Description != "" {
+				text += "\n" + *l.Description
+			}
+			return text + "\nSay \"book it\" to reserve dates or \"buy it\" to order."
+		}
+	case domain.ActionPauseListing:
+		return "Done — the listing is paused and hidden from search."
+	case domain.ActionResumeListing, domain.ActionPublishListing:
+		return "Done — the listing is live and searchable."
+	case domain.ActionCreateOrder:
+		if m, ok := data.(map[string]interface{}); ok {
+			return fmt.Sprintf("Your order is created (ref %v). You can pay for it now.", m["order_id"])
+		}
+		return "Your order is created."
+	case domain.ActionCreateReservation:
+		return "You're booked! Your reservation is confirmed."
+	case domain.ActionCancelReservation, domain.ActionCancelOrder:
+		return "Done — it's cancelled."
+	case domain.ActionCheckAvailability:
+		if m, ok := data.(map[string]interface{}); ok {
+			if avail, _ := m["available"].(bool); avail {
+				return "Good news: it's available for those dates."
+			}
+			return "Sorry, it's not available for those dates."
+		}
+	}
+	return "I've completed that for you."
 }
 
 func (p *ConversationProcessor) buildConfirmationResponse(
@@ -590,11 +808,24 @@ func (p *ConversationProcessor) buildClarificationResponse(
 }
 
 func (p *ConversationProcessor) missingParamPrompt(param domain.MissingParameter) string {
+	if prompt, ok := friendlyParamPrompts[param.Name]; ok {
+		return prompt
+	}
 	prompt := fmt.Sprintf("I need a bit more information: %s. What would you like to use?", param.Description)
 	if len(param.Examples) > 0 && len(param.Examples) <= 3 {
 		prompt += fmt.Sprintf(" (e.g., %s)", strings.Join(param.Examples, ", "))
 	}
 	return prompt
+}
+
+var friendlyParamPrompts = map[string]string{
+	"text":           "What are you looking for? (e.g. \"a hotel in Gombe\" or \"iPhone 13\")",
+	"listing_id":     "Which one? You can reply with its number from the list (e.g. \"2\" or \"the second one\").",
+	"start_at":       "When should it start? (e.g. 2026-10-01 14:00)",
+	"end_at":         "And when should it end? (e.g. 2026-10-03 11:00)",
+	"quantity":       "How many would you like?",
+	"order_id":       "Which order? Please share its reference.",
+	"reservation_id": "Which reservation? Please share its reference.",
 }
 
 func (p *ConversationProcessor) extractMissingParams(result *commerce.ExecuteResult) []domain.MissingParameter {
@@ -663,6 +894,10 @@ func (p *ConversationProcessor) storeSingleResult(ctx context.Context, convID st
 		Data:    data,
 	}
 
+	if l, ok := data.(*domain.Listing); ok && l != nil {
+		item.ID, item.Title, item.Subtitle = l.ID, l.Title, formatPrice(l.PriceAmount, l.PriceCurrency)
+		item.Data = nil
+	}
 	if m, ok := data.(map[string]interface{}); ok {
 		if id, ok := m["id"].(string); ok {
 			item.ID = id
@@ -690,6 +925,25 @@ func extractResultItems(data interface{}) []domain.ResultItemRef {
 		return nil
 	}
 
+	// Typed search results (from the in-process search use case).
+	if typed, ok := result["items"].([]domain.SearchResult); ok {
+		items := make([]domain.ResultItemRef, 0, len(typed))
+		for i, r := range typed {
+			subtitle := formatPrice(r.PriceAmount, r.PriceCurrency)
+			if r.Location != nil && r.Location.Neighborhood != nil && *r.Location.Neighborhood != "" {
+				subtitle += " · " + *r.Location.Neighborhood
+			}
+			items = append(items, domain.ResultItemRef{
+				RefType:  "listing",
+				ID:       r.ListingID,
+				Index:    i,
+				Title:    r.Title,
+				Subtitle: subtitle,
+			})
+		}
+		return items
+	}
+
 	itemsList, ok := result["items"].([]interface{})
 	if !ok {
 		itemsList, ok = result["listings"].([]interface{})
@@ -700,9 +954,11 @@ func extractResultItems(data interface{}) []domain.ResultItemRef {
 
 	items := make([]domain.ResultItemRef, 0, len(itemsList))
 	for i, itemData := range itemsList {
-		item := domain.ResultItemRef{Index: i}
+		item := domain.ResultItemRef{Index: i, RefType: "listing"}
 		if m, ok := itemData.(map[string]interface{}); ok {
 			if id, ok := m["id"].(string); ok {
+				item.ID = id
+			} else if id, ok := m["listing_id"].(string); ok {
 				item.ID = id
 			}
 			if title, ok := m["title"].(string); ok {
@@ -720,6 +976,16 @@ func extractResultItems(data interface{}) []domain.ResultItemRef {
 	return items
 }
 
+func formatPrice(amount float64, currency string) string {
+	if currency == "" {
+		return ""
+	}
+	if amount == float64(int64(amount)) {
+		return fmt.Sprintf("%d %s", int64(amount), currency)
+	}
+	return fmt.Sprintf("%.2f %s", amount, currency)
+}
+
 func (p *ConversationProcessor) buildMessageHistory(ctx context.Context, convID string, req *ProcessRequest) ([]domain.Message, error) {
 	messages := []domain.Message{}
 	if p.messageStore != nil {
@@ -731,53 +997,114 @@ func (p *ConversationProcessor) buildMessageHistory(ctx context.Context, convID 
 		}
 	}
 
-	inbound := domain.NewMessage(convID, domain.MessageDirectionInbound, domain.MessageTypeText, req.SenderID, &domain.MessageContent{
-		Text: req.MessageText,
-	})
-	messages = append(messages, *inbound)
+	if n := len(messages); n == 0 || messages[n-1].Content == nil || messages[n-1].Content.Text != req.MessageText {
+		inbound := domain.NewMessage(convID, domain.MessageDirectionInbound, domain.MessageTypeText, req.SenderID, &domain.MessageContent{
+			Text: req.MessageText,
+		})
+		messages = append(messages, *inbound)
+	}
+	// Bound the history handed to the classifier.
+	if len(messages) > 20 {
+		messages = messages[len(messages)-20:]
+	}
 
 	return messages, nil
 }
 
-// ConfirmAction processes a confirmation response using a token.
-func (p *ConversationProcessor) ConfirmAction(ctx context.Context, convID string, token string) (*ProcessResult, error) {
-	cx, err := p.loadContext(ctx, convID)
+// ConfirmAction processes a confirmation response using a token. The actor
+// must own the conversation and be the one who requested the action.
+func (p *ConversationProcessor) ConfirmAction(ctx context.Context, convID string, token string, actor domain.CommerceActor) (*ProcessResult, error) {
+	conv, cx, err := p.loadOwnedPendingConfirmation(ctx, convID, token, actor)
 	if err != nil {
 		return nil, err
 	}
-
-	if cx.ConfirmationState.ConfirmationToken != token || cx.ConfirmationState.State != domain.ConfirmationRequested {
-		return nil, fmt.Errorf("invalid or expired confirmation token")
-	}
-
-	conv, err := p.convStore.FindByID(ctx, convID)
+	result, err := p.executePendingAction(ctx, conv, cx, actor)
 	if err != nil {
 		return nil, err
 	}
-
-	return p.executePendingAction(ctx, conv, cx, cx.ConfirmationState.ActionID, true)
+	p.persistReply(ctx, conv, "confirm:"+token, result)
+	return result, nil
 }
 
 // RejectAction processes a rejection of a confirmation.
-func (p *ConversationProcessor) RejectAction(ctx context.Context, convID string, token string) (*ProcessResult, error) {
-	cx, err := p.loadContext(ctx, convID)
+func (p *ConversationProcessor) RejectAction(ctx context.Context, convID string, token string, actor domain.CommerceActor) (*ProcessResult, error) {
+	_, cx, err := p.loadOwnedPendingConfirmation(ctx, convID, token, actor)
 	if err != nil {
 		return nil, err
 	}
 
-	if cx.ConfirmationState.ConfirmationToken != token || cx.ConfirmationState.State != domain.ConfirmationRequested {
-		return nil, fmt.Errorf("invalid or expired confirmation token")
-	}
-
 	cx.ConfirmationState.State = domain.ConfirmationRejected
+	cx.PendingAction = nil
 	_ = p.saveContext(ctx, convID, cx)
 
 	resp := domain.NewConversationResponse("I've cancelled that action.", cx.Language)
 	return &ProcessResult{ConversationID: convID, Response: resp}, nil
 }
 
+func (p *ConversationProcessor) loadOwnedPendingConfirmation(ctx context.Context, convID, token string, actor domain.CommerceActor) (*domain.Conversation, *domain.ConversationContext, error) {
+	conv, err := p.convStore.FindByID(ctx, convID)
+	if err != nil || conv == nil {
+		return nil, nil, fmt.Errorf("invalid or expired confirmation token")
+	}
+	if !actor.IsAuthenticated() || conv.CustomerID != actor.ID {
+		return nil, nil, domain.ErrConversationForbidden
+	}
+	cx, err := p.loadContext(ctx, convID)
+	if err != nil {
+		return nil, nil, err
+	}
+	if token == "" || cx.ConfirmationState.ConfirmationToken != token ||
+		cx.ConfirmationState.State != domain.ConfirmationRequested || p.confirmationExpired(cx) {
+		return nil, nil, fmt.Errorf("invalid or expired confirmation token")
+	}
+	return conv, cx, nil
+}
+
+// listingScopedActions act on one listing; "book it", "buy it" or "pause this
+// listing" refer to the listing the user is currently looking at.
+var listingScopedActions = map[domain.CommerceActionType]bool{
+	domain.ActionGetListing:        true,
+	domain.ActionCheckAvailability: true,
+	domain.ActionCreateReservation: true,
+	domain.ActionCreateOrder:       true,
+	domain.ActionPublishListing:    true,
+	domain.ActionPauseListing:      true,
+	domain.ActionResumeListing:     true,
+}
+
+// currentListingID returns the listing in focus: the single listing last
+// shown (e.g. after opening a result).
+func currentListingID(cx *domain.ConversationContext) string {
+	if cx == nil || len(cx.ResultItems) != 1 {
+		return ""
+	}
+	if item := cx.ResultItems[0]; item.RefType == "listing" {
+		return item.ID
+	}
+	return ""
+}
+
+// guestAllowedActions are read-only discovery actions available without an account.
+var guestAllowedActions = map[domain.CommerceActionType]bool{
+	domain.ActionSearchListings:  true,
+	domain.ActionGetListing:      true,
+	domain.ActionSuggest:         true,
+	domain.ActionCompareListings: true,
+}
+
 func resolveActionTypeKeyword(text string) domain.CommerceActionType {
 	lower := strings.ToLower(text)
+
+	// Listing lifecycle (seller operations) first: "listing" contains "list".
+	if strings.Contains(lower, "pause") || strings.Contains(lower, "suspend") {
+		return domain.ActionPauseListing
+	}
+	if strings.Contains(lower, "resume") || strings.Contains(lower, "reactivate") || strings.Contains(lower, "unpause") {
+		return domain.ActionResumeListing
+	}
+	if strings.Contains(lower, "publish") {
+		return domain.ActionPublishListing
+	}
 
 	if strings.Contains(lower, "search") || strings.Contains(lower, "find") ||
 		strings.Contains(lower, "look") || strings.Contains(lower, "browse") ||
@@ -811,8 +1138,7 @@ func resolveActionTypeKeyword(text string) domain.CommerceActionType {
 	}
 
 	if strings.Contains(lower, "create listing") || strings.Contains(lower, "new listing") ||
-		strings.Contains(lower, "add product") || strings.Contains(lower, "sell") ||
-		strings.Contains(lower, "publish") {
+		strings.Contains(lower, "add product") || strings.Contains(lower, "sell") {
 		return domain.ActionCreateListing
 	}
 
@@ -820,23 +1146,69 @@ func resolveActionTypeKeyword(text string) domain.CommerceActionType {
 }
 
 func isAffirmative(text string) bool {
-	affirmatives := []string{"yes", "yeah", "yep", "sure", "ok", "okay", "confirm", "confirmed", "proceed", "go ahead", "please do"}
-	for _, a := range affirmatives {
-		if strings.Contains(text, a) {
+	words := normalizedWords(text)
+	if len(words) == 0 {
+		return false
+	}
+	joined := strings.Join(words, " ")
+	for _, phrase := range []string{"go ahead", "please do", "do it"} {
+		if strings.Contains(" "+joined+" ", " "+phrase+" ") {
 			return true
 		}
 	}
-	// Single-letter "y" must be exact match
-	trimmed := strings.TrimSpace(text)
-	return trimmed == "y"
+	affirmatives := map[string]bool{"yes": true, "y": true, "yeah": true, "yep": true, "sure": true, "ok": true,
+		"okay": true, "confirm": true, "confirmed": true, "proceed": true, "oui": true, "d'accord": true, "daccord": true}
+	// Short replies only: a longer sentence that merely contains "ok"
+	// (e.g. "can you book another?") must not confirm a payment.
+	if len(words) > 4 {
+		return false
+	}
+	for _, w := range words {
+		if affirmatives[w] {
+			return !isNegative(text)
+		}
+	}
+	return false
 }
 
 func isNegative(text string) bool {
-	negatives := []string{"no", "nope", "cancel", "never", "stop", "abort", "no thanks", "not now"}
-	for _, n := range negatives {
-		if strings.Contains(text, n) {
+	words := normalizedWords(text)
+	joined := " " + strings.Join(words, " ") + " "
+	for _, phrase := range []string{"no thanks", "not now"} {
+		if strings.Contains(joined, " "+phrase+" ") {
+			return true
+		}
+	}
+	negatives := map[string]bool{"no": true, "n": true, "nope": true, "cancel": true, "never": true, "stop": true, "abort": true, "non": true, "annuler": true}
+	for _, w := range words {
+		if negatives[w] {
 			return true
 		}
 	}
 	return false
+}
+
+// normalizedWords lowercases text and splits it into words, dropping punctuation.
+func normalizedWords(text string) []string {
+	return strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
+		return !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9') && r != '\''
+	})
+}
+
+// referencedResultID resolves a short reply to one of the last listed results.
+func referencedResultID(text string, cx *domain.ConversationContext) string {
+	if cx == nil || len(cx.ResultItems) == 0 || len(normalizedWords(text)) > 4 {
+		return ""
+	}
+	trimmed := strings.TrimSpace(text)
+	if n, err := strconv.Atoi(trimmed); err == nil {
+		if n >= 1 && n <= len(cx.ResultItems) {
+			return cx.ResultItems[n-1].ID
+		}
+		return ""
+	}
+	if ref := domain.ResolveContextualReference(trimmed, cx); ref != nil && ref.Strategy == domain.StrategyOrdinal {
+		return ref.ResolvedItemID
+	}
+	return ""
 }

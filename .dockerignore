@@ -1,0 +1,13 @@
+.git
+.kilo
+**/node_modules
+**/dist
+web/frontend/.vite
+HomepageDesign
+trezutil_demo_catalog
+*.zip
+*.exe
+*.log
+.env
+.env.*
+deployments/docker/app.env

@@ -8,7 +8,9 @@ Thumbs.db
 
 # Go
 bin/
+*.exe
 *.test
+*.test.exe
 coverage.out
 coverage.html
 
@@ -26,7 +28,11 @@ dist/
 build/
 
 # Node / frontend
+node_modules/
 web/frontend/node_modules/
+
+# Agent worktrees
+.kilo/
 
 # Local infra data
 infrastructure/**/data/

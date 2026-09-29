@@ -69,16 +69,40 @@ type apiRoute struct {
 
 func (g *Gateway) routes() []apiRoute {
 	return []apiRoute{
+		{"/api/v1/auth", "identity"},
+		{"/api/v1/organizations", "identity"},
+		{"/api/v1/sellers", "identity"},
+		{"/api/v1/stores", "identity"},
+		{"/api/v1/categories", "search"},
 		{"/api/v1/conversations", "conversation"},
+		{"/api/v1/packs", "conversation"},
+		{"/api/v1/webhooks/whatsapp", "conversation"},
 		{"/api/v1/payments", "payment"},
+		{"/api/v1/webhooks/payments", "payment"},
 		{"/api/v1/search", "search"},
 		{"/api/v1/listings", "search"},
+		{"/api/v1/orders", "commerce"},
+		{"/api/v1/reservations", "commerce"},
+		{"/api/v1/availability", "commerce"},
+		{"/api/v1/inventory", "commerce"},
+		{"/api/v1/fulfillments", "commerce"},
 	}
 }
 
 // apiRouter dispatches /api/v1/* to configured upstreams, rewriting prefixes
 // where internal services use a /v1/* contract.
 func (g *Gateway) apiRouter(w http.ResponseWriter, r *http.Request) {
+	maxBody := g.config.MaxBodyBytes
+	if maxBody <= 0 {
+		maxBody = 1 << 20
+	}
+	if r.ContentLength > maxBody {
+		g.writeError(w, http.StatusRequestEntityTooLarge, "PAYLOAD_TOO_LARGE", "request body too large", r)
+		return
+	}
+	if r.Body != nil {
+		r.Body = http.MaxBytesReader(w, r.Body, maxBody)
+	}
 	for _, rt := range g.routes() {
 		if strings.HasPrefix(r.URL.Path, rt.prefix) {
 			up := g.config.Upstreams[rt.upstream]
@@ -197,7 +221,13 @@ func (g *Gateway) staticHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	p := strings.TrimPrefix(r.URL.Path, "/")
 	if p != "" && p != "/" {
-		full := filepath.Join(root, filepath.FromSlash(filepath.Clean(p)))
+		full := filepath.Join(root, filepath.FromSlash(filepath.Clean("/"+p)))
+		// Never serve anything outside the web root (defense in depth; also
+		// covers "\" separators on Windows).
+		if rel, err := filepath.Rel(root, full); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			g.writeError(w, http.StatusBadRequest, "INVALID_PATH", "invalid path", r)
+			return
+		}
 		if info, err := os.Stat(full); err == nil && !info.IsDir() {
 			http.ServeFile(w, r, full)
 			return

@@ -100,6 +100,7 @@ func TestProviderHandler_ListProviders(t *testing.T) {
 			uc := &mockProviderUseCases{response: testProviderResponse(), err: tt.mockErr}
 			handler := NewProviderHandler(uc)
 			req := httptest.NewRequest(http.MethodGet, "/v1/providers?user_id="+tt.actorID+"&organization_id="+tt.orgID, nil)
+			req = asQueryUser(req)
 			w := httptest.NewRecorder()
 
 			handler.ListProvidersH(w, req)
@@ -156,6 +157,7 @@ func TestProviderHandler_GetProvider(t *testing.T) {
 			uc := &mockProviderUseCases{response: testProviderResponse(), err: tt.mockErr}
 			handler := NewProviderHandler(uc)
 			req := httptest.NewRequest(http.MethodGet, "/v1/providers?provider_id="+tt.providerID+"&user_id="+tt.actorID+"&organization_id="+tt.orgID, nil)
+			req = asQueryUser(req)
 			w := httptest.NewRecorder()
 
 			handler.GetProviderH(w, req)
@@ -219,6 +221,7 @@ func TestProviderHandler_CreateProvider(t *testing.T) {
 			uc := &mockProviderUseCases{response: testProviderResponse(), err: tt.mockErr}
 			handler := NewProviderHandler(uc)
 			req := httptest.NewRequest(http.MethodPost, "/v1/providers?user_id="+tt.actorID+"&organization_id="+tt.orgID, strings.NewReader(tt.body))
+			req = asQueryUser(req)
 			w := httptest.NewRecorder()
 
 			handler.CreateProviderH(w, req)
@@ -235,6 +238,7 @@ func TestProviderHandler_EnableDisable(t *testing.T) {
 		uc := &mockProviderUseCases{}
 		handler := NewProviderHandler(uc)
 		req := httptest.NewRequest(http.MethodPost, "/v1/providers/enable?provider_id=prov-1&user_id=user-1&organization_id=org-1", nil)
+		req = asQueryUser(req)
 		w := httptest.NewRecorder()
 
 		handler.EnableProviderH(w, req)
@@ -247,6 +251,7 @@ func TestProviderHandler_EnableDisable(t *testing.T) {
 		uc := &mockProviderUseCases{}
 		handler := NewProviderHandler(uc)
 		req := httptest.NewRequest(http.MethodPost, "/v1/providers/disable?provider_id=prov-1&user_id=user-1&organization_id=org-1", nil)
+		req = asQueryUser(req)
 		w := httptest.NewRecorder()
 
 		handler.DisableProviderH(w, req)
@@ -259,6 +264,7 @@ func TestProviderHandler_EnableDisable(t *testing.T) {
 		uc := &mockProviderUseCases{err: domain.ErrProviderNotFound}
 		handler := NewProviderHandler(uc)
 		req := httptest.NewRequest(http.MethodPost, "/v1/providers/enable?provider_id=prov-1&user_id=user-1&organization_id=org-1", nil)
+		req = asQueryUser(req)
 		w := httptest.NewRecorder()
 
 		handler.EnableProviderH(w, req)
@@ -272,6 +278,7 @@ func TestProviderHandler_GetCapabilities(t *testing.T) {
 	uc := &mockProviderUseCases{caps: []string{"AVAILABILITY", "RESERVATION"}}
 	handler := NewProviderHandler(uc)
 	req := httptest.NewRequest(http.MethodGet, "/v1/providers/capabilities?provider_id=prov-1&user_id=user-1&organization_id=org-1", nil)
+	req = asQueryUser(req)
 	w := httptest.NewRecorder()
 
 	handler.GetProviderCapabilitiesH(w, req)
@@ -285,6 +292,7 @@ func TestProviderHandler_SecretsNotReturned(t *testing.T) {
 	uc := &mockProviderUseCases{response: testProviderResponse()}
 	handler := NewProviderHandler(uc)
 	req := httptest.NewRequest(http.MethodGet, "/v1/providers?provider_id=prov-1&user_id=user-1&organization_id=org-1", nil)
+	req = asQueryUser(req)
 	w := httptest.NewRecorder()
 
 	handler.GetProviderH(w, req)

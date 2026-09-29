@@ -35,6 +35,7 @@ func (u *OrganizationUseCases) CreateOrganization(ctx context.Context, actorID s
 		return domain.ErrInsufficientPermissions
 	}
 
+	org.ID = domain.NewID()
 	org.CreatedAt = time.Now().Unix()
 	org.UpdatedAt = time.Now().Unix()
 

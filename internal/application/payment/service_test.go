@@ -20,6 +20,20 @@ type mockPaymentProviderAdapter struct {
 	capabilities map[domain.PaymentProviderOperation]bool
 	responses    map[domain.PaymentProviderOperation]domain.PaymentProviderResponse
 	errors       map[domain.PaymentProviderOperation]error
+	mu           sync.Mutex
+}
+
+// setResponse is safe to call from concurrent test goroutines.
+func (m *mockPaymentProviderAdapter) setResponse(op domain.PaymentProviderOperation, resp domain.PaymentProviderResponse) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.responses[op] = resp
+}
+
+func (m *mockPaymentProviderAdapter) result(op domain.PaymentProviderOperation) (domain.PaymentProviderResponse, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.responses[op], m.errors[op]
 }
 
 func newMockPaymentAdapter(id string) *mockPaymentProviderAdapter {
@@ -41,24 +55,24 @@ func (m *mockPaymentProviderAdapter) Health(ctx context.Context) domain.Provider
 }
 
 func (m *mockPaymentProviderAdapter) CreatePayment(ctx context.Context, req domain.PaymentProviderRequest) (domain.PaymentProviderResponse, error) {
-	return m.responses[domain.PaymentProviderOpCreate], m.errors[domain.PaymentProviderOpCreate]
+	return m.result(domain.PaymentProviderOpCreate)
 }
 func (m *mockPaymentProviderAdapter) GetPayment(ctx context.Context, providerPaymentID string) (domain.PaymentProviderResponse, error) {
-	return m.responses[domain.PaymentProviderOpGet], m.errors[domain.PaymentProviderOpGet]
+	return m.result(domain.PaymentProviderOpGet)
 }
 func (m *mockPaymentProviderAdapter) CancelPayment(ctx context.Context, providerPaymentID string) (domain.PaymentProviderResponse, error) {
-	return m.responses[domain.PaymentProviderOpCancel], m.errors[domain.PaymentProviderOpCancel]
+	return m.result(domain.PaymentProviderOpCancel)
 }
 func (m *mockPaymentProviderAdapter) CapturePayment(ctx context.Context, providerPaymentID string, amount *domain.Money) (domain.PaymentProviderResponse, error) {
-	return m.responses[domain.PaymentProviderOpCapture], m.errors[domain.PaymentProviderOpCapture]
+	return m.result(domain.PaymentProviderOpCapture)
 }
 func (m *mockPaymentProviderAdapter) RefundPayment(ctx context.Context, providerPaymentID string, amount *domain.Money) (domain.RefundProviderResponse, error) {
-	resp := m.responses[domain.PaymentProviderOpRefund]
+	resp, err := m.result(domain.PaymentProviderOpRefund)
 	return domain.RefundProviderResponse{
 		ProviderRefundID: resp.ProviderPaymentID,
 		Status:           resp.Status,
 		Amount:           *amount,
-	}, m.errors[domain.PaymentProviderOpRefund]
+	}, err
 }
 
 type mockPaymentRepo struct {
@@ -81,7 +95,8 @@ func (m *mockPaymentRepo) Create(ctx context.Context, payment *domain.Payment) e
 	if payment.ID == "" {
 		payment.ID = uuid()
 	}
-	m.payments[payment.ID] = payment
+	cp := *payment
+	m.payments[payment.ID] = &cp
 	return nil
 }
 func (m *mockPaymentRepo) FindByID(ctx context.Context, tenantID, paymentID string) (*domain.Payment, error) {
@@ -94,7 +109,9 @@ func (m *mockPaymentRepo) FindByID(ctx context.Context, tenantID, paymentID stri
 	if p.TenantID != tenantID {
 		return nil, domain.ErrPaymentNotFound
 	}
-	return p, nil
+	// Return a copy, like a database read, so concurrent callers do not share state.
+	cp := *p
+	return &cp, nil
 }
 func (m *mockPaymentRepo) FindByIDForUpdate(ctx context.Context, tenantID, paymentID string) (*domain.Payment, error) {
 	return m.FindByID(ctx, tenantID, paymentID)
@@ -104,7 +121,8 @@ func (m *mockPaymentRepo) FindByOrderID(ctx context.Context, tenantID, orderID s
 	defer m.mu.RUnlock()
 	for _, p := range m.payments {
 		if p.OrderID == orderID && p.TenantID == tenantID {
-			return p, nil
+			cp := *p
+			return &cp, nil
 		}
 	}
 	return nil, domain.ErrPaymentNotFound
@@ -114,7 +132,8 @@ func (m *mockPaymentRepo) FindByProviderPaymentID(ctx context.Context, tenantID,
 	defer m.mu.RUnlock()
 	for _, p := range m.payments {
 		if p.ProviderPaymentID == providerPaymentID && p.TenantID == tenantID {
-			return p, nil
+			cp := *p
+			return &cp, nil
 		}
 	}
 	return nil, domain.ErrPaymentNotFound
@@ -124,7 +143,8 @@ func (m *mockPaymentRepo) FindByIdempotencyKey(ctx context.Context, tenantID, id
 	defer m.mu.RUnlock()
 	for _, p := range m.payments {
 		if p.IdempotencyKey == idempotencyKey && p.TenantID == tenantID {
-			return p, nil
+			cp := *p
+			return &cp, nil
 		}
 	}
 	return nil, domain.ErrPaymentNotFound
@@ -132,7 +152,12 @@ func (m *mockPaymentRepo) FindByIdempotencyKey(ctx context.Context, tenantID, id
 func (m *mockPaymentRepo) Update(ctx context.Context, payment *domain.Payment) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.payments[payment.ID] = payment
+	// Mirror the PostgreSQL optimistic lock: WHERE version = payment.Version-1.
+	if stored, ok := m.payments[payment.ID]; ok && stored.Version != payment.Version-1 {
+		return domain.ErrOptimisticLock
+	}
+	cp := *payment
+	m.payments[payment.ID] = &cp
 	return nil
 }
 
@@ -332,6 +357,10 @@ func (m *mockOrderRepo) FindByIDAndOrg(ctx context.Context, orgID, orderID strin
 	}
 	return o, nil
 }
+func (m *mockOrderRepo) FindByCustomerIdempotencyKey(ctx context.Context, customerID, key string) (*domain.Order, error) {
+	return nil, domain.ErrOrderNotFound
+}
+
 func (m *mockOrderRepo) Update(ctx context.Context, order *domain.Order) error {
 	m.orders[order.ID] = order
 	return nil
@@ -386,6 +415,7 @@ func setupTestService(t *testing.T) (*PaymentService, *mockPaymentRepo, *mockRef
 	})
 
 	svc := NewPaymentService(PaymentServiceConfig{
+		Locker:       NewLocalLocker(),
 		Payments:     mockRepo,
 		Refunds:      mockRefundRepo,
 		Ledger:       mockLedgerRepo,
@@ -715,10 +745,13 @@ func TestPaymentService_AuthorizePayment(t *testing.T) {
 		t.Fatalf("expected CREATED after create, got %s", p.Status)
 	}
 
-	adapter.responses[domain.PaymentProviderOpCreate] = domain.PaymentProviderResponse{
+	// The provider already holds this payment: authorize must sync its state
+	// (GetPayment) rather than create a second provider payment.
+	adapter.setResponse(domain.PaymentProviderOpCreate, domain.PaymentProviderResponse{Status: "failed", ProviderPaymentID: "must-not-be-created"})
+	adapter.setResponse(domain.PaymentProviderOpGet, domain.PaymentProviderResponse{
 		Status:            "authorized",
-		ProviderPaymentID: "ext-auth-123",
-	}
+		ProviderPaymentID: "ext-pay-001-noauth",
+	})
 
 	p2, err := svc.AuthorizePayment(context.Background(), "org-test", "actor-1", p.ID, "idem-authorize-2")
 	if err != nil {
@@ -726,6 +759,9 @@ func TestPaymentService_AuthorizePayment(t *testing.T) {
 	}
 	if p2.Status != domain.PaymentStatusAuthorized {
 		t.Errorf("expected AUTHORIZED after authorize, got %s", p2.Status)
+	}
+	if p2.ProviderPaymentID != "ext-pay-001-noauth" {
+		t.Errorf("authorize must keep the original provider payment, got %s", p2.ProviderPaymentID)
 	}
 
 	if _, err := repo.FindByID(context.Background(), "org-test", p.ID); err != nil {
@@ -1239,10 +1275,10 @@ func TestPaymentService_ConcurrentRefunds(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			adapter.responses[domain.PaymentProviderOpRefund] = domain.PaymentProviderResponse{
+			adapter.setResponse(domain.PaymentProviderOpRefund, domain.PaymentProviderResponse{
 				Status:            "succeeded",
 				ProviderPaymentID: fmt.Sprintf("ext-concurrent-refund-%d", idx+2),
-			}
+			})
 			_, _, results[idx] = svc.RefundPayment(context.Background(), "org-test", "actor-1", p.ID,
 				fmt.Sprintf("idem-cr-%d", idx+2),
 				&domain.Money{AmountMinor: 200, Currency: "USD"})
@@ -1320,7 +1356,7 @@ func TestExactlyOnceLedger_CaptureSingleEntry(t *testing.T) {
 		OrganizationID: "org-test",
 		TotalAmount:    domain.Money{AmountMinor: 1000, Currency: "USD"},
 		Currency:       "USD",
-		Status:         domain.OrderStatusConfirmed,
+		Status:         domain.OrderStatusPendingPayment,
 	}
 
 	adapter.responses[domain.PaymentProviderOpCreate] = domain.PaymentProviderResponse{
@@ -1375,7 +1411,7 @@ func TestExactlyOnceLedger_CaptureConcurrent_NoDuplicate(t *testing.T) {
 		OrganizationID: "org-test",
 		TotalAmount:    domain.Money{AmountMinor: 1000, Currency: "USD"},
 		Currency:       "USD",
-		Status:         domain.OrderStatusConfirmed,
+		Status:         domain.OrderStatusPendingPayment,
 	}
 
 	p, err := svc.CreatePayment(context.Background(), "org-test", "actor-1", "order-concurrent-capture",
@@ -1433,7 +1469,7 @@ func TestExactlyOnceLedger_RefundConcurrent_NoDuplicate(t *testing.T) {
 		OrganizationID: "org-test",
 		TotalAmount:    domain.Money{AmountMinor: 1000, Currency: "USD"},
 		Currency:       "USD",
-		Status:         domain.OrderStatusConfirmed,
+		Status:         domain.OrderStatusPendingPayment,
 	}
 
 	p, err := svc.CreatePayment(context.Background(), "org-test", "actor-1", "order-ref-concurrent",
@@ -1490,7 +1526,7 @@ func TestRefundPayment_TenantIsolation(t *testing.T) {
 		OrganizationID: "org-test",
 		TotalAmount:    domain.Money{AmountMinor: 1000, Currency: "USD"},
 		Currency:       "USD",
-		Status:         domain.OrderStatusConfirmed,
+		Status:         domain.OrderStatusPendingPayment,
 	}
 
 	p, err := svc.CreatePayment(context.Background(), "org-test", "actor-1", "order-tenant-refund",
@@ -1553,7 +1589,7 @@ func TestCapturePayment_TenantIsolation(t *testing.T) {
 		OrganizationID: "org-test",
 		TotalAmount:    domain.Money{AmountMinor: 500, Currency: "USD"},
 		Currency:       "USD",
-		Status:         domain.OrderStatusConfirmed,
+		Status:         domain.OrderStatusPendingPayment,
 	}
 
 	p, err := svc.CreatePayment(context.Background(), "org-test", "actor-1", "order-capture-tenant",
@@ -1644,7 +1680,7 @@ func TestConcurrentRefunds_TenantIsolation(t *testing.T) {
 		OrganizationID: "org-test",
 		TotalAmount:    domain.Money{AmountMinor: 1000, Currency: "USD"},
 		Currency:       "USD",
-		Status:         domain.OrderStatusConfirmed,
+		Status:         domain.OrderStatusPendingPayment,
 	}
 
 	p, err := svc.CreatePayment(context.Background(), "org-test", "actor-1", "order-concurrent-ref-tenant",
@@ -1690,7 +1726,7 @@ func TestRefundPayment_ExceedsAmount_SingleEntry(t *testing.T) {
 		OrganizationID: "org-test",
 		TotalAmount:    domain.Money{AmountMinor: 1000, Currency: "USD"},
 		Currency:       "USD",
-		Status:         domain.OrderStatusConfirmed,
+		Status:         domain.OrderStatusPendingPayment,
 	}
 
 	p, err := svc.CreatePayment(context.Background(), "org-test", "actor-1", "order-refund-exceeds",
@@ -1714,5 +1750,28 @@ func TestRefundPayment_ExceedsAmount_SingleEntry(t *testing.T) {
 
 	if len(mockRefundRepo.refunds) != 1 {
 		t.Errorf("expected 1 refund (second should be rejected), got %d", len(mockRefundRepo.refunds))
+	}
+}
+
+func TestCreatePayment_RejectsOrderNotAwaitingPayment(t *testing.T) {
+	for _, status := range []domain.OrderStatus{domain.OrderStatusPaid, domain.OrderStatusConfirmed, domain.OrderStatusCancelled} {
+		mockOrders := &mockOrderRepo{orders: map[string]*domain.Order{}}
+		mockOrders.orders["order-x"] = &domain.Order{
+			ID:             "order-x",
+			OrganizationID: "org-test",
+			TotalAmount:    domain.Money{AmountMinor: 1000, Currency: "USD"},
+			Currency:       "USD",
+			Status:         status,
+		}
+		svc := NewPaymentService(PaymentServiceConfig{
+			Payments: newMockPaymentRepo(),
+			Orders:   mockOrders,
+			Logger:   zerolog.Nop(),
+		})
+		_, err := svc.CreatePayment(context.Background(), "org-test", "actor-1", "order-x",
+			domain.Money{AmountMinor: 1000, Currency: "USD"}, domain.PaymentMethodCard, "m-1", "idem-"+string(status), nil)
+		if !errors.Is(err, domain.ErrOrderNotPayable) {
+			t.Errorf("status %s: expected ErrOrderNotPayable, got %v", status, err)
+		}
 	}
 }

@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/trezutil/trezutil/internal/domain"
 )
 
@@ -95,6 +97,13 @@ func (r *PaymentRepository) Create(ctx context.Context, payment *domain.Payment)
 		paymentID = payment.ID
 	}
 	if err != nil {
+		var pqErr *pq.Error
+		if errors.As(err, &pqErr) && pqErr.Code == "23505" {
+			if pqErr.Constraint == "uq_payments_live_per_order" {
+				return domain.ErrOrderNotPayable
+			}
+			return domain.ErrPaymentAlreadyExists
+		}
 		return fmt.Errorf("failed to create payment: %w", err)
 	}
 	payment.ID = paymentID

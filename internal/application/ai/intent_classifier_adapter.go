@@ -36,7 +36,16 @@ func (a *IntentClassifierAdapter) ClassifyIntent(ctx context.Context, req *conve
 	}
 
 	// Build sanitized message context
-	sanitized, _, _ := a.orchestrator.buildSanitizedContext(aiReq)
+	sanitized, requestID, traceID := a.orchestrator.buildSanitizedContext(aiReq)
+
+	// Model calls are metered when an AI_INTERPRETATION usage policy is
+	// active. Without credits the conversation degrades to keyword routing.
+	settle, ok := a.meter(ctx, req, requestID)
+	if !ok {
+		result.Fallback = a.orchestrator.buildFallbackResponse("You don't have enough credits to use AI features.")
+		result.LatencyMs = time.Since(startTime).Milliseconds()
+		return result, nil
+	}
 
 	aiReq2 := domain.AIRequest{
 		Task:             domain.AITaskIntentClassification,
@@ -44,14 +53,19 @@ func (a *IntentClassifierAdapter) ClassifyIntent(ctx context.Context, req *conve
 		SystemPrompt:     a.orchestrator.buildSystemPrompt(),
 		StructuredOutput: true,
 		OutputSchema:     intentOutputSchema(),
+		RequestID:        requestID,
+		TraceID:          traceID,
 		MaxTokens:        4000,
 		Temperature:      0.3,
-		Timeout:          30 * time.Second,
+		// Timeout left to the gateway (AI_TIMEOUT_SECONDS).
 	}
 
 	_ = req.Locale
 
 	aiResp, err := a.orchestrator.gateway.Generate(ctx, req.OrganizationID, aiReq2)
+	// The model call is billed once it produced an answer, even if the answer
+	// is later rejected by the allowlist or the confidence threshold.
+	settle(err == nil)
 	if err != nil {
 		result.Fallback = a.orchestrator.buildFallbackResponse("I'm having trouble understanding your request. Could you rephrase?")
 		result.LatencyMs = time.Since(startTime).Milliseconds()
@@ -78,6 +92,39 @@ func (a *IntentClassifierAdapter) ClassifyIntent(ctx context.Context, req *conve
 	result.Intent = intent
 	result.LatencyMs = time.Since(startTime).Milliseconds()
 	return result, nil
+}
+
+// meter reserves AI credits for an authenticated actor when a usage policy
+// applies. It returns a settle function (consume on true, release on false)
+// and false when the actor cannot afford the call.
+func (a *IntentClassifierAdapter) meter(ctx context.Context, req *conversation.IntentClassificationRequest, requestID string) (func(bool), bool) {
+	noop := func(bool) {}
+	usage := a.orchestrator.usageService
+	if usage == nil || !req.Actor.IsAuthenticated() {
+		return noop, true
+	}
+	policy, err := usage.ResolvePolicy(ctx, "AI_INTERPRETATION", req.Channel, req.Actor.Type)
+	if err != nil || policy == nil || !policy.IsMetered() {
+		return noop, true
+	}
+	account, err := usage.FindOrCreateCreditAccountByOwner(ctx, req.Actor.Type, req.Actor.ID, req.TenantID, "", "")
+	if err != nil {
+		return noop, false
+	}
+	if ok, err := usage.Check(ctx, account.AccountID, policy.Cost); err != nil || !ok {
+		return noop, false
+	}
+	res, err := usage.Reserve(ctx, account.AccountID, "AI_INTERPRETATION", policy.Cost, requestID, req.TenantID)
+	if err != nil {
+		return noop, false
+	}
+	return func(used bool) {
+		if used {
+			_ = usage.Consume(ctx, res.ReservationID)
+		} else {
+			_ = usage.Release(ctx, res.ReservationID)
+		}
+	}, true
 }
 
 // Ensure interface compliance

@@ -64,7 +64,7 @@ type MessageContent struct {
 // NewMessage creates a new Message.
 func NewMessage(conversationID string, direction MessageDirection, msgType MessageType, senderID string, content *MessageContent) *Message {
 	return &Message{
-		ID:             "",
+		ID:             NewID(),
 		ConversationID: conversationID,
 		Direction:      direction,
 		Type:           msgType,

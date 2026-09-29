@@ -69,7 +69,8 @@ type StoreRepository interface {
 type TokenService interface {
 	IssueAccessToken(userID string, roles []Role) (string, error)
 	IssueRefreshToken(userID string) (string, error)
-	ValidateAccessToken(token string) (string, error) // returns userID
+	ValidateAccessToken(token string) (string, error)  // returns userID; rejects refresh tokens
+	ValidateRefreshToken(token string) (string, error) // returns userID; rejects access tokens
 	RotateRefreshToken(oldToken string) (string, error)
 }
 
@@ -196,6 +197,26 @@ var ErrInvalidOTP = fmt.Errorf("OTP is invalid or expired")
 // ErrOTPExpired is returned when an OTP code has expired.
 var ErrOTPExpired = fmt.Errorf("OTP is invalid or expired")
 
+// ErrConversationForbidden is returned when an actor addresses a conversation
+// owned by someone else.
+var ErrConversationForbidden = fmt.Errorf("conversation belongs to another user")
+
+// ErrDuplicateMessage is returned when an inbound message with the same
+// idempotency key was already recorded for the conversation.
+var ErrDuplicateMessage = fmt.Errorf("duplicate message")
+
+// ErrListingAvailabilityNotFound is returned when a listing has no availability record.
+var ErrListingAvailabilityNotFound = fmt.Errorf("listing availability not found")
+
+// ErrUserNotFound is returned when a user does not exist.
+var ErrUserNotFound = fmt.Errorf("user not found")
+
+// ErrUserSuspended is returned when a suspended user tries to authenticate.
+var ErrUserSuspended = fmt.Errorf("user account is suspended")
+
+// ErrOTPRateLimited is returned when too many OTP codes were requested for a phone.
+var ErrOTPRateLimited = fmt.Errorf("too many verification codes requested; try again later")
+
 // ErrInsufficientPermissions is returned when a user lacks required permissions.
 var ErrInsufficientPermissions = fmt.Errorf("insufficient permissions")
 
@@ -226,8 +247,24 @@ type OrderRepository interface {
 	FindByID(ctx context.Context, orderID string) (*Order, error)
 	FindByIDForUpdate(ctx context.Context, orderID string) (*Order, error)
 	FindByIDAndOrg(ctx context.Context, orgID, orderID string) (*Order, error)
+	// FindByCustomerIdempotencyKey returns ErrOrderNotFound when no order matches.
+	FindByCustomerIdempotencyKey(ctx context.Context, customerID, idempotencyKey string) (*Order, error)
+	// Update persists a single state transition; it fails with ErrOptimisticLock
+	// when the stored version is not order.Version-1 (concurrent modification).
 	Update(ctx context.Context, order *Order) error
 }
+
+// ErrProviderDeclined marks a definitive provider refusal (e.g. card declined):
+// retrying the same request cannot succeed, so the payment must fail.
+var ErrProviderDeclined = fmt.Errorf("payment declined by provider")
+
+// ErrOrderNotPayable is returned when an order cannot accept a (new) payment:
+// it is not awaiting payment, or it already has a live payment.
+var ErrOrderNotPayable = fmt.Errorf("order is not awaiting payment")
+
+// ErrListingUnavailable is returned when a listing cannot be ordered or booked
+// (e.g. it is not published).
+var ErrListingUnavailable = fmt.Errorf("listing is not available")
 
 // ErrReservationNotFound is returned when a reservation is not found.
 var ErrReservationNotFound = fmt.Errorf("reservation not found")

@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/subtle"
 	"io"
 	"net/http"
 	"os"
@@ -126,7 +127,7 @@ func (h *WhatsappHandler) WebhookH(w http.ResponseWriter, r *http.Request) {
 			if err != nil {
 				writeJSON(w, ErrorResponse{Error: Error{
 					Code:    "WEBHOOK_PROCESSING_FAILED",
-					Message: err.Error(),
+					Message: "Webhook processing failed",
 				}}, http.StatusInternalServerError)
 				return
 			}
@@ -179,4 +180,19 @@ func aggregateConversationResponses(responses []*domain.ConversationResponse) *d
 	}
 
 	return aggregate
+}
+
+// VerifySubscriptionH answers Meta's webhook subscription handshake
+// (GET ?hub.mode=subscribe&hub.verify_token=...&hub.challenge=...).
+func VerifySubscriptionH(verifyToken string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if verifyToken == "" || q.Get("hub.mode") != "subscribe" ||
+			subtle.ConstantTimeCompare([]byte(q.Get("hub.verify_token")), []byte(verifyToken)) != 1 {
+			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Invalid verification request"}}, http.StatusForbidden)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte(q.Get("hub.challenge")))
+	}
 }

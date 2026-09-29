@@ -55,7 +55,16 @@ func (u *SellerUseCases) CreateSellerProfile(ctx context.Context, actorID string
 		}
 	}
 
-	// Set timestamps
+	// Server-controlled identity: a seller profile always belongs to the
+	// caller; clients cannot attach it to another user.
+	seller.ID = domain.NewID()
+	seller.UserID = &actorID
+	// Trust signals are earned through verification, never self-declared.
+	seller.VerificationStatus = domain.VerificationStatusUnverified
+	seller.TrustLevel = 0
+	if seller.Status == "" {
+		seller.Status = domain.SellerStatusActive
+	}
 	seller.CreatedAt = time.Now().Unix()
 	seller.UpdatedAt = time.Now().Unix()
 

@@ -40,6 +40,10 @@ func (k *KeywordClassifier) ClassifyIntent(ctx context.Context, req *IntentClass
 		Parameters:  make(map[string]interface{}),
 		Explanation: "keyword-based classification",
 	}
+	if actionType == domain.ActionSearchListings {
+		// The user's own words are the search query.
+		intent.Parameters["text"] = req.Messages[len(req.Messages)-1].Content.Text
+	}
 	if len(specialist) > 0 {
 		_ = specialist[0]
 	}

@@ -10,6 +10,7 @@ const (
 	ActorTypeOrganizationAdmin ActorType = "organization_admin"
 	ActorTypePlatformOperator  ActorType = "platform_operator"
 	ActorTypeSystem            ActorType = "system"
+	ActorTypeGuest             ActorType = "guest"
 )
 
 // CommerceActor represents an actor in a commerce action.
@@ -29,9 +30,9 @@ func NewCommerceActor(id string, actorType ActorType) CommerceActor {
 	}
 }
 
-// IsAuthenticated returns true if the actor is not a system actor.
+// IsAuthenticated returns true for identified people and false for system or guest actors.
 func (a CommerceActor) IsAuthenticated() bool {
-	return a.Type != ActorTypeSystem
+	return a.Type != ActorTypeSystem && a.Type != ActorTypeGuest
 }
 
 // CanActAs returns true if this actor can act as the given type.

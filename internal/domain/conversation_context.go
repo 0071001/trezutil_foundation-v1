@@ -32,10 +32,10 @@ type PendingParameter struct {
 
 // MissingParameter represents a parameter required for an action that the user has not yet provided.
 type MissingParameter struct {
-	Name        string
-	Description string
-	EntityName  string
-	Examples    []string
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	EntityName  string   `json:"entity_name,omitempty"`
+	Examples    []string `json:"examples,omitempty"`
 }
 
 // ConfirmationFlowState tracks the multi-step confirmation flow for an action.

@@ -45,6 +45,12 @@ func TestNewConversation(t *testing.T) {
 	if conversation.Channel != channel {
 		t.Errorf("expected %s, got %s", channel, conversation.Channel)
 	}
+	if conversation.ID == "" {
+		t.Fatal("expected a generated conversation ID")
+	}
+	if second := NewConversation(channel, "ext-1", "customer-1", "org-1"); second.ID == conversation.ID {
+		t.Fatal("expected each new conversation to receive a unique ID")
+	}
 	if conversation.ExternalID != "ext-1" {
 		t.Errorf("expected ext-1, got %s", conversation.ExternalID)
 	}

@@ -3,6 +3,7 @@ package application
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/trezutil/trezutil/internal/domain"
@@ -75,8 +76,9 @@ func (u *ListingUseCases) CreateListing(ctx context.Context, actorID string, lis
 		return fmt.Errorf("seller not found: %w", err)
 	}
 
-	// Verify seller belongs to the same organization as the store
-	if seller.OrganizationID != nil && *seller.OrganizationID != store.OrganizationID {
+	// Verify seller belongs to the same organization as the store. A seller
+	// without an organization cannot attach listings to any organization's store.
+	if seller.OrganizationID == nil || *seller.OrganizationID != store.OrganizationID {
 		return domain.ErrInsufficientPermissions
 	}
 
@@ -118,10 +120,17 @@ func (u *ListingUseCases) CreateListing(ctx context.Context, actorID string, lis
 		return fmt.Errorf("category not found: %w", err)
 	}
 
-	// Set timestamps
+	// Server-controlled fields: identity and lifecycle are never taken from the
+	// client. New listings always start as drafts and go live via PublishListing.
 	now := time.Now().Unix()
+	listing.ID = domain.NewID()
+	listing.Status = domain.ListingStatusDraft
+	listing.PublishedAt = nil
 	listing.CreatedAt = now
 	listing.UpdatedAt = now
+	if listing.Metadata == nil {
+		listing.Metadata = make(map[string]interface{})
+	}
 
 	// Create listing
 	err = u.listingRepo.Create(ctx, listing)
@@ -131,6 +140,7 @@ func (u *ListingUseCases) CreateListing(ctx context.Context, actorID string, lis
 
 	// Create attribute values
 	for _, attr := range attributes {
+		attr.ID = domain.NewID()
 		attr.ListingID = listing.ID
 		attr.CreatedAt = now
 		attr.UpdatedAt = now
@@ -142,6 +152,7 @@ func (u *ListingUseCases) CreateListing(ctx context.Context, actorID string, lis
 
 	// Create media
 	for i, m := range media {
+		m.ID = domain.NewID()
 		m.ListingID = listing.ID
 		m.SortOrder = i
 		m.CreatedAt = now
@@ -154,6 +165,7 @@ func (u *ListingUseCases) CreateListing(ctx context.Context, actorID string, lis
 
 	// Create availability
 	if availability != nil {
+		availability.ID = domain.NewID()
 		availability.ListingID = listing.ID
 		availability.CreatedAt = now
 		availability.UpdatedAt = now
@@ -165,6 +177,7 @@ func (u *ListingUseCases) CreateListing(ctx context.Context, actorID string, lis
 
 	// Create listing locations
 	for _, ll := range locations {
+		ll.ID = domain.NewID()
 		ll.ListingID = listing.ID
 		ll.CreatedAt = now
 		ll.UpdatedAt = now
@@ -445,4 +458,84 @@ func (u *ListingUseCases) ResumeListing(ctx context.Context, actorID string, lis
 	}
 
 	return nil
+}
+
+// ListingMedia returns a listing's media in display order. Callers must have
+// resolved the listing through GetListing first (visibility is checked there).
+func (u *ListingUseCases) ListingMedia(ctx context.Context, listingID string) ([]domain.ListingMedia, error) {
+	return u.mediaRepo.FindByListingID(ctx, listingID)
+}
+
+// ListingPatch holds the seller-editable listing fields. Identity, ownership,
+// organization, store, seller and lifecycle status are never editable here.
+type ListingPatch struct {
+	Title       *string
+	Description *string
+	PriceAmount *float64
+	Metadata    map[string]interface{}
+}
+
+// UpdateListing applies a patch to a draft, pending-review or paused listing
+// (a live listing must be paused first). Existing orders keep their pricing
+// snapshot, so a price change never alters what a customer already agreed to.
+func (u *ListingUseCases) UpdateListing(ctx context.Context, actorID string, listingID string, patch ListingPatch) (*domain.Listing, error) {
+	if actorID == "" {
+		return nil, domain.ErrInsufficientPermissions
+	}
+	listing, err := u.listingRepo.FindByID(ctx, listingID)
+	if err != nil {
+		return nil, domain.ErrListingNotFound
+	}
+	if !u.canManageListing(ctx, actorID, listing) {
+		return nil, domain.ErrInsufficientPermissions
+	}
+	if !listing.CanBeModified() {
+		return nil, domain.ErrInvalidStatusTransition
+	}
+	if patch.Title != nil {
+		title := strings.TrimSpace(*patch.Title)
+		if title == "" || len(title) > 255 {
+			return nil, fmt.Errorf("%w: title must be 1-255 characters", domain.ErrInvalidParameter)
+		}
+		listing.Title = title
+	}
+	if patch.Description != nil {
+		d := strings.TrimSpace(*patch.Description)
+		listing.Description = &d
+	}
+	if patch.PriceAmount != nil {
+		if *patch.PriceAmount <= 0 || *patch.PriceAmount > 1e9 {
+			return nil, fmt.Errorf("%w: price must be positive", domain.ErrInvalidParameter)
+		}
+		listing.PriceAmount = *patch.PriceAmount
+	}
+	if patch.Metadata != nil {
+		listing.Metadata = patch.Metadata
+	}
+	listing.UpdatedAt = time.Now().Unix()
+	if err := u.listingRepo.Update(ctx, listing); err != nil {
+		return nil, fmt.Errorf("failed to update listing: %w", err)
+	}
+	if u.auditLogger != nil {
+		u.auditLogger.Record(ctx, domain.AuditEntry{ActorID: actorID, Action: "listing.updated", TargetType: "listing", TargetID: listing.ID})
+	}
+	return listing, nil
+}
+
+// canManageListing: the seller owner, the organization's owner/admin/manager,
+// or a platform admin/operator.
+func (u *ListingUseCases) canManageListing(ctx context.Context, actorID string, listing *domain.Listing) bool {
+	if seller, err := u.sellerRepo.FindByID(ctx, listing.SellerID); err == nil && seller.UserID != nil && *seller.UserID == actorID {
+		return true
+	}
+	if role, err := u.orgRepo.GetMemberRole(ctx, listing.OrganizationID, actorID); err == nil {
+		if role == domain.OrganizationRoleOwner || role == domain.OrganizationRoleAdmin || role == domain.OrganizationRoleManager {
+			return true
+		}
+	}
+	if actor, err := u.userRepo.FindByID(ctx, actorID); err == nil && !actor.IsSuspended() &&
+		(actor.HasRole(domain.RoleAdmin) || actor.HasRole(domain.RoleOperator)) {
+		return true
+	}
+	return false
 }

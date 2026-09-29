@@ -96,7 +96,8 @@ func TestUserRepository_RolesLoaded(t *testing.T) {
 		t.Fatalf("Create user failed: %v", err)
 	}
 
-	_, err := testDB.DB.ExecContext(ctx, "INSERT INTO roles (id, name, description, created_at) VALUES ($1, $2, $3, $4)",
+	// The seller role is seeded by migration 000018; inserting it again is a no-op.
+	_, err := testDB.DB.ExecContext(ctx, "INSERT INTO roles (id, name, description, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO NOTHING",
 		"123e4567-e89b-12d3-a456-426614174073", "seller", "Seller role", time.Now())
 	if err != nil {
 		t.Fatalf("Failed to insert test role: %v", err)

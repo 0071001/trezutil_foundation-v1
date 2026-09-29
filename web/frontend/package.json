@@ -1,28 +1,35 @@
 {
-  "name": "trezutil-homepage",
+  "name": "trezutil-web",
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "Trezutil homepage — Commerce in Motion. React SPA consuming the Trezutil Go backend APIs.",
+  "description": "Trezutil web app — the Figma 'Premium Homepage Design' implemented on the Trezutil gateway APIs.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "format": "oxfmt"
+    "test": "vitest",
+    "test:run": "vitest run"
   },
   "dependencies": {
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-router": "^7.18.4"
   },
   "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@testing-library/jest-dom": "^6.6.4",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.2",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^6.0.0",
-    "@tailwindcss/vite": "^4.0.0",
-    "oxfmt": "^0.2.0",
+    "happy-dom": "^15.10.0",
+    "tailwindcss": "^4.0.0",
     "typescript": "^5.7.0",
-    "vite": "^8.0.5"
+    "vite": "^8.0.5",
+    "vitest": "^3.1.7"
   }
 }

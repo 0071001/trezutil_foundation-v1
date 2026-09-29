@@ -36,9 +36,14 @@ func (h *SearchHandler) Handle(ctx context.Context, actor domain.CommerceActor, 
 		query.Pagination.Cursor = pageStr
 	}
 
-	if pageSize, ok := parameters["page_size"].(int); ok && pageSize > 0 {
+	if pageSize, ok := intParam(parameters, "page_size"); ok && pageSize > 0 {
 		query.Pagination.PageSize = pageSize
 	}
+
+	if query.Pagination.PageSize <= 0 || query.Pagination.PageSize > 50 {
+		query.Pagination.PageSize = 10
+	}
+	query.Pagination.Mode = domain.PaginationModeCursor
 
 	result, err := h.searchUseCases.ExecuteSearch(ctx, actor.ID, query)
 	if err != nil {

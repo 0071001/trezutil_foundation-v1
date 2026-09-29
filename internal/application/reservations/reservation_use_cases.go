@@ -2,6 +2,7 @@ package reservations
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -112,7 +113,26 @@ func (u *ReservationUseCasesImpl) CreateReservation(
 		return nil, domain.ErrInsufficientPermissions
 	}
 
+	if !listing.IsPublished() {
+		return nil, domain.ErrListingUnavailable
+	}
+
+	// Idempotency is resolved before the availability check: a retry of a
+	// booking that already succeeded must return it, not fail because the slot
+	// is now (correctly) taken by that very booking.
+	if idempotencyKey != "" {
+		if existing, err := u.findIdempotentReservation(ctx, actorID, listingID, idempotencyKey); err == nil && existing != nil {
+			if existing.StartAt != startAt || existing.EndAt != endAt || existing.Quantity != quantity {
+				return nil, domain.ErrIdempotencyConflict
+			}
+			return existing, nil
+		} else if errors.Is(err, domain.ErrIdempotencyConflict) {
+			return nil, err
+		}
+	}
+
 	availabilityQuery := domain.AvailabilityQuery{
+		TenantID:  tenantID,
 		ListingID: listingID,
 		StartAt:   startAt,
 		EndAt:     endAt,
@@ -127,22 +147,32 @@ func (u *ReservationUseCasesImpl) CreateReservation(
 		return nil, domain.ErrAvailabilityUnavailable
 	}
 
-	if idempotencyKey != "" {
-		existing, err := u.findIdempotentReservation(ctx, actorID, listingID, idempotencyKey)
-		if err == nil && existing != nil {
-			return existing, nil
-		}
-	}
-
 	now := time.Now().Unix()
 	reservation := domain.NewReservation(tenantID, actorID, listingID, startAt, endAt, quantity, partySize, now)
 	reservation.IdempotencyKey = idempotencyKey
+
+	// Holds taken below are released again if any later step fails, so a
+	// rejected booking never leaks capacity or stock.
+	var capacityHeld, inventoryHeld bool
+	compensate := func() {
+		if capacityHeld {
+			_ = u.capacityRepo.ReleaseCapacity(ctx, tenantID, listingID, startAt, endAt, int64(quantity), reservation.ID)
+		}
+		if inventoryHeld {
+			if inv, err := u.inventoryRepo.FindByListingIDForUpdate(ctx, tenantID, listingID); err == nil {
+				if inv.Release(int64(quantity), time.Now().Unix()) == nil {
+					_ = u.inventoryRepo.Update(ctx, inv)
+				}
+			}
+		}
+	}
 
 	// Reserve capacity units if capacity repo is available
 	if u.capacityRepo != nil {
 		if err := u.capacityRepo.ReserveCapacity(ctx, tenantID, listingID, startAt, endAt, int64(quantity), reservation.ID); err != nil {
 			return nil, fmt.Errorf("failed to reserve capacity: %w", err)
 		}
+		capacityHeld = true
 	}
 
 	// Reserve inventory if inventory repo is available
@@ -151,15 +181,19 @@ func (u *ReservationUseCasesImpl) CreateReservation(
 		if err != nil {
 			// If no inventory resource exists, skip (non-inventory-controlled)
 			if err != domain.ErrInventoryNotFound {
+				compensate()
 				return nil, err
 			}
 		} else {
 			if err := inv.Reserve(int64(quantity), now); err != nil {
+				compensate()
 				return nil, fmt.Errorf("failed to reserve inventory: %w", err)
 			}
 			if err := u.inventoryRepo.Update(ctx, inv); err != nil {
+				compensate()
 				return nil, fmt.Errorf("failed to update inventory: %w", err)
 			}
+			inventoryHeld = true
 		}
 	}
 
@@ -170,6 +204,16 @@ func (u *ReservationUseCasesImpl) CreateReservation(
 	}
 
 	if err := u.reservationRepo.Create(ctx, reservation); err != nil {
+		compensate()
+		if errors.Is(err, domain.ErrIdempotencyConflict) && idempotencyKey != "" {
+			// Lost a race with a concurrent retry carrying the same key.
+			if existing, ferr := u.findIdempotentReservation(ctx, actorID, listingID, idempotencyKey); ferr == nil && existing != nil {
+				return existing, nil
+			}
+		}
+		if errors.Is(err, domain.ErrReservationConflict) {
+			return nil, domain.ErrReservationConflict
+		}
 		return nil, fmt.Errorf("failed to create reservation: %w", err)
 	}
 
@@ -250,8 +294,15 @@ func (u *ReservationUseCasesImpl) CancelReservation(ctx context.Context, actorID
 	}
 
 	now := time.Now().Unix()
+	previousStatus := reservation.Status
 	if err := reservation.Cancel(now); err != nil {
 		return domain.ErrReservationCannotBeCancelled
+	}
+
+	// Persist the (version-checked) status change first: exactly one
+	// concurrent cancellation can win, so holds are released exactly once.
+	if err := u.reservationRepo.Update(ctx, reservation); err != nil {
+		return fmt.Errorf("failed to cancel reservation: %w", err)
 	}
 
 	// Release capacity
@@ -274,10 +325,6 @@ func (u *ReservationUseCasesImpl) CancelReservation(ctx context.Context, actorID
 		}
 	}
 
-	if err := u.reservationRepo.Update(ctx, reservation); err != nil {
-		return fmt.Errorf("failed to cancel reservation: %w", err)
-	}
-
 	if u.auditLogger != nil {
 		u.auditLogger.Record(ctx, domain.AuditEntry{
 			ActorID:    actorID,
@@ -285,7 +332,7 @@ func (u *ReservationUseCasesImpl) CancelReservation(ctx context.Context, actorID
 			TargetType: "reservation",
 			TargetID:   reservationID,
 			Metadata: map[string]interface{}{
-				"previous_status": string(reservation.Status),
+				"previous_status": string(previousStatus),
 			},
 		})
 	}
@@ -322,23 +369,10 @@ func (u *ReservationUseCasesImpl) ModifyReservation(
 	return nil, domain.ErrNotImplemented
 }
 
+// canCreateReservation: any active (verified, non-suspended) user may book a
+// published listing of any organization.
 func (u *ReservationUseCasesImpl) canCreateReservation(ctx context.Context, actor *domain.User, tenantID string) bool {
-	if actor.HasRole(domain.RoleAdmin) || actor.HasRole(domain.RoleOperator) {
-		return true
-	}
-	memberRole, err := u.orgRepo.GetMemberRole(ctx, tenantID, actor.ID)
-	if err == nil {
-		if memberRole == domain.OrganizationRoleOwner || memberRole == domain.OrganizationRoleAdmin || memberRole == domain.OrganizationRoleManager {
-			return true
-		}
-	}
-	seller, err := u.sellerRepo.FindByUserID(ctx, actor.ID)
-	if err == nil && seller != nil {
-		if seller.UserID != nil && *seller.UserID == actor.ID {
-			return true
-		}
-	}
-	return false
+	return actor != nil && actor.IsActive()
 }
 
 func (u *ReservationUseCasesImpl) canAccessReservation(ctx context.Context, reservation *domain.Reservation, actorID string) bool {
@@ -356,8 +390,18 @@ func (u *ReservationUseCasesImpl) canAccessReservation(ctx context.Context, rese
 	return false
 }
 
+// findIdempotentReservation returns the caller's reservation for the key.
+// A key owned by another customer or listing is a conflict and never discloses
+// the other reservation.
 func (u *ReservationUseCasesImpl) findIdempotentReservation(ctx context.Context, actorID, listingID, idempotencyKey string) (*domain.Reservation, error) {
-	return u.reservationRepo.FindByIdempotencyKey(ctx, idempotencyKey)
+	existing, err := u.reservationRepo.FindByIdempotencyKey(ctx, idempotencyKey)
+	if err != nil || existing == nil {
+		return nil, err
+	}
+	if existing.CustomerID != actorID || existing.ListingID != listingID {
+		return nil, domain.ErrIdempotencyConflict
+	}
+	return existing, nil
 }
 
 func (u *ReservationUseCasesImpl) inferFulfillmentType(listing *domain.Listing) domain.FulfillmentType {

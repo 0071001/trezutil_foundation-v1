@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/trezutil/trezutil/internal/domain"
 )
 
@@ -52,7 +54,7 @@ func (r *ReservationRepository) Create(ctx context.Context, reservation *domain.
 			reservation.Version, toTime(reservation.CreatedAt), toTime(reservation.UpdatedAt),
 		).Scan(&reservation.ID)
 		if err != nil {
-			return fmt.Errorf("failed to create reservation: %w", err)
+			return mapReservationInsertError(err)
 		}
 		return nil
 	}
@@ -68,9 +70,26 @@ func (r *ReservationRepository) Create(ctx context.Context, reservation *domain.
 		reservation.Version, toTime(reservation.CreatedAt), toTime(reservation.UpdatedAt),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create reservation: %w", err)
+		return mapReservationInsertError(err)
 	}
 	return nil
+}
+
+// mapReservationInsertError translates constraint violations into domain errors:
+// the no_overlapping_reservations exclusion constraint (23P01) is the
+// authoritative double-booking guard; a duplicate idempotency key (23505) means
+// a concurrent retry already created the reservation.
+func mapReservationInsertError(err error) error {
+	var pqErr *pq.Error
+	if errors.As(err, &pqErr) {
+		switch pqErr.Code {
+		case "23P01":
+			return domain.ErrReservationConflict
+		case "23505":
+			return domain.ErrIdempotencyConflict
+		}
+	}
+	return fmt.Errorf("failed to create reservation: %w", err)
 }
 
 func (r *ReservationRepository) FindByID(ctx context.Context, id string) (*domain.Reservation, error) {
@@ -249,4 +268,50 @@ func nullStringToString(ns sql.NullString) string {
 		return ""
 	}
 	return ns.String
+}
+
+// FindByCustomerID lists a customer's reservations, most recent start first.
+func (r *ReservationRepository) FindByCustomerID(ctx context.Context, customerID string, limit, offset int) ([]*domain.Reservation, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, organization_id, customer_id, listing_id, status, start_at, end_at, quantity, party_size, pricing_snapshot, idempotency_key, version, created_at, updated_at
+	          FROM reservations WHERE customer_id = $1 ORDER BY start_at DESC, id LIMIT $2 OFFSET $3`, customerID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list reservations: %w", err)
+	}
+	defer rows.Close()
+	var out []*domain.Reservation
+	for rows.Next() {
+		var u reservationRow
+		if err := rows.Scan(
+			&u.ID, &u.OrganizationID, &u.CustomerID, &u.ListingID,
+			&u.Status, &u.StartAt, &u.EndAt, &u.Quantity, &u.PartySize,
+			&u.PricingSnapshotJSON, &u.IdempotencyKey, &u.Version, &u.CreatedAt, &u.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan reservation: %w", err)
+		}
+		out = append(out, unmarshalReservation(u))
+	}
+	return out, rows.Err()
+}
+
+// FindByOrganizationID lists an organization's reservations by start time.
+func (r *ReservationRepository) FindByOrganizationID(ctx context.Context, organizationID string, limit, offset int) ([]*domain.Reservation, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, organization_id, customer_id, listing_id, status, start_at, end_at, quantity, party_size, pricing_snapshot, idempotency_key, version, created_at, updated_at
+	          FROM reservations WHERE organization_id = $1 ORDER BY start_at DESC, id LIMIT $2 OFFSET $3`, organizationID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list organization reservations: %w", err)
+	}
+	defer rows.Close()
+	var out []*domain.Reservation
+	for rows.Next() {
+		var u reservationRow
+		if err := rows.Scan(
+			&u.ID, &u.OrganizationID, &u.CustomerID, &u.ListingID,
+			&u.Status, &u.StartAt, &u.EndAt, &u.Quantity, &u.PartySize,
+			&u.PricingSnapshotJSON, &u.IdempotencyKey, &u.Version, &u.CreatedAt, &u.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan reservation: %w", err)
+		}
+		out = append(out, unmarshalReservation(u))
+	}
+	return out, rows.Err()
 }

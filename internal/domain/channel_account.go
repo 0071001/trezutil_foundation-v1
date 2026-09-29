@@ -34,7 +34,7 @@ type ChannelAccount struct {
 func NewChannelAccount(channel Channel, externalID string, organizationID string) *ChannelAccount {
 	now := time.Now().Unix()
 	return &ChannelAccount{
-		ID:             "",
+		ID:             NewID(),
 		OrganizationID: organizationID,
 		Channel:        channel,
 		ExternalID:     externalID,

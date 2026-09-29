@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/trezutil/trezutil/internal/application/conversation"
 	"github.com/trezutil/trezutil/internal/domain"
+	"github.com/trezutil/trezutil/packages/auth"
 )
 
 type mockConversationUseCases struct {
@@ -26,12 +27,12 @@ func (m *mockConversationUseCases) ProcessMessage(ctx context.Context, req *conv
 	return m.resp, m.err
 }
 
-func (m *mockConversationUseCases) ConfirmAction(ctx context.Context, convID string, token string) (*conversation.ProcessConversationResponse, error) {
+func (m *mockConversationUseCases) ConfirmAction(ctx context.Context, convID string, token string, actor domain.CommerceActor) (*conversation.ProcessConversationResponse, error) {
 	m.confirmCalled = true
 	return m.resp, m.err
 }
 
-func (m *mockConversationUseCases) RejectAction(ctx context.Context, convID string, token string) (*conversation.ProcessConversationResponse, error) {
+func (m *mockConversationUseCases) RejectAction(ctx context.Context, convID string, token string, actor domain.CommerceActor) (*conversation.ProcessConversationResponse, error) {
 	m.rejectCalled = true
 	return m.resp, m.err
 }
@@ -49,8 +50,10 @@ func TestConversationHandler_ProcessMessage(t *testing.T) {
 
 	handler := NewConversationHandler(useCases, zerolog.Nop())
 
-	body := `{"channel":"web","message_text":"find iPhone","actor":{"id":"user-1","type":"customer"}}`
+	// The body claims to be a platform operator; only the verified principal counts.
+	body := `{"channel":"web","message_text":"find iPhone","actor":{"id":"attacker","type":"platform_operator"},"organization_id":"org-x"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversations/message", bytes.NewBufferString(body))
+	req = req.WithContext(auth.WithPrincipal(req.Context(), auth.Principal{UserID: "user-1"}))
 	w := httptest.NewRecorder()
 
 	handler.HandleProcessMessage(w, req)
@@ -68,12 +71,16 @@ func TestConversationHandler_ProcessMessage(t *testing.T) {
 	if useCases.lastReq.MessageText != "find iPhone" {
 		t.Errorf("expected 'find iPhone', got %s", useCases.lastReq.MessageText)
 	}
-	if useCases.lastReq.Actor.ID != "user-1" {
-		t.Errorf("expected actor ID user-1, got %s", useCases.lastReq.Actor.ID)
+	if useCases.lastReq.Actor.ID != "user-1" || useCases.lastReq.Actor.Type != domain.ActorTypeCustomer {
+		t.Errorf("expected verified customer user-1, got %s/%s", useCases.lastReq.Actor.ID, useCases.lastReq.Actor.Type)
+	}
+	if useCases.lastReq.TenantID != "" || useCases.lastReq.Actor.OrgID != "" {
+		t.Errorf("client-supplied organization must be ignored, got tenant=%q org=%q", useCases.lastReq.TenantID, useCases.lastReq.Actor.OrgID)
 	}
 
+	responseBody := w.Body.Bytes()
 	var resp conversation.ProcessConversationResponse
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+	if err := json.Unmarshal(responseBody, &resp); err != nil {
 		t.Fatalf("failed to decode response: %v", err)
 	}
 
@@ -82,6 +89,21 @@ func TestConversationHandler_ProcessMessage(t *testing.T) {
 	}
 	if resp.Response.Text != "Here are some results" {
 		t.Errorf("unexpected text: %s", resp.Response.Text)
+	}
+
+	var payload map[string]json.RawMessage
+	if err := json.Unmarshal(responseBody, &payload); err != nil {
+		t.Fatalf("failed to decode JSON contract: %v", err)
+	}
+	if _, ok := payload["conversation_id"]; !ok {
+		t.Fatal("response is missing conversation_id")
+	}
+	var responsePayload map[string]json.RawMessage
+	if err := json.Unmarshal(payload["response"], &responsePayload); err != nil {
+		t.Fatalf("failed to decode conversation response: %v", err)
+	}
+	if _, ok := responsePayload["text"]; !ok {
+		t.Fatal("conversation response is missing text")
 	}
 }
 
@@ -127,6 +149,7 @@ func TestConversationHandler_ConfirmAction(t *testing.T) {
 
 	body := `{"token":"test-token"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversations/conv-1/confirm", bytes.NewBufferString(body))
+	req = req.WithContext(auth.WithPrincipal(req.Context(), auth.Principal{UserID: "user-1"}))
 	w := httptest.NewRecorder()
 
 	handler.HandleConfirmAction(w, req)
@@ -139,25 +162,19 @@ func TestConversationHandler_ConfirmAction(t *testing.T) {
 	}
 }
 
-func TestConversationHandler_GenerateToken(t *testing.T) {
-	handler := NewConversationHandler(&mockConversationUseCases{}, zerolog.Nop())
+func TestConversationHandler_ConfirmRequiresAuthentication(t *testing.T) {
+	useCases := &mockConversationUseCases{}
+	handler := NewConversationHandler(useCases, zerolog.Nop())
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversations/conv-1/token", nil)
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/conversations/conv-1/confirm", bytes.NewBufferString(`{"token":"t"}`))
 	w := httptest.NewRecorder()
+	handler.HandleConfirmAction(w, req)
 
-	handler.HandleGenerateToken(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("expected 200, got %d", w.Code)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for anonymous confirmation, got %d", w.Code)
 	}
-
-	var resp map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-
-	if resp["token"] == nil || resp["token"] == "" {
-		t.Error("expected non-empty token")
+	if useCases.confirmCalled {
+		t.Error("ConfirmAction must not run for anonymous callers")
 	}
 }
 
@@ -191,20 +208,5 @@ func TestExtractIDFromPath(t *testing.T) {
 		if got != tc.want {
 			t.Errorf("extractIDFromPath(%q, %q, %q) = %q, want %q", tc.path, tc.prefix, tc.suffix, got, tc.want)
 		}
-	}
-}
-
-func TestGenerateToken(t *testing.T) {
-	token := generateToken()
-	if token == "" {
-		t.Error("expected non-empty token")
-	}
-	if len(token) != 32 {
-		t.Errorf("expected 32-char hex token, got %d chars", len(token))
-	}
-
-	token2 := generateToken()
-	if token == token2 {
-		t.Error("expected different tokens")
 	}
 }

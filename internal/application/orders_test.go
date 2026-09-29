@@ -40,6 +40,12 @@ func (f *fakeOrderRepo) FindByIDAndOrg(ctx context.Context, orgID, orderID strin
 	}
 	return nil, domain.ErrOrderNotFound
 }
+func (f *fakeOrderRepo) FindByCustomerIdempotencyKey(ctx context.Context, customerID, key string) (*domain.Order, error) {
+	if f.order != nil && f.order.CustomerID == customerID && f.order.IdempotencyKey == key {
+		return f.order, nil
+	}
+	return nil, domain.ErrOrderNotFound
+}
 func (f *fakeOrderRepo) Update(ctx context.Context, order *domain.Order) error {
 	if f.err != nil {
 		return f.err
@@ -243,12 +249,18 @@ func NewTestOrderUseCases(
 	return NewOrderUseCases(orderRepo, listingRepo, sellerRepo, orgRepo, userRepo, &fakeInventoryRepoForOrder{}, &fakeFulfillmentRepoForOrder{}, &fakeAuditLoggerForOrder{})
 }
 
-func TestOrderUseCases_CreateOrder_Success(t *testing.T) {
-	listing := domain.NewListing("org-1", "seller-1", "store-1", "cat-1", "Test Listing", "physical_product", "fixed", "USD", 99.99)
+func publishedListing(price float64) *domain.Listing {
+	listing := domain.NewListing("org-1", "seller-1", "store-1", "cat-1", "Test Listing", "physical_product", "fixed", "USD", price)
 	listing.ID = "listing-1"
+	listing.Publish()
+	return listing
+}
+
+func TestOrderUseCases_CreateOrder_Success(t *testing.T) {
+	listing := publishedListing(99.99)
 	listingRepo := &fakeListingRepoForOrder{listing: listing}
 	sellerRepo := &fakeSellerRepoForOrder{seller: &domain.SellerProfile{ID: "seller-1", UserID: strPtr("user-1"), OrganizationID: strPtr("org-1")}}
-	userRepo := &fakeUserRepoForOrder{user: &domain.User{ID: "user-1"}}
+	userRepo := &fakeUserRepoForOrder{user: &domain.User{ID: "user-1", Status: domain.UserStatusActive}}
 	orderRepo := &fakeOrderRepo{}
 	orgRepo := &fakeOrgRepoForOrder{}
 
@@ -331,19 +343,70 @@ func TestOrderUseCases_CreateOrder_EmptyActor(t *testing.T) {
 }
 
 func TestOrderUseCases_CreateOrder_Unauthorized(t *testing.T) {
-	listing := domain.NewListing("org-1", "seller-1", "store-1", "cat-1", "Test", "physical_product", "fixed", "USD", 99.99)
-	listing.ID = "listing-1"
-	listingRepo := &fakeListingRepoForOrder{listing: listing}
+	// Suspended / unverified users cannot place orders.
+	listingRepo := &fakeListingRepoForOrder{listing: publishedListing(99.99)}
 	sellerRepo := &fakeSellerRepoForOrder{seller: &domain.SellerProfile{ID: "seller-1", UserID: strPtr("other-user"), OrganizationID: strPtr("org-1")}}
-	userRepo := &fakeUserRepoForOrder{user: &domain.User{ID: "user-2"}}
-	orderRepo := &fakeOrderRepo{}
 	orgRepo := &fakeOrgRepoForOrder{}
 
-	useCases := NewTestOrderUseCases(orderRepo, listingRepo, sellerRepo, orgRepo, userRepo)
+	for _, status := range []domain.UserStatus{domain.UserStatusSuspended, domain.UserStatusPendingVerified} {
+		userRepo := &fakeUserRepoForOrder{user: &domain.User{ID: "user-2", Status: status}}
+		useCases := NewTestOrderUseCases(&fakeOrderRepo{}, listingRepo, sellerRepo, orgRepo, userRepo)
+		_, err := useCases.CreateOrder(context.Background(), "user-2", "listing-1", 1)
+		if err != domain.ErrInsufficientPermissions {
+			t.Errorf("status %s: expected ErrInsufficientPermissions, got %v", status, err)
+		}
+	}
+}
 
-	_, err := useCases.CreateOrder(context.Background(), "user-2", "listing-1", 1)
-	if err != domain.ErrInsufficientPermissions {
-		t.Errorf("expected ErrInsufficientPermissions, got %v", err)
+func TestOrderUseCases_CreateOrder_CustomerWithoutMembership(t *testing.T) {
+	// A plain customer (no org membership, not a seller) may buy a published listing.
+	listingRepo := &fakeListingRepoForOrder{listing: publishedListing(19.99)}
+	sellerRepo := &fakeSellerRepoForOrder{seller: &domain.SellerProfile{ID: "seller-1", UserID: strPtr("other-user"), OrganizationID: strPtr("org-1")}}
+	userRepo := &fakeUserRepoForOrder{user: &domain.User{ID: "buyer-1", Status: domain.UserStatusActive, Roles: []domain.Role{domain.RoleCustomer}}}
+	useCases := NewTestOrderUseCases(&fakeOrderRepo{}, listingRepo, sellerRepo, &fakeOrgRepoForOrder{}, userRepo)
+
+	order, err := useCases.CreateOrder(context.Background(), "buyer-1", "listing-1", 1)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// 19.99 must round to 1999 minor units, not truncate to 1998.
+	if order.TotalAmount.AmountMinor != 1999 {
+		t.Errorf("expected 1999 minor units, got %d", order.TotalAmount.AmountMinor)
+	}
+	if order.ID == "" || order.Items[0].OrderID != order.ID {
+		t.Errorf("expected generated order ID propagated to items, got %q/%q", order.ID, order.Items[0].OrderID)
+	}
+}
+
+func TestOrderUseCases_CreateOrder_UnpublishedListingRejected(t *testing.T) {
+	listing := publishedListing(10)
+	listing.Status = domain.ListingStatusDraft
+	userRepo := &fakeUserRepoForOrder{user: &domain.User{ID: "buyer-1", Status: domain.UserStatusActive}}
+	useCases := NewTestOrderUseCases(&fakeOrderRepo{}, &fakeListingRepoForOrder{listing: listing}, &fakeSellerRepoForOrder{}, &fakeOrgRepoForOrder{}, userRepo)
+
+	if _, err := useCases.CreateOrder(context.Background(), "buyer-1", "listing-1", 1); err != domain.ErrListingUnavailable {
+		t.Fatalf("expected ErrListingUnavailable, got %v", err)
+	}
+}
+
+func TestOrderUseCases_CreateOrder_Idempotent(t *testing.T) {
+	userRepo := &fakeUserRepoForOrder{user: &domain.User{ID: "buyer-1", Status: domain.UserStatusActive}}
+	orderRepo := &fakeOrderRepo{}
+	useCases := NewTestOrderUseCases(orderRepo, &fakeListingRepoForOrder{listing: publishedListing(10)}, &fakeSellerRepoForOrder{}, &fakeOrgRepoForOrder{}, userRepo)
+
+	first, err := useCases.CreateOrderIdempotent(context.Background(), "buyer-1", "listing-1", 2, "key-1")
+	if err != nil {
+		t.Fatalf("first create: %v", err)
+	}
+	second, err := useCases.CreateOrderIdempotent(context.Background(), "buyer-1", "listing-1", 2, "key-1")
+	if err != nil {
+		t.Fatalf("replay: %v", err)
+	}
+	if first.ID != second.ID {
+		t.Fatalf("replay created a new order: %s vs %s", first.ID, second.ID)
+	}
+	if _, err := useCases.CreateOrderIdempotent(context.Background(), "buyer-1", "listing-1", 3, "key-1"); err != domain.ErrIdempotencyConflict {
+		t.Fatalf("expected ErrIdempotencyConflict for different parameters, got %v", err)
 	}
 }
 

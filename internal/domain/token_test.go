@@ -152,3 +152,57 @@ func TestJWTTokenService_ClaimsParsing(t *testing.T) {
 		t.Errorf("Expected role 'admin', got %v", parsedClaims.Roles)
 	}
 }
+
+// TestJWTTokenService_TokenTypesAreNotInterchangeable ensures a refresh token
+// cannot be used as an access token and vice versa.
+func TestJWTTokenService_TokenTypesAreNotInterchangeable(t *testing.T) {
+	service := NewJWTTokenService(JWTConfig{
+		SecretKey:       "test-secret-key-1234567890",
+		Issuer:          "test-issuer",
+		Audience:        "test-audience",
+		AccessTokenTTL:  15 * time.Minute,
+		RefreshTokenTTL: 24 * time.Hour,
+	})
+
+	access, err := service.IssueAccessToken("user-123", []Role{RoleCustomer})
+	if err != nil {
+		t.Fatalf("issue access: %v", err)
+	}
+	refresh, err := service.IssueRefreshToken("user-123")
+	if err != nil {
+		t.Fatalf("issue refresh: %v", err)
+	}
+
+	if _, err := service.ValidateAccessToken(refresh); err == nil {
+		t.Error("refresh token must not validate as an access token")
+	}
+	if _, err := service.ValidateRefreshToken(access); err == nil {
+		t.Error("access token must not validate as a refresh token")
+	}
+	if _, err := service.RotateRefreshToken(access); err == nil {
+		t.Error("access token must not be accepted for rotation")
+	}
+	if id, err := service.ValidateRefreshToken(refresh); err != nil || id != "user-123" {
+		t.Errorf("valid refresh token rejected: id=%q err=%v", id, err)
+	}
+	rotated, err := service.RotateRefreshToken(refresh)
+	if err != nil || rotated == "" {
+		t.Fatalf("rotate failed: %v", err)
+	}
+}
+
+// TestJWTTokenService_RejectsAlgNone ensures unsigned tokens are rejected.
+func TestJWTTokenService_RejectsAlgNone(t *testing.T) {
+	service := NewJWTTokenService(JWTConfig{SecretKey: "test-secret-key-1234567890", AccessTokenTTL: time.Minute})
+	claims := &Claims{UserID: "u1", TokenType: TokenTypeAccess, RegisteredClaims: jwt.RegisteredClaims{
+		Subject:   "u1",
+		ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute)),
+	}}
+	unsigned, err := jwt.NewWithClaims(jwt.SigningMethodNone, claims).SignedString(jwt.UnsafeAllowNoneSignatureType)
+	if err != nil {
+		t.Fatalf("build unsigned token: %v", err)
+	}
+	if _, err := service.ValidateAccessToken(unsigned); err == nil {
+		t.Error("alg=none token must be rejected")
+	}
+}

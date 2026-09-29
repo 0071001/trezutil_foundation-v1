@@ -2,6 +2,7 @@ package projection
 
 import (
 	"context"
+	"errors"
 
 	"github.com/trezutil/trezutil/internal/domain"
 )
@@ -71,6 +72,12 @@ func (s *PostgresListingProjectionSource) GetListingProjection(ctx context.Conte
 	categoryPath := buildCategoryPath(category)
 
 	availability, err := s.availabilityRepo.FindByListingID(ctx, listingID)
+	if errors.Is(err, domain.ErrListingAvailabilityNotFound) {
+		// Availability details are optional at listing creation; a published
+		// listing without them is presented as in stock rather than being
+		// silently excluded from search.
+		availability, err = &domain.ListingAvailability{ListingID: listingID, Status: domain.AvailabilityStatusInStock}, nil
+	}
 	if err != nil {
 		return domain.ListingProjection{}, err
 	}

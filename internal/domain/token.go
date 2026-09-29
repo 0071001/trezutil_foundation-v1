@@ -28,10 +28,19 @@ func NewJWTTokenService(config JWTConfig) TokenService {
 	return &jwtTokenService{config: config}
 }
 
+// Token types carried in the "typ" claim. Access and refresh tokens are signed
+// with the same key, so the type must be checked explicitly: otherwise a
+// long-lived refresh token would be accepted wherever an access token is.
+const (
+	TokenTypeAccess  = "access"
+	TokenTypeRefresh = "refresh"
+)
+
 // Claims represents the JWT claims.
 type Claims struct {
-	UserID string   `json:"user_id"`
-	Roles  []string `json:"roles"`
+	UserID    string   `json:"user_id"`
+	Roles     []string `json:"roles"`
+	TokenType string   `json:"typ"`
 	jwt.RegisteredClaims
 }
 
@@ -47,8 +56,9 @@ func (s *jwtTokenService) IssueAccessToken(userID string, roles []Role) (string,
 	}
 
 	claims := &Claims{
-		UserID: userID,
-		Roles:  roleStrings,
+		UserID:    userID,
+		Roles:     roleStrings,
+		TokenType: TokenTypeAccess,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.config.AccessTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -75,8 +85,10 @@ func (s *jwtTokenService) IssueRefreshToken(userID string) (string, error) {
 	}
 
 	claims := &Claims{
-		UserID: userID,
+		UserID:    userID,
+		TokenType: TokenTypeRefresh,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        NewID(),
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(s.config.RefreshTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 			NotBefore: jwt.NewNumericDate(time.Now()),
@@ -95,10 +107,28 @@ func (s *jwtTokenService) IssueRefreshToken(userID string) (string, error) {
 	return tokenString, nil
 }
 
-// ValidateAccessToken validates a production JWT access token.
+// ValidateAccessToken validates a production JWT access token and returns its user ID.
 func (s *jwtTokenService) ValidateAccessToken(tokenString string) (string, error) {
+	claims, err := s.parse(tokenString, TokenTypeAccess)
+	if err != nil {
+		return "", err
+	}
+	return claims.UserID, nil
+}
+
+// ValidateRefreshToken validates a production JWT refresh token and returns its user ID.
+func (s *jwtTokenService) ValidateRefreshToken(tokenString string) (string, error) {
+	claims, err := s.parse(tokenString, TokenTypeRefresh)
+	if err != nil {
+		return "", err
+	}
+	return claims.UserID, nil
+}
+
+// parse verifies signature, algorithm, expiry, issuer, audience and token type.
+func (s *jwtTokenService) parse(tokenString, wantType string) (*Claims, error) {
 	if s.config.SecretKey == "" {
-		return "", errors.New("JWT secret key is not configured")
+		return nil, errors.New("JWT secret key is not configured")
 	}
 
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
@@ -106,20 +136,28 @@ func (s *jwtTokenService) ValidateAccessToken(tokenString string) (string, error
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return []byte(s.config.SecretKey), nil
-	})
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}), jwt.WithExpirationRequired())
 
 	if err != nil {
-		return "", fmt.Errorf("invalid token: %w", err)
+		return nil, fmt.Errorf("invalid token: %w", err)
 	}
 
 	claims, ok := token.Claims.(*Claims)
 	if !ok || !token.Valid {
-		return "", errors.New("invalid token claims")
+		return nil, errors.New("invalid token claims")
+	}
+
+	if claims.TokenType != wantType {
+		return nil, errors.New("invalid token type")
+	}
+
+	if claims.UserID == "" || claims.Subject != claims.UserID {
+		return nil, errors.New("invalid token subject")
 	}
 
 	// Validate issuer
 	if s.config.Issuer != "" && claims.Issuer != s.config.Issuer {
-		return "", errors.New("invalid issuer")
+		return nil, errors.New("invalid issuer")
 	}
 
 	// Validate audience
@@ -132,21 +170,19 @@ func (s *jwtTokenService) ValidateAccessToken(tokenString string) (string, error
 			}
 		}
 		if !found {
-			return "", errors.New("invalid audience")
+			return nil, errors.New("invalid audience")
 		}
 	}
 
-	return claims.UserID, nil
+	return claims, nil
 }
 
-// RotateRefreshToken rotates a refresh token.
+// RotateRefreshToken validates a refresh token and issues a new one.
 func (s *jwtTokenService) RotateRefreshToken(oldToken string) (string, error) {
-	// Validate old token
-	userID, err := s.ValidateAccessToken(oldToken)
+	userID, err := s.ValidateRefreshToken(oldToken)
 	if err != nil {
 		return "", fmt.Errorf("invalid refresh token: %w", err)
 	}
 
-	// Issue new refresh token
 	return s.IssueRefreshToken(userID)
 }

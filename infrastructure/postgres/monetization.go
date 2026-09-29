@@ -442,7 +442,11 @@ func (r *PostgresUsageReservationRepository) UpdateStatus(ctx context.Context, r
 // logical action (F2/F5). The balance-guard UPDATE clause `AND (granted - reserved -
 // consumed) >= cost` prevents the account from going negative under concurrent
 // reservation attempts (F4/F6).
-func (r *PostgresUsageReservationRepository) ReserveCreditsTx(ctx context.Context, accountID string, actionType domain.CommerceActionType, cost int64, idempotencyKey, tenantID string, now int64) (*domain.UsageReservation, error) {
+func (r *PostgresUsageReservationRepository) ReserveCreditsTx(ctx context.Context, accountID string, actionType domain.CommerceActionType, cost int64, idempotencyKey, tenantID string, now int64) (reservation *domain.UsageReservation, err error) {
+	// An empty key would make every caller share one reservation row.
+	if idempotencyKey == "" {
+		return nil, fmt.Errorf("reserve: idempotency key is required")
+	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("reserve begin: %w", err)
@@ -454,15 +458,19 @@ func (r *PostgresUsageReservationRepository) ReserveCreditsTx(ctx context.Contex
 	}()
 
 	var existing domain.UsageReservation
+	var reservedAt time.Time
+	var existingTenant sql.NullString
 	err = tx.QueryRowContext(ctx, `
 		SELECT reservation_id, account_id, action_type, amount, status, reserved_at, idempotency_key, tenant_id
 		FROM usage_reservations
-		WHERE idempotency_key = $1
-	`, idempotencyKey).Scan(
+		WHERE idempotency_key = $1 AND account_id = $2
+	`, idempotencyKey, accountID).Scan(
 		&existing.ReservationID, &existing.AccountID, &existing.ActionType, &existing.Amount,
-		&existing.Status, &existing.ReservedAt, &existing.IdempotencyKey, &existing.TenantID,
+		&existing.Status, &reservedAt, &existing.IdempotencyKey, &existingTenant,
 	)
 	if err == nil {
+		existing.TenantID = existingTenant.String
+		existing.ReservedAt = toUnix(reservedAt)
 		_ = tx.Commit()
 		return &existing, nil
 	}
@@ -470,6 +478,16 @@ func (r *PostgresUsageReservationRepository) ReserveCreditsTx(ctx context.Contex
 		return nil, fmt.Errorf("reserve idempotency check failed: %w", err)
 	}
 
+	// Serialize on the account row to prevent deadlocks between the reservation
+	// INSERT (FK share lock on credit_accounts) and the balance-guard UPDATE below,
+	// and to make over-draw prevention robust under concurrent reservations.
+	var accountExists bool
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM credit_accounts WHERE account_id = $1 FOR UPDATE)`, accountID).Scan(&accountExists); err != nil {
+		return nil, fmt.Errorf("reserve account lock failed: %w", err)
+	}
+	if !accountExists {
+		return nil, domain.ErrUsageAccountNotFound
+	}
 	var tenantParam interface{}
 	if tenantID != "" {
 		tenantParam = tenantID
@@ -515,8 +533,8 @@ func (r *PostgresUsageReservationRepository) ReserveCreditsTx(ctx context.Contex
 	balanceAfter := granted - reserved - consumed
 
 	metaJSON, _ := json.Marshal(map[string]interface{}{
-		"reservation_id":   reservationID,
-		"idempotency_key":  idempotencyKey,
+		"reservation_id":  reservationID,
+		"idempotency_key": idempotencyKey,
 	})
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO usage_ledger (id, account_id, action_type, actor_id, tenant_id, transaction_type, amount, balance_before, balance_after, period_id, created_at, metadata)
@@ -531,21 +549,21 @@ func (r *PostgresUsageReservationRepository) ReserveCreditsTx(ctx context.Contex
 	}
 
 	return &domain.UsageReservation{
-		ReservationID:   reservationID,
-		AccountID:       accountID,
-		ActionType:      actionType,
-		Amount:          cost,
-		ReservedAt:      now,
-		Status:          domain.UsageReservationActive,
-		IdempotencyKey:  idempotencyKey,
-		TenantID:        tenantID,
+		ReservationID:  reservationID,
+		AccountID:      accountID,
+		ActionType:     actionType,
+		Amount:         cost,
+		ReservedAt:     now,
+		Status:         domain.UsageReservationActive,
+		IdempotencyKey: idempotencyKey,
+		TenantID:       tenantID,
 	}, nil
 }
 
 // ConsumeReservation atomically marks a reservation consumed, moves the reserved
 // credits to consumed, and appends a ledger event. Returns domain errors for
 // missing reservations, double-consume, or consume-after-release.
-func (r *PostgresUsageReservationRepository) ConsumeReservation(ctx context.Context, reservationID string, now int64) error {
+func (r *PostgresUsageReservationRepository) ConsumeReservation(ctx context.Context, reservationID string, now int64) (err error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("consume begin: %w", err)
@@ -635,7 +653,7 @@ func (r *PostgresUsageReservationRepository) ConsumeReservation(ctx context.Cont
 
 // ReleaseReservation atomically marks a reservation released, returns the reserved
 // credits to the account, and appends a ledger event.
-func (r *PostgresUsageReservationRepository) ReleaseReservation(ctx context.Context, reservationID string, now int64) error {
+func (r *PostgresUsageReservationRepository) ReleaseReservation(ctx context.Context, reservationID string, now int64) (err error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("release begin: %w", err)
@@ -767,3 +785,37 @@ var (
 	_ domain.CreditAccountByOwnerStore  = (*CreditAccountRepository)(nil)
 	_ domain.CreditAccountCreator       = (*CreditAccountRepository)(nil)
 )
+
+// ReleaseStaleReservations releases active credit reservations older than
+// maxAge. Reservations are consumed or released within the request that
+// created them, so an old active one was orphaned by a crash or timeout and
+// would otherwise hold the customer's credits forever. Each release uses the
+// atomic ReleaseReservation primitive; a reservation completed concurrently is
+// skipped. Returns the number released.
+func (r *PostgresUsageReservationRepository) ReleaseStaleReservations(ctx context.Context, maxAge time.Duration, now int64) (int, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT reservation_id FROM usage_reservations
+		WHERE status = 'active' AND reserved_at < to_timestamp($1)
+		ORDER BY reserved_at
+		LIMIT 500`, now-int64(maxAge/time.Second))
+	if err != nil {
+		return 0, fmt.Errorf("list stale reservations: %w", err)
+	}
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		ids = append(ids, id)
+	}
+	rows.Close()
+	released := 0
+	for _, id := range ids {
+		if err := r.ReleaseReservation(ctx, id, now); err == nil {
+			released++
+		}
+	}
+	return released, nil
+}

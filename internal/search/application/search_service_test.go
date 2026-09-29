@@ -144,3 +144,32 @@ func TestSystemClock_Now(t *testing.T) {
 		t.Error("expected positive timestamp")
 	}
 }
+
+// recordingEngine captures the query passed to the engine.
+type recordingEngine struct{ last domain.DiscoveryQuery }
+
+func (e *recordingEngine) ExecuteSearch(ctx context.Context, q domain.DiscoveryQuery) (domain.SearchResultPage, error) {
+	e.last = q
+	return domain.SearchResultPage{}, nil
+}
+
+// Regression: the searching user's ID used to be injected as a seller_id
+// filter, so public searches returned nothing for real users.
+func TestSearchService_DoesNotScopeToSearchingUser(t *testing.T) {
+	engine := &recordingEngine{}
+	service := NewSearchService(engine, NewNoopVisibilityResolver(), NewAllowAllAuthorizationResolver(), nil, NewNoopCursorCodec(), NewSystemClock())
+
+	if _, err := service.ExecuteSearch(context.Background(), "user-42", domain.DiscoveryQuery{Text: "hotel"}); err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	if engine.last.SellerID != "" || engine.last.StoreID != "" {
+		t.Fatalf("search must not be scoped to the caller, got seller=%q store=%q", engine.last.SellerID, engine.last.StoreID)
+	}
+
+	if _, err := service.ExecuteSearch(context.Background(), "", domain.DiscoveryQuery{Text: "hotel", SellerID: "seller-9"}); err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	if engine.last.SellerID != "seller-9" {
+		t.Fatalf("explicit seller filter must be preserved, got %q", engine.last.SellerID)
+	}
+}

@@ -35,7 +35,7 @@ type Conversation struct {
 func NewConversation(channel Channel, externalID string, customerID string, organizationID string) *Conversation {
 	now := time.Now().Unix()
 	return &Conversation{
-		ID:             "",
+		ID:             NewID(),
 		OrganizationID: organizationID,
 		CustomerID:     customerID,
 		Channel:        channel,

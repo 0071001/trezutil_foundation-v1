@@ -103,6 +103,10 @@ type JSONSchemaProperty struct {
 	Description string
 	Items       *JSONSchemaProperty
 	Enum        []string
+	// Properties/Required describe a nested object. Providers enforcing a
+	// strict output schema treat an object without Properties as empty.
+	Properties map[string]JSONSchemaProperty
+	Required   []string
 }
 
 type AIRequest struct {

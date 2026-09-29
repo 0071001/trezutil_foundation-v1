@@ -45,7 +45,7 @@ func (u *StoreUseCases) CreateStore(ctx context.Context, actorID string, store *
 		return domain.ErrInsufficientPermissions
 	}
 
-	// Set timestamps
+	store.ID = domain.NewID()
 	store.CreatedAt = time.Now().Unix()
 	store.UpdatedAt = time.Now().Unix()
 

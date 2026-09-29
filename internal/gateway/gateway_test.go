@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -127,7 +128,7 @@ func TestRouteMappingListingsStrip(t *testing.T) {
 
 func TestUnknownRoute404(t *testing.T) {
 	_, srv := testGateway(t, map[string]*Upstream{}, nil, t.TempDir())
-	resp, err := http.Get(srv.URL + "/api/v1/packs")
+	resp, err := http.Get(srv.URL + "/api/v1/unknown-route")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -456,5 +457,72 @@ func TestStaticSPAServesRealWeb(t *testing.T) {
 	b, _ := io.ReadAll(resp.Body)
 	if !strings.Contains(string(b), "TREZUTIL") {
 		t.Fatalf("expected home page to contain TREZUTIL, got: %q", string(b))
+	}
+}
+
+func TestRouteMappingFinalizationUpstreams(t *testing.T) {
+	hits := map[string]string{}
+	mk := func(name string) *Upstream {
+		s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			hits[name] = r.URL.Path
+			w.WriteHeader(http.StatusOK)
+		}))
+		t.Cleanup(s.Close)
+		return &Upstream{Name: name, URL: mustURL(t, s.URL)}
+	}
+	_, srv := testGateway(t, map[string]*Upstream{
+		"identity":     mk("identity"),
+		"commerce":     mk("commerce"),
+		"conversation": mk("conversation"),
+		"payment":      mk("payment"),
+	}, nil, t.TempDir())
+
+	cases := map[string]string{
+		"/api/v1/auth/request-otp":             "identity",
+		"/api/v1/orders/o-1":                   "commerce",
+		"/api/v1/reservations":                 "commerce",
+		"/api/v1/availability":                 "commerce",
+		"/api/v1/webhooks/whatsapp":            "conversation",
+		"/api/v1/webhooks/payments/mobile-pay": "payment",
+	}
+	for path, want := range cases {
+		resp, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if hits[want] != path {
+			t.Errorf("%s: expected upstream %s to receive the path verbatim, got %q", path, want, hits[want])
+		}
+	}
+}
+
+func TestOversizedBodyRejected(t *testing.T) {
+	_, srv := testGateway(t, map[string]*Upstream{}, nil, t.TempDir())
+	body := strings.NewReader(strings.Repeat("a", 2<<20))
+	resp, err := http.Post(srv.URL+"/api/v1/conversations/message", "application/json", body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("expected 413, got %d", resp.StatusCode)
+	}
+}
+
+func TestStaticHandlerNeverEscapesWebRoot(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "index.html"), []byte("spa"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	g, _ := testGateway(t, map[string]*Upstream{}, nil, root)
+	for _, p := range []string{"/../secret", `/..\..\secret`, "/a/../../secret"} {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.URL.Path = p
+		rec := httptest.NewRecorder()
+		g.staticHandler(rec, req)
+		if body := rec.Body.String(); rec.Code == http.StatusOK && body != "spa" {
+			t.Errorf("%s: served unexpected content %q", p, body)
+		}
 	}
 }

@@ -700,3 +700,24 @@ func (r *OrganizationRepository) GetMemberRole(ctx context.Context, organization
 	}
 	return role, nil
 }
+
+// FindMembershipsByUserID lists the active organization memberships of a user.
+func (r *OrganizationRepository) FindMembershipsByUserID(ctx context.Context, userID string) ([]domain.OrganizationMember, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT organization_id, user_id, membership_role, status, joined_at
+		FROM organization_members WHERE user_id = $1 AND status = 'active' ORDER BY joined_at`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query memberships: %w", err)
+	}
+	defer rows.Close()
+	var out []domain.OrganizationMember
+	for rows.Next() {
+		var m domain.OrganizationMember
+		var joinedAt time.Time
+		if err := rows.Scan(&m.OrganizationID, &m.UserID, &m.Role, &m.Status, &joinedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan membership: %w", err)
+		}
+		m.JoinedAt = toUnix(joinedAt)
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}

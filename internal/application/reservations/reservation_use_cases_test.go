@@ -109,11 +109,18 @@ func createTestOrg(t *testing.T, db *sql.DB) string {
 	return org.ID
 }
 
+// uniqueTestPhone returns a distinct E.164 number (phones are unique per user).
+func uniqueTestPhone() string {
+	b := make([]byte, 4)
+	rand.Read(b)
+	return fmt.Sprintf("+1555%07d", (uint32(b[0])<<24|uint32(b[1])<<16|uint32(b[2])<<8|uint32(b[3]))%10000000)
+}
+
 func createTestUser(t *testing.T, db *sql.DB, orgID string, role domain.Role) string {
 	userRepo := postgres.NewUserRepository(db)
 	user := &domain.User{
 		ID:          testUUID(),
-		Phone:       "+15551234567",
+		Phone:       uniqueTestPhone(),
 		DisplayName: "Test User",
 		Status:      domain.UserStatusActive,
 		CreatedAt:   time.Now().Unix(),
@@ -243,12 +250,80 @@ func TestReservationUseCases_CreateReservation_Success(t *testing.T) {
 	assert.Equal(t, 2, reservation.PartySize)
 }
 
-func TestReservationUseCases_CreateReservation_Unauthorized(t *testing.T) {
+func TestReservationUseCases_CreateReservation_CustomerCanBook(t *testing.T) {
+	// Approved buyer rule: a plain active customer (no org membership, not a
+	// seller) may book any published listing.
 	db := setupReservationTestDB(t)
 	defer db.Close()
 
 	orgID := createTestOrg(t, db)
-	userID := createTestUser(t, db, orgID, domain.RoleCustomer)
+	customerID := createTestUser(t, db, orgID, domain.RoleCustomer)
+	sellerUserID := createTestUser(t, db, orgID, domain.RoleAdmin)
+	sellerID := createTestSeller(t, db, orgID, sellerUserID)
+	storeID := createTestStore(t, db, orgID)
+	categoryID := createTestCategory(t, db)
+	listingID := createTestListing(t, db, orgID, sellerID, storeID, categoryID)
+
+	uc := newTestUseCases(db)
+	startAt := time.Now().Add(24 * time.Hour).Unix()
+	endAt := time.Now().Add(48 * time.Hour).Unix()
+
+	reservation, err := uc.CreateReservation(context.Background(), customerID, listingID, startAt, endAt, 1, 2, "")
+	require.NoError(t, err)
+	assert.Equal(t, customerID, reservation.CustomerID)
+}
+
+func TestReservationUseCases_CreateReservation_SuspendedUserDenied(t *testing.T) {
+	db := setupReservationTestDB(t)
+	defer db.Close()
+
+	orgID := createTestOrg(t, db)
+	customerID := createTestUser(t, db, orgID, domain.RoleCustomer)
+	_, err := db.Exec(`UPDATE users SET status = 'suspended' WHERE id = $1`, customerID)
+	require.NoError(t, err)
+	sellerUserID := createTestUser(t, db, orgID, domain.RoleAdmin)
+	sellerID := createTestSeller(t, db, orgID, sellerUserID)
+	storeID := createTestStore(t, db, orgID)
+	categoryID := createTestCategory(t, db)
+	listingID := createTestListing(t, db, orgID, sellerID, storeID, categoryID)
+
+	uc := newTestUseCases(db)
+	startAt := time.Now().Add(24 * time.Hour).Unix()
+	endAt := time.Now().Add(48 * time.Hour).Unix()
+
+	_, err = uc.CreateReservation(context.Background(), customerID, listingID, startAt, endAt, 1, 2, "")
+	assert.ErrorIs(t, err, domain.ErrInsufficientPermissions)
+}
+
+func TestReservationUseCases_CreateReservation_UnpublishedListingRejected(t *testing.T) {
+	db := setupReservationTestDB(t)
+	defer db.Close()
+
+	orgID := createTestOrg(t, db)
+	customerID := createTestUser(t, db, orgID, domain.RoleCustomer)
+	sellerUserID := createTestUser(t, db, orgID, domain.RoleAdmin)
+	sellerID := createTestSeller(t, db, orgID, sellerUserID)
+	storeID := createTestStore(t, db, orgID)
+	categoryID := createTestCategory(t, db)
+	listingID := createTestListing(t, db, orgID, sellerID, storeID, categoryID)
+	_, err := db.Exec(`UPDATE listings SET status = 'paused' WHERE id = $1`, listingID)
+	require.NoError(t, err)
+
+	uc := newTestUseCases(db)
+	startAt := time.Now().Add(24 * time.Hour).Unix()
+	endAt := time.Now().Add(48 * time.Hour).Unix()
+
+	_, err = uc.CreateReservation(context.Background(), customerID, listingID, startAt, endAt, 1, 2, "")
+	assert.ErrorIs(t, err, domain.ErrListingUnavailable)
+}
+
+func TestReservationUseCases_OverlapRejectedAndIdempotencyScoped(t *testing.T) {
+	db := setupReservationTestDB(t)
+	defer db.Close()
+
+	orgID := createTestOrg(t, db)
+	alice := createTestUser(t, db, orgID, domain.RoleCustomer)
+	bob := createTestUser(t, db, orgID, domain.RoleCustomer)
 	sellerUserID := createTestUser(t, db, orgID, domain.RoleAdmin)
 	sellerID := createTestSeller(t, db, orgID, sellerUserID)
 	storeID := createTestStore(t, db, orgID)
@@ -257,13 +332,29 @@ func TestReservationUseCases_CreateReservation_Unauthorized(t *testing.T) {
 
 	uc := newTestUseCases(db)
 	ctx := context.Background()
-
 	startAt := time.Now().Add(24 * time.Hour).Unix()
 	endAt := time.Now().Add(48 * time.Hour).Unix()
 
-	_, err := uc.CreateReservation(ctx, userID, listingID, startAt, endAt, 1, 2, "")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "insufficient permissions")
+	first, err := uc.CreateReservation(ctx, alice, listingID, startAt, endAt, 1, 2, "alice-key")
+	require.NoError(t, err)
+
+	// Replay by the same customer returns the same reservation even though the
+	// slot is now taken (idempotency resolved before availability).
+	replay, err := uc.CreateReservation(ctx, alice, listingID, startAt, endAt, 1, 2, "alice-key")
+	require.NoError(t, err)
+	assert.Equal(t, first.ID, replay.ID)
+
+	// Another customer reusing the key must not see Alice's reservation.
+	_, err = uc.CreateReservation(ctx, bob, listingID, startAt, endAt, 1, 2, "alice-key")
+	assert.ErrorIs(t, err, domain.ErrIdempotencyConflict)
+
+	// Overlapping booking is rejected by the DB exclusion constraint.
+	_, err = uc.CreateReservation(ctx, bob, listingID, startAt+3600, endAt+3600, 1, 2, "bob-key")
+	assert.ErrorIs(t, err, domain.ErrReservationConflict)
+
+	var count int
+	require.NoError(t, db.QueryRow(`SELECT COUNT(*) FROM reservations WHERE listing_id = $1`, listingID).Scan(&count))
+	assert.Equal(t, 1, count)
 }
 
 func TestReservationUseCases_CreateReservation_Unavailable(t *testing.T) {

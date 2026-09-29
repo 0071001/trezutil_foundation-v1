@@ -32,6 +32,7 @@ func TestCommerceActorIsAuthenticated(t *testing.T) {
 		{ActorTypeOrganizationAdmin, true},
 		{ActorTypePlatformOperator, true},
 		{ActorTypeSystem, false},
+		{ActorTypeGuest, false},
 	}
 
 	for _, tt := range tests {

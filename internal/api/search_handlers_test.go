@@ -45,6 +45,7 @@ func TestSearchHandler_SearchH(t *testing.T) {
 
 	body := `{"text":"test"}`
 	req := httptest.NewRequest(http.MethodPost, "/v1/search?user_id=user1", strings.NewReader(body))
+	req = asQueryUser(req)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 
@@ -68,6 +69,7 @@ func TestSearchHandler_SuggestH(t *testing.T) {
 	handler := NewSearchHandler(&mockSearchUseCases{})
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/search/suggest?user_id=user1&text=test", nil)
+	req = asQueryUser(req)
 	w := httptest.NewRecorder()
 
 	handler.SuggestH(w, req)
@@ -86,16 +88,17 @@ func TestSearchHandler_SuggestH(t *testing.T) {
 	}
 }
 
-func TestSearchHandler_SearchH_MissingUserID(t *testing.T) {
+func TestSearchHandler_SearchH_GuestAllowed(t *testing.T) {
+	// Discovery is public: guests may search published listings.
 	handler := NewSearchHandler(&mockSearchUseCases{})
 
-	req := httptest.NewRequest(http.MethodPost, "/v1/search", nil)
+	req := httptest.NewRequest(http.MethodPost, "/v1/search", strings.NewReader(`{"text":"hotel"}`))
 	w := httptest.NewRecorder()
 
 	handler.SearchH(w, req)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected status %d, got %d", http.StatusUnauthorized, w.Code)
+	if w.Code != http.StatusOK {
+		t.Errorf("expected status %d for guest search, got %d", http.StatusOK, w.Code)
 	}
 }
 
@@ -103,6 +106,7 @@ func TestSearchHandler_SuggestH_MissingText(t *testing.T) {
 	handler := NewSearchHandler(&mockSearchUseCases{})
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/search/suggest?user_id=user1", nil)
+	req = asQueryUser(req)
 	w := httptest.NewRecorder()
 
 	handler.SuggestH(w, req)

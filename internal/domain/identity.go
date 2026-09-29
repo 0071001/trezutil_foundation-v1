@@ -19,7 +19,7 @@ const (
 
 func NewIdentity(userID, provider, providerSubject string) *Identity {
 	return &Identity{
-		ID:              "",
+		ID:              NewID(),
 		UserID:          userID,
 		Provider:        provider,
 		ProviderSubject: providerSubject,

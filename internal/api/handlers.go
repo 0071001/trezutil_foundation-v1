@@ -9,6 +9,7 @@ import (
 
 	"github.com/trezutil/trezutil/internal/application/provider"
 	"github.com/trezutil/trezutil/internal/domain"
+	"github.com/trezutil/trezutil/packages/auth"
 )
 
 // ErrorResponse represents a standard API error response.
@@ -81,6 +82,12 @@ type OrderUseCases interface {
 	ConfirmOrder(ctx context.Context, actorID string, orderID string) (*domain.Order, error)
 }
 
+// idempotentOrderCreator is implemented by order use cases that support
+// idempotent checkout (application.OrderUseCases).
+type idempotentOrderCreator interface {
+	CreateOrderIdempotent(ctx context.Context, actorID string, listingID string, quantity int, idempotencyKey string) (*domain.Order, error)
+}
+
 // ReservationUseCases interface for reservation operations.
 type ReservationUseCases interface {
 	CreateReservation(ctx context.Context, actorID string, listingID string, startAt int64, endAt int64, quantity int, partySize int, idempotencyKey string) (*domain.Reservation, error)
@@ -115,7 +122,7 @@ func NewOrganizationHandler(orgUseCases OrganizationUseCases) *OrganizationHandl
 
 // CreateOrganizationH handles POST /v1/organizations
 func (h *OrganizationHandler) CreateOrganizationH(w http.ResponseWriter, r *http.Request) {
-	userID := r.URL.Query().Get("user_id")
+	userID := auth.UserID(r.Context())
 	if userID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -155,7 +162,7 @@ func (h *OrganizationHandler) GetOrganizationH(w http.ResponseWriter, r *http.Re
 
 // UpdateOrganizationH handles PATCH /v1/organizations/{organization_id}
 func (h *OrganizationHandler) UpdateOrganizationH(w http.ResponseWriter, r *http.Request) {
-	userID := r.URL.Query().Get("user_id")
+	userID := auth.UserID(r.Context())
 	orgID := r.URL.Query().Get("organization_id")
 	if userID == "" || orgID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_PARAMS", Message: "User ID and Organization ID required"}}, http.StatusBadRequest)
@@ -179,7 +186,7 @@ func (h *OrganizationHandler) UpdateOrganizationH(w http.ResponseWriter, r *http
 
 // AddMemberH handles POST /v1/organizations/{organization_id}/members
 func (h *OrganizationHandler) AddMemberH(w http.ResponseWriter, r *http.Request) {
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	orgID := r.URL.Query().Get("organization_id")
 	if actorID == "" || orgID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_PARAMS", Message: "User ID and Organization ID required"}}, http.StatusBadRequest)
@@ -224,9 +231,9 @@ func (h *OrganizationHandler) GetMembersH(w http.ResponseWriter, r *http.Request
 
 // RemoveMemberH handles DELETE /v1/organizations/{organization_id}/members/{user_id}
 func (h *OrganizationHandler) RemoveMemberH(w http.ResponseWriter, r *http.Request) {
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	orgID := r.URL.Query().Get("organization_id")
-	userID := r.URL.Query().Get("user_id")
+	userID := r.URL.Query().Get("member_user_id") // the member being removed
 	if actorID == "" || orgID == "" || userID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_PARAMS", Message: "User ID and Organization ID required"}}, http.StatusBadRequest)
 		return
@@ -253,7 +260,7 @@ func NewSellerHandler(sellerUseCases SellerUseCases) *SellerHandler {
 
 // CreateSellerH handles POST /v1/sellers
 func (h *SellerHandler) CreateSellerH(w http.ResponseWriter, r *http.Request) {
-	userID := r.URL.Query().Get("user_id")
+	userID := auth.UserID(r.Context())
 	if userID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -293,7 +300,7 @@ func (h *SellerHandler) GetSellerH(w http.ResponseWriter, r *http.Request) {
 
 // UpdateSellerH handles PATCH /v1/sellers/{seller_id}
 func (h *SellerHandler) UpdateSellerH(w http.ResponseWriter, r *http.Request) {
-	userID := r.URL.Query().Get("user_id")
+	userID := auth.UserID(r.Context())
 	sellerID := r.URL.Query().Get("seller_id")
 	if userID == "" || sellerID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_PARAMS", Message: "User ID and Seller ID required"}}, http.StatusBadRequest)
@@ -327,7 +334,7 @@ func NewStoreHandler(storeUseCases StoreUseCases) *StoreHandler {
 
 // CreateStoreH handles POST /v1/stores
 func (h *StoreHandler) CreateStoreH(w http.ResponseWriter, r *http.Request) {
-	userID := r.URL.Query().Get("user_id")
+	userID := auth.UserID(r.Context())
 	if userID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -367,7 +374,7 @@ func (h *StoreHandler) GetStoreH(w http.ResponseWriter, r *http.Request) {
 
 // UpdateStoreH handles PATCH /v1/stores/{store_id}
 func (h *StoreHandler) UpdateStoreH(w http.ResponseWriter, r *http.Request) {
-	userID := r.URL.Query().Get("user_id")
+	userID := auth.UserID(r.Context())
 	storeID := r.URL.Query().Get("store_id")
 	if userID == "" || storeID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_PARAMS", Message: "User ID and Store ID required"}}, http.StatusBadRequest)
@@ -401,7 +408,7 @@ func NewOrderHandler(orderUseCases OrderUseCases) *OrderHandler {
 
 // CreateOrderH handles POST /v1/orders
 func (h *OrderHandler) CreateOrderH(w http.ResponseWriter, r *http.Request) {
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -425,19 +432,25 @@ func (h *OrderHandler) CreateOrderH(w http.ResponseWriter, r *http.Request) {
 		req.Quantity = 1
 	}
 
-	// Check idempotency key
+	// Retried checkouts carrying the same Idempotency-Key return the original order.
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	if idempotencyKey != "" {
-		// TODO: Implement idempotency check using existing mechanism
+	var order *domain.Order
+	var err error
+	if creator, ok := h.orderUseCases.(idempotentOrderCreator); ok && idempotencyKey != "" {
+		order, err = creator.CreateOrderIdempotent(r.Context(), actorID, req.ListingID, req.Quantity, idempotencyKey)
+	} else {
+		order, err = h.orderUseCases.CreateOrder(r.Context(), actorID, req.ListingID, req.Quantity)
 	}
-
-	order, err := h.orderUseCases.CreateOrder(r.Context(), actorID, req.ListingID, req.Quantity)
 	if err != nil {
 		switch err {
 		case domain.ErrOrderNotFound:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_NOT_FOUND", Message: "Listing not found"}}, http.StatusNotFound)
 		case domain.ErrInsufficientPermissions:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
+		case domain.ErrListingUnavailable:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_UNAVAILABLE", Message: "This listing is not available for purchase"}}, http.StatusConflict)
+		case domain.ErrIdempotencyConflict:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "IDEMPOTENCY_CONFLICT", Message: "Idempotency-Key was already used for a different order"}}, http.StatusConflict)
 		default:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
 		}
@@ -463,7 +476,7 @@ func (h *OrderHandler) GetOrderH(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -490,7 +503,7 @@ func (h *OrderHandler) CancelOrderH(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -522,7 +535,7 @@ func (h *OrderHandler) ConfirmOrderH(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -559,7 +572,7 @@ func NewListingHandler(listingUseCases ListingUseCases) *ListingHandler {
 
 // CreateListingH handles POST /v1/listings
 func (h *ListingHandler) CreateListingH(w http.ResponseWriter, r *http.Request) {
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -599,19 +612,34 @@ func (h *ListingHandler) GetListingH(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	listing, err := h.listingUseCases.GetListing(r.Context(), actorID, listingID)
 	if err != nil {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_NOT_FOUND", Message: "Listing not found"}}, http.StatusNotFound)
 		return
 	}
 
-	writeJSON(w, listing, http.StatusOK)
+	// Media is added next to the listing fields (the listing shape is unchanged).
+	media := []domain.ListingMedia{}
+	if src, ok := h.listingUseCases.(listingMediaSource); ok {
+		if items, err := src.ListingMedia(r.Context(), listing.ID); err == nil && items != nil {
+			media = items
+		}
+	}
+	writeJSON(w, struct {
+		*domain.Listing
+		Media []domain.ListingMedia
+	}{listing, media}, http.StatusOK)
+}
+
+// listingMediaSource is implemented by use cases that can list a listing's media.
+type listingMediaSource interface {
+	ListingMedia(ctx context.Context, listingID string) ([]domain.ListingMedia, error)
 }
 
 // PublishListingH handles POST /v1/listings/{listing_id}/publish
 func (h *ListingHandler) PublishListingH(w http.ResponseWriter, r *http.Request) {
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	listingID := r.URL.Query().Get("listing_id")
 	if actorID == "" || listingID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_PARAMS", Message: "User ID and Listing ID required"}}, http.StatusBadRequest)
@@ -629,7 +657,7 @@ func (h *ListingHandler) PublishListingH(w http.ResponseWriter, r *http.Request)
 
 // PauseListingH handles POST /v1/listings/{listing_id}/pause
 func (h *ListingHandler) PauseListingH(w http.ResponseWriter, r *http.Request) {
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	listingID := r.URL.Query().Get("listing_id")
 	if actorID == "" || listingID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_PARAMS", Message: "User ID and Listing ID required"}}, http.StatusBadRequest)
@@ -656,7 +684,7 @@ func (h *ListingHandler) PauseListingH(w http.ResponseWriter, r *http.Request) {
 
 // ResumeListingH handles POST /v1/listings/{listing_id}/resume
 func (h *ListingHandler) ResumeListingH(w http.ResponseWriter, r *http.Request) {
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	listingID := r.URL.Query().Get("listing_id")
 	if actorID == "" || listingID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_PARAMS", Message: "User ID and Listing ID required"}}, http.StatusBadRequest)
@@ -697,7 +725,7 @@ func NewReservationHandler(reservationUseCases ReservationUseCases, availability
 
 // CreateReservationH handles POST /v1/reservations
 func (h *ReservationHandler) CreateReservationH(w http.ResponseWriter, r *http.Request) {
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -752,6 +780,10 @@ func (h *ReservationHandler) CreateReservationH(w http.ResponseWriter, r *http.R
 			writeJSON(w, ErrorResponse{Error: Error{Code: "UNAVAILABLE", Message: "Requested period not available"}}, http.StatusConflict)
 		case domain.ErrReservationConflict:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "CONFLICT", Message: "Reservation conflict: period not available"}}, http.StatusConflict)
+		case domain.ErrListingUnavailable:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_UNAVAILABLE", Message: "This listing cannot be booked"}}, http.StatusConflict)
+		case domain.ErrIdempotencyConflict:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "IDEMPOTENCY_CONFLICT", Message: "Idempotency-Key was already used for a different booking"}}, http.StatusConflict)
 		default:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "RESERVATION_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
 		}
@@ -792,7 +824,7 @@ func (h *ReservationHandler) GetReservationH(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -829,7 +861,7 @@ func (h *ReservationHandler) CancelReservationH(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -855,7 +887,7 @@ func (h *ReservationHandler) CancelReservationH(w http.ResponseWriter, r *http.R
 
 // CheckAvailabilityH handles GET /v1/availability
 func (h *ReservationHandler) CheckAvailabilityH(w http.ResponseWriter, r *http.Request) {
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -1091,7 +1123,7 @@ func (h *FulfillmentHandler) TransitionFulfillment(w http.ResponseWriter, r *htt
 	}
 
 	tenantID := r.URL.Query().Get("tenant_id")
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -1126,7 +1158,6 @@ func (h *FulfillmentHandler) AssignFulfillment(w http.ResponseWriter, r *http.Re
 	}
 
 	var req struct {
-		ActorID        string `json:"actor_id"`
 		IdempotencyKey string `json:"idempotency_key"`
 	}
 	if err := readJSONBody(r, &req); err != nil {
@@ -1135,10 +1166,7 @@ func (h *FulfillmentHandler) AssignFulfillment(w http.ResponseWriter, r *http.Re
 	}
 
 	tenantID := r.URL.Query().Get("tenant_id")
-	actorID := req.ActorID
-	if actorID == "" {
-		actorID = r.URL.Query().Get("user_id")
-	}
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -1176,7 +1204,7 @@ func (h *FulfillmentHandler) UpdateTracking(w http.ResponseWriter, r *http.Reque
 	}
 
 	tenantID := r.URL.Query().Get("tenant_id")
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return

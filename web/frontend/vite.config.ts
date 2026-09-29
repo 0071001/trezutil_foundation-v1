@@ -1,51 +1,36 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
 
-const base = process.env.BASE_URL && process.env.BASE_URL !== '/' ? process.env.BASE_URL : undefined
 const srcDir = import.meta.dirname
+// Local development proxies the API to the gateway; production is served by
+// the gateway itself (same origin), so no URL is baked into the bundle.
+const apiTarget = process.env.API_URL || 'http://127.0.0.1:8080'
 
-export default defineConfig(({ mode }) => {
-  const isDev = mode === 'development'
-
-  return {
-    base,
-    build: {
-      outDir: path.resolve(srcDir, 'dist'),
-      emptyOutDir: true,
-      sourcemap: isDev,
-      minify: !isDev,
-      rollupOptions: {
-        output: {
-          manualChunks: undefined,
-        },
-      },
+export default defineConfig(({ mode }) => ({
+  base: '/',
+  build: {
+    outDir: path.resolve(srcDir, 'dist'),
+    emptyOutDir: true,
+    sourcemap: mode === 'development',
+    target: 'es2020',
+  },
+  plugins: [react(), tailwindcss()],
+  resolve: { alias: { '@': path.resolve(srcDir, 'src') } },
+  server: {
+    host: process.env.HOST || '127.0.0.1',
+    port: 5173,
+    proxy: {
+      '/api': { target: apiTarget, changeOrigin: true },
+      '/healthz': { target: apiTarget, changeOrigin: true },
     },
-    plugins: [react(), tailwindcss()],
-    resolve: {
-      alias: {
-        '@': path.resolve(srcDir, 'src'),
-      },
-    },
-    server: {
-      host: process.env.HOST || '0.0.0.0',
-      port: 5173,
-      strictPort: false,
-      proxy: {
-        '/api': {
-          target: process.env.API_URL || 'http://127.0.0.1:8080',
-          changeOrigin: true,
-        },
-        '/auth': {
-          target: process.env.API_URL || 'http://127.0.0.1:8080',
-          changeOrigin: true,
-        },
-        '/health': {
-          target: process.env.API_URL || 'http://127.0.0.1:8080',
-          changeOrigin: true,
-        },
-      },
-    },
-  }
-})
+  },
+  test: {
+    environment: 'happy-dom',
+    globals: true,
+    setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.test.{ts,tsx}'],
+  },
+}))

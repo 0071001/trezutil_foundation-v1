@@ -41,7 +41,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id string) (*domain.User,
 	err := row.Scan(&u.ID, &u.Phone, &emailVal, &u.DisplayName, &u.Status, &u.CreatedAt, &u.UpdatedAt, &u.VerifiedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("user not found: %s", id)
+			return nil, fmt.Errorf("%w: %s", domain.ErrUserNotFound, id)
 		}
 		return nil, fmt.Errorf("failed to find user: %w", err)
 	}
@@ -87,7 +87,7 @@ func (r *UserRepository) FindByPhone(ctx context.Context, phone string) (*domain
 	err := row.Scan(&u.ID, &u.Phone, &emailVal, &u.DisplayName, &u.Status, &u.CreatedAt, &u.UpdatedAt, &u.VerifiedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("user not found with phone: %s", phone)
+			return nil, domain.ErrUserNotFound
 		}
 		return nil, fmt.Errorf("failed to find user by phone: %w", err)
 	}

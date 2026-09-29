@@ -29,7 +29,7 @@ type ListingAvailability struct {
 func NewListingAvailability(listingID string, status AvailabilityStatus) *ListingAvailability {
 	now := time.Now().Unix()
 	return &ListingAvailability{
-		ID:        "",
+		ID:        NewID(),
 		ListingID: listingID,
 		Status:    status,
 		CreatedAt: now,

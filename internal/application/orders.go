@@ -2,7 +2,9 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/trezutil/trezutil/internal/domain"
@@ -45,6 +47,12 @@ func NewOrderUseCases(
 
 // CreateOrder creates a new order from a listing and quantity.
 func (u *OrderUseCases) CreateOrder(ctx context.Context, actorID string, listingID string, quantity int) (*domain.Order, error) {
+	return u.CreateOrderIdempotent(ctx, actorID, listingID, quantity, "")
+}
+
+// CreateOrderIdempotent creates a new order; a retry with the same non-empty
+// idempotency key by the same customer returns the original order.
+func (u *OrderUseCases) CreateOrderIdempotent(ctx context.Context, actorID string, listingID string, quantity int, idempotencyKey string) (*domain.Order, error) {
 	if actorID == "" {
 		return nil, domain.ErrInsufficientPermissions
 	}
@@ -53,6 +61,17 @@ func (u *OrderUseCases) CreateOrder(ctx context.Context, actorID string, listing
 	}
 	if quantity <= 0 {
 		return nil, fmt.Errorf("quantity must be positive")
+	}
+
+	if idempotencyKey != "" {
+		if existing, err := u.orderRepo.FindByCustomerIdempotencyKey(ctx, actorID, idempotencyKey); err == nil {
+			if len(existing.Items) != 1 || existing.Items[0].ListingID != listingID || existing.Items[0].Quantity != quantity {
+				return nil, domain.ErrIdempotencyConflict
+			}
+			return existing, nil
+		} else if !errors.Is(err, domain.ErrOrderNotFound) {
+			return nil, err
+		}
 	}
 
 	listing, err := u.listingRepo.FindByID(ctx, listingID)
@@ -74,8 +93,15 @@ func (u *OrderUseCases) CreateOrder(ctx context.Context, actorID string, listing
 		return nil, domain.ErrInsufficientPermissions
 	}
 
+	// Only live listings can be purchased.
+	if !listing.IsPublished() {
+		return nil, domain.ErrListingUnavailable
+	}
+
 	now := time.Now().Unix()
-	unitPrice := domain.NewMoney(int64(listing.PriceAmount*100), listing.PriceCurrency)
+	// Listing prices are stored as decimal major units; round to the nearest
+	// minor unit so e.g. 19.99 becomes 1999 rather than a truncated 1998.
+	unitPrice := domain.NewMoney(int64(math.Round(listing.PriceAmount*100)), listing.PriceCurrency)
 
 	item := domain.NewOrderItem("", listingID, listing.Title, quantity, unitPrice, now)
 
@@ -87,9 +113,17 @@ func (u *OrderUseCases) CreateOrder(ctx context.Context, actorID string, listing
 	)
 
 	order := domain.NewOrder(tenantID, listing.SellerID, actorID, listing.StoreID, []*domain.OrderItem{item}, listing.PriceCurrency, now)
+	item.OrderID = order.ID
 	order.PricingSnapshot = pricingSnapshot
+	order.IdempotencyKey = idempotencyKey
 
 	if err := u.orderRepo.Create(ctx, order); err != nil {
+		if errors.Is(err, domain.ErrIdempotencyConflict) && idempotencyKey != "" {
+			// Lost a race with a concurrent retry: return the winner.
+			if existing, ferr := u.orderRepo.FindByCustomerIdempotencyKey(ctx, actorID, idempotencyKey); ferr == nil {
+				return existing, nil
+			}
+		}
 		return nil, fmt.Errorf("failed to create order: %w", err)
 	}
 
@@ -178,27 +212,11 @@ func (u *OrderUseCases) CancelOrder(ctx context.Context, actorID string, orderID
 	return nil
 }
 
-// canCreateOrder checks if an actor can create orders for a tenant.
+// canCreateOrder checks if an actor can place an order with a tenant.
+// Any active (verified, non-suspended) user may buy from any organization;
+// the listing itself must be published (checked by the caller).
 func (u *OrderUseCases) canCreateOrder(ctx context.Context, actor *domain.User, tenantID string) bool {
-	if actor.HasRole(domain.RoleAdmin) || actor.HasRole(domain.RoleOperator) {
-		return true
-	}
-
-	memberRole, err := u.orgRepo.GetMemberRole(ctx, tenantID, actor.ID)
-	if err == nil {
-		if memberRole == domain.OrganizationRoleOwner || memberRole == domain.OrganizationRoleAdmin || memberRole == domain.OrganizationRoleManager {
-			return true
-		}
-	}
-
-	seller, err := u.sellerRepo.FindByUserID(ctx, actor.ID)
-	if err == nil && seller != nil {
-		if seller.UserID != nil && *seller.UserID == actor.ID {
-			return true
-		}
-	}
-
-	return false
+	return actor != nil && actor.IsActive()
 }
 
 // canAccessOrder checks if an actor can access an order.

@@ -1,7 +1,25 @@
-.PHONY: build test vet fmt lint up down logs tidy govulncheck opensearch-tests infra-up infra-down infra-status test-integration build-frontend frontend-dev frontend-typecheck
+.PHONY: build test vet fmt lint up down logs tidy govulncheck opensearch-tests infra-up infra-down infra-status test-integration build-frontend frontend-dev frontend-typecheck migrate migrate-status app-up app-down e2e
 
 build:
-	go build ./...
+	go build -buildvcs=false ./...
+
+# Apply pending SQL migrations to $$DATABASE_URL.
+migrate:
+	go run ./cmd/migrate
+
+migrate-status:
+	go run ./cmd/migrate -status
+
+# Full application stack (see deployments/docker/docker-compose.app.yml).
+app-up:
+	docker compose -f deployments/docker/docker-compose.app.yml --env-file deployments/docker/app.env up -d --build
+
+app-down:
+	docker compose -f deployments/docker/docker-compose.app.yml --env-file deployments/docker/app.env down
+
+# Real-stack journeys through the gateway (see test/e2e/README.md).
+e2e:
+	python test/e2e/journeys.py
 
 build-frontend:
 	cd web/frontend && pnpm install --frozen-lockfile && pnpm run build
@@ -12,8 +30,9 @@ frontend-dev:
 frontend-typecheck:
 	cd web/frontend && pnpm run typecheck
 
+# Unit + PostgreSQL-backed suites (needs PostgreSQL on localhost:5432, user/pass trezutil).
 test:
-	go test ./...
+	go test -p 1 ./...
 
 vet:
 	go vet ./...
@@ -27,7 +46,7 @@ govulncheck:
 	govulncheck ./...
 
 opensearch-tests:
-	go test ./internal/search/... -tags=integration
+	TREZUTIL_OPENSEARCH_INTEGRATION=true go test ./internal/search/... -tags=integration
 
 up:
 	docker compose -f deployments/docker/docker-compose.yml up -d

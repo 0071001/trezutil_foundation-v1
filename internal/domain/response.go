@@ -2,42 +2,42 @@ package domain
 
 // ConversationResponse represents a canonical response for any channel.
 type ConversationResponse struct {
-	Text              string
-	Language          string
-	StructuredContent *StructuredContent
-	Cards             []ConversationCard
-	Actions           []ConversationActionPrompt
-	Confirmation      *ConversationConfirmation
-	Metadata          map[string]interface{}
+	Text              string                     `json:"text"`
+	Language          string                     `json:"language"`
+	StructuredContent *StructuredContent         `json:"structured_content,omitempty"`
+	Cards             []ConversationCard         `json:"cards,omitempty"`
+	Actions           []ConversationActionPrompt `json:"actions,omitempty"`
+	Confirmation      *ConversationConfirmation  `json:"confirmation,omitempty"`
+	Metadata          map[string]interface{}     `json:"metadata,omitempty"`
 }
 
 // StructuredContent represents structured data in a response.
 type StructuredContent struct {
-	Type string
-	Data map[string]interface{}
+	Type string                 `json:"type"`
+	Data map[string]interface{} `json:"data"`
 }
 
 // ConversationCard represents a card in a response.
 type ConversationCard struct {
-	ID          string
-	Type        string
-	Title       string
-	Description string
-	Data        map[string]interface{}
+	ID          string                 `json:"id"`
+	Type        string                 `json:"type"`
+	Title       string                 `json:"title"`
+	Description string                 `json:"description"`
+	Data        map[string]interface{} `json:"data,omitempty"`
 }
 
 // ConversationActionPrompt represents an actionable prompt in a response.
 type ConversationActionPrompt struct {
-	ActionType CommerceActionType
-	Label      string
-	Parameters map[string]interface{}
+	ActionType CommerceActionType     `json:"action_type"`
+	Label      string                 `json:"label"`
+	Parameters map[string]interface{} `json:"parameters,omitempty"`
 }
 
 // ConversationConfirmation represents a confirmation request in a response.
 type ConversationConfirmation struct {
-	ActionID string
-	Summary  string
-	Details  map[string]interface{}
+	ActionID string                 `json:"action_id"`
+	Summary  string                 `json:"summary"`
+	Details  map[string]interface{} `json:"details,omitempty"`
 }
 
 // NewConversationResponse creates a new ConversationResponse.

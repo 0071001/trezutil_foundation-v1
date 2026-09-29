@@ -13,8 +13,8 @@ import (
 // conversationRow represents a row from the conversations table.
 type conversationRow struct {
 	ID             string
-	OrganizationID string
-	CustomerID     string
+	OrganizationID sql.NullString
+	CustomerID     sql.NullString
 	SellerID       sql.NullString
 	StoreID        sql.NullString
 	Channel        string
@@ -55,7 +55,7 @@ func (r *ConversationStore) Create(ctx context.Context, conversation *domain.Con
 	}
 
 	_, err = r.db.ExecContext(ctx, query,
-		conversation.ID, conversation.OrganizationID, conversation.CustomerID,
+		conversation.ID, nullString(conversation.OrganizationID), nullString(conversation.CustomerID),
 		sellerID, storeID, string(conversation.Channel), conversation.ExternalID,
 		conversation.Language, string(conversation.State), metadataJSON,
 		toTime(conversation.CreatedAt), toTime(conversation.UpdatedAt),
@@ -134,7 +134,7 @@ func (r *ConversationStore) Update(ctx context.Context, conversation *domain.Con
 	}
 
 	result, err := r.db.ExecContext(ctx, query,
-		conversation.OrganizationID, conversation.CustomerID,
+		nullString(conversation.OrganizationID), nullString(conversation.CustomerID),
 		sellerID, storeID, string(conversation.Channel), conversation.ExternalID,
 		conversation.Language, string(conversation.State), metadataJSON,
 		toTime(conversation.UpdatedAt), conversation.ID,
@@ -157,8 +157,8 @@ func (r *ConversationStore) Update(ctx context.Context, conversation *domain.Con
 func unmarshalConversation(u conversationRow) (*domain.Conversation, error) {
 	conversation := &domain.Conversation{
 		ID:             u.ID,
-		OrganizationID: u.OrganizationID,
-		CustomerID:     u.CustomerID,
+		OrganizationID: u.OrganizationID.String,
+		CustomerID:     u.CustomerID.String,
 		Channel:        domain.Channel(u.Channel),
 		ExternalID:     u.ExternalID,
 		Language:       u.Language,

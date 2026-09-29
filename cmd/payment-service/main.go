@@ -1,46 +1,38 @@
+// Command payment-service serves the Payment Core (/api/v1/payments) and
+// provider webhooks (/api/v1/webhooks/payments/{provider_code}).
 package main
 
 import (
 	"context"
-	"database/sql"
 	"log"
 	"net/http"
 	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
-	_ "github.com/lib/pq"
-	"github.com/rs/zerolog"
 	"github.com/trezutil/trezutil/infrastructure/postgres"
 	"github.com/trezutil/trezutil/internal/api"
 	"github.com/trezutil/trezutil/internal/application/payment"
 	"github.com/trezutil/trezutil/internal/application/provider"
 	payverifier "github.com/trezutil/trezutil/internal/infrastructure/payment"
+	"github.com/trezutil/trezutil/internal/infrastructure/payment/stripe"
+	"github.com/trezutil/trezutil/packages/auth"
+	"github.com/trezutil/trezutil/packages/common"
+	"github.com/trezutil/trezutil/packages/database"
 )
 
 func main() {
-	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	logger := common.Logger("payment-service")
 
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		dbURL = "postgres://trezutil:trezutil@localhost:5432/trezutil?sslmode=disable"
+	authn, err := auth.NewAuthenticatorFromEnv()
+	if err != nil {
+		log.Fatalf("payment-service: %v", err)
 	}
 
-	db, err := sql.Open("postgres", dbURL)
+	db, err := database.Open(context.Background())
 	if err != nil {
-		log.Fatalf("failed to connect to database: %v", err)
+		log.Fatalf("payment-service: %v", err)
 	}
 	defer db.Close()
-
-	if err := db.Ping(); err != nil {
-		log.Fatalf("failed to ping database: %v", err)
-	}
-	logger.Info().Msg("Connected to database")
-
-	db.SetMaxOpenConns(25)
-	db.SetMaxIdleConns(5)
-	db.SetConnMaxLifetime(5 * time.Minute)
 
 	paymentRepo := postgres.NewPaymentRepository(db)
 	refundRepo := postgres.NewRefundRepository(db)
@@ -50,7 +42,21 @@ func main() {
 	executionRepo := postgres.NewProviderExecutionRepository(db)
 	orderRepo := postgres.NewOrderRepository(db)
 
+	// Payment provider adapters are registered from each organization's
+	// providers rows (code 'stripe'); API keys are resolved from environment
+	// references, never stored in the database.
 	providerRegistry := provider.NewProviderRegistry()
+	stripeLoader := &stripe.Loader{Providers: providerRepo, Registry: providerRegistry, Logger: logger}
+	if n, err := stripeLoader.Load(context.Background()); err != nil {
+		logger.Error().Err(err).Msg("failed to load Stripe providers")
+	} else if n == 0 {
+		logger.Warn().Msg("no payment provider configured: payment creation returns PAYMENT_PROVIDER_UNAVAILABLE until a 'stripe' provider row and its secret are configured")
+	} else {
+		logger.Info().Int("providers", n).Msg("Stripe payment providers registered")
+	}
+	// New or changed provider rows are picked up without a restart.
+	go stripeLoader.Run(context.Background(), time.Duration(common.GetenvInt("PAYMENT_PROVIDER_REFRESH_SECONDS", 60))*time.Second)
+
 	orchestrator := provider.NewProviderOrchestrator(providerRegistry, executionRepo, provider.OrchestratorConfig{
 		Logger: logger,
 	})
@@ -62,15 +68,13 @@ func main() {
 		Orders:       orderRepo,
 		Orchestrator: orchestrator,
 		Logger:       logger,
+		Locker:       postgres.NewAdvisoryLocker(db),
 	})
 
-	webhookSecrets := map[string]string{
-		"stripe": os.Getenv("STRIPE_WEBHOOK_SECRET"),
-		"paypal": os.Getenv("PAYPAL_WEBHOOK_SECRET"),
-	}
-	for k, v := range webhookSecrets {
-		if v == "" {
-			delete(webhookSecrets, k)
+	webhookSecrets := map[string]string{}
+	for code, env := range map[string]string{"stripe": "STRIPE_WEBHOOK_SECRET", "paypal": "PAYPAL_WEBHOOK_SECRET"} {
+		if v := os.Getenv(env); v != "" {
+			webhookSecrets[code] = v
 		}
 	}
 	signatureVerifier := payverifier.NewWebhookSignatureVerifier(payverifier.WebhookVerifierConfig{
@@ -84,13 +88,17 @@ func main() {
 		Events:            webhookEventStore,
 		Providers:         providerRepo,
 		SignatureVerifier: signatureVerifier,
-		Logger:            logger,
+		Orders:            orderRepo,
+		Normalizers: map[string]payment.WebhookNormalizer{
+			stripe.ProviderCode: &stripe.WebhookNormalizer{SecretFor: stripeLoader.WebhookSecret},
+		},
+		Logger: logger,
 	})
 
-	paymentHandler := api.NewPaymentHandler(paymentSvc, webhookHandler)
+	access := payment.NewAccessPolicy(orderRepo, paymentRepo, postgres.NewOrganizationRepository(db), postgres.NewUserRepository(db))
+	paymentHandler := api.NewPaymentHandler(paymentSvc, webhookHandler).WithAccessPolicy(access)
 
 	mux := http.NewServeMux()
-
 	mux.HandleFunc("POST /api/v1/payments", paymentHandler.CreatePaymentH)
 	mux.HandleFunc("GET /api/v1/payments/{payment_id}", paymentHandler.GetPaymentH)
 	mux.HandleFunc("POST /api/v1/payments/{payment_id}/cancel", paymentHandler.CancelPaymentH)
@@ -98,45 +106,13 @@ func main() {
 	mux.HandleFunc("POST /api/v1/payments/{payment_id}/refund", paymentHandler.RefundPaymentH)
 	mux.HandleFunc("GET /api/v1/payments/{payment_id}/status", paymentHandler.GetPaymentStatusH)
 	mux.HandleFunc("GET /api/v1/payments/{payment_id}/refunds/{refund_id}", paymentHandler.GetRefundH)
+	// Webhooks authenticate by provider signature, not by user token.
 	mux.HandleFunc("POST /api/v1/webhooks/payments/{provider_code}", paymentHandler.WebhookPaymentH)
+	mux.HandleFunc("GET /healthz", common.HealthHandler)
+	mux.HandleFunc("GET /readyz", common.ReadyHandler(db))
 
-	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ok"}`))
-	})
-
-	port := os.Getenv("HTTP_PORT")
-	if port == "" {
-		port = "8083"
+	srv := common.NewServer(":"+common.Getenv("HTTP_PORT", "8083"), common.AccessLog(logger, authn.Middleware(mux)))
+	if err := common.Run(srv, logger, "payment-service"); err != nil {
+		log.Fatalf("payment-service: %v", err)
 	}
-
-	server := &http.Server{
-		Addr:         ":" + port,
-		Handler:      mux,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
-		IdleTimeout:  60 * time.Second,
-	}
-
-	go func() {
-		logger.Info().Str("port", port).Msg("Payment service starting")
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
-		}
-	}()
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	logger.Info().Msg("Shutting down payment service...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	if err := server.Shutdown(ctx); err != nil {
-		log.Fatalf("server shutdown error: %v", err)
-	}
-
-	logger.Info().Msg("Payment service stopped")
 }

@@ -8,19 +8,68 @@ on:
 jobs:
   go:
     runs-on: ubuntu-latest
+    services:
+      # Repository and use-case suites run against real PostgreSQL
+      # (infrastructure/postgres/integration, internal/application/reservations).
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: trezutil
+          POSTGRES_PASSWORD: trezutil
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U trezutil"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+      opensearch:
+        image: opensearchproject/opensearch:2.17.1
+        env:
+          discovery.type: single-node
+          DISABLE_SECURITY_PLUGIN: "true"
+          OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+        ports: ["9200:9200"]
+        options: >-
+          --health-cmd "curl -fsS http://localhost:9200 >/dev/null"
+          --health-interval 10s --health-timeout 5s --health-retries 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version-file: go.mod
       - name: Download dependencies
         run: go mod download
       - name: Format check
-        run: test -z "$(gofmt -l .)"
-      - name: Test
-        run: go test ./...
+        run: test -z "$(gofmt -l cmd internal infrastructure packages)"
       - name: Vet
         run: go vet ./...
+      - name: Build
+        run: go build -buildvcs=false ./...
+      - name: Test (unit + PostgreSQL integration)
+        run: go test -p 1 -timeout 20m ./...
+      - name: Test (OpenSearch integration)
+        env:
+          TREZUTIL_OPENSEARCH_INTEGRATION: "true"
+        run: go test -tags=integration ./internal/search/...
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm exec vitest run
+      - run: pnpm run build
 
   api-contract:
     runs-on: ubuntu-latest

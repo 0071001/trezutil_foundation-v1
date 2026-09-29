@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -31,8 +32,7 @@ func (r *ListingRepository) Create(ctx context.Context, listing *domain.Listing)
 
 	var metadata sql.NullString
 	if listing.Metadata != nil && len(listing.Metadata) > 0 {
-		// TODO: serialize metadata to JSON
-		metadata = sql.NullString{String: "{}", Valid: true}
+		metadata = encodeListingMetadata(listing.Metadata)
 	}
 
 	var publishedAt sql.NullTime
@@ -75,7 +75,7 @@ func (r *ListingRepository) FindByID(ctx context.Context, id string) (*domain.Li
 		PriceAmount:    u.PriceAmount,
 		PriceCurrency:  u.PriceCurrency,
 		Status:         domain.ListingStatus(u.Status),
-		Metadata:       make(map[string]interface{}),
+		Metadata:       decodeListingMetadata(metadata),
 		CreatedAt:      toUnix(u.CreatedAt),
 		UpdatedAt:      toUnix(u.UpdatedAt),
 	}
@@ -122,7 +122,7 @@ func (r *ListingRepository) FindByOrganizationID(ctx context.Context, organizati
 			PriceAmount:    u.PriceAmount,
 			PriceCurrency:  u.PriceCurrency,
 			Status:         domain.ListingStatus(u.Status),
-			Metadata:       make(map[string]interface{}),
+			Metadata:       decodeListingMetadata(metadata),
 			CreatedAt:      toUnix(u.CreatedAt),
 			UpdatedAt:      toUnix(u.UpdatedAt),
 		}
@@ -180,7 +180,7 @@ func (r *ListingRepository) FindBySellerID(ctx context.Context, sellerID string,
 			PriceAmount:    u.PriceAmount,
 			PriceCurrency:  u.PriceCurrency,
 			Status:         domain.ListingStatus(u.Status),
-			Metadata:       make(map[string]interface{}),
+			Metadata:       decodeListingMetadata(metadata),
 			CreatedAt:      toUnix(u.CreatedAt),
 			UpdatedAt:      toUnix(u.UpdatedAt),
 		}
@@ -238,7 +238,7 @@ func (r *ListingRepository) FindByStoreID(ctx context.Context, storeID string, o
 			PriceAmount:    u.PriceAmount,
 			PriceCurrency:  u.PriceCurrency,
 			Status:         domain.ListingStatus(u.Status),
-			Metadata:       make(map[string]interface{}),
+			Metadata:       decodeListingMetadata(metadata),
 			CreatedAt:      toUnix(u.CreatedAt),
 			UpdatedAt:      toUnix(u.UpdatedAt),
 		}
@@ -296,7 +296,7 @@ func (r *ListingRepository) FindByCategoryID(ctx context.Context, categoryID str
 			PriceAmount:    u.PriceAmount,
 			PriceCurrency:  u.PriceCurrency,
 			Status:         domain.ListingStatus(u.Status),
-			Metadata:       make(map[string]interface{}),
+			Metadata:       decodeListingMetadata(metadata),
 			CreatedAt:      toUnix(u.CreatedAt),
 			UpdatedAt:      toUnix(u.UpdatedAt),
 		}
@@ -335,7 +335,7 @@ func (r *ListingRepository) Update(ctx context.Context, listing *domain.Listing)
 
 	var metadata sql.NullString
 	if listing.Metadata != nil && len(listing.Metadata) > 0 {
-		metadata = sql.NullString{String: "{}", Valid: true}
+		metadata = encodeListingMetadata(listing.Metadata)
 	}
 
 	var publishedAt sql.NullTime
@@ -386,4 +386,54 @@ type listingRow struct {
 	Status         string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+}
+
+// encodeListingMetadata serializes listing metadata for the JSONB column.
+func encodeListingMetadata(m map[string]interface{}) sql.NullString {
+	b, err := json.Marshal(m)
+	if err != nil {
+		return sql.NullString{String: "{}", Valid: true}
+	}
+	return sql.NullString{String: string(b), Valid: true}
+}
+
+// decodeListingMetadata parses the JSONB column; invalid or empty values yield an empty map.
+func decodeListingMetadata(v sql.NullString) map[string]interface{} {
+	out := make(map[string]interface{})
+	if v.Valid && v.String != "" {
+		_ = json.Unmarshal([]byte(v.String), &out)
+	}
+	return out
+}
+
+// ListingChange is a (id, status, updated_at) tuple used by search projection sync.
+type ListingChange struct {
+	ID        string
+	Status    domain.ListingStatus
+	UpdatedAt time.Time
+}
+
+// ListChangedSince returns listings ordered by (updated_at, id) strictly after
+// the given keyset position.
+func (r *ListingRepository) ListChangedSince(ctx context.Context, afterUpdatedAt time.Time, afterID string, limit int) ([]ListingChange, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id::text, status, updated_at FROM listings
+		WHERE (updated_at, id::text) > ($1, $2)
+		ORDER BY updated_at, id::text
+		LIMIT $3`, afterUpdatedAt, afterID, limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list changed listings: %w", err)
+	}
+	defer rows.Close()
+	var out []ListingChange
+	for rows.Next() {
+		var c ListingChange
+		var status string
+		if err := rows.Scan(&c.ID, &status, &c.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("failed to scan listing change: %w", err)
+		}
+		c.Status = domain.ListingStatus(status)
+		out = append(out, c)
+	}
+	return out, rows.Err()
 }

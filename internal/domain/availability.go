@@ -4,6 +4,9 @@ import "context"
 
 // AvailabilityQuery represents a request to check if a listing is available.
 type AvailabilityQuery struct {
+	// TenantID is the listing's organization, resolved server-side from the
+	// listing (never from the client).
+	TenantID  string
 	ListingID string
 	StartAt   int64
 	EndAt     int64
@@ -14,12 +17,12 @@ type AvailabilityQuery struct {
 
 // AvailabilityResult represents the result of an availability check.
 type AvailabilityResult struct {
-	Available bool
-	Capacity  int
-	Remaining int
-	Reason    string
-	StartAt   int64
-	EndAt     int64
+	Available bool   `json:"available"`
+	Capacity  int    `json:"capacity"`
+	Remaining int    `json:"remaining"`
+	Reason    string `json:"reason"`
+	StartAt   int64  `json:"start_at"`
+	EndAt     int64  `json:"end_at"`
 }
 
 // AvailabilityProvider defines the port for checking listing availability.

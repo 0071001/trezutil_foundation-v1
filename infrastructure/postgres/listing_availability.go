@@ -57,7 +57,7 @@ func (r *ListingAvailabilityRepository) FindByListingID(ctx context.Context, lis
 	err := row.Scan(&u.ID, &u.ListingID, &u.Status, &quantity, &reservedQuantity, &availableFrom, &availableTo, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("listing availability not found for listing %s", listingID)
+			return nil, fmt.Errorf("%w for listing %s", domain.ErrListingAvailabilityNotFound, listingID)
 		}
 		return nil, fmt.Errorf("failed to find listing availability: %w", err)
 	}

@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/trezutil/trezutil/internal/domain"
+	"github.com/trezutil/trezutil/packages/auth"
 )
 
 // SearchUseCases interface for search operations.
@@ -54,18 +55,29 @@ type SuggestResponseDTO struct {
 	Suggestions []domain.Suggestion `json:"suggestions"`
 }
 
-// SearchH handles POST /v1/search
+// Page-size bounds for public search.
+const (
+	defaultSearchPageSize = 20
+	maxSearchPageSize     = 100
+)
+
+// SearchH handles POST /v1/search. Discovery is public: anonymous callers
+// (guests) search published listings; an authenticated caller is identified
+// only through the verified principal.
 func (h *SearchHandler) SearchH(w http.ResponseWriter, r *http.Request) {
-	actorID := r.URL.Query().Get("user_id")
-	if actorID == "" {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
-		return
-	}
+	actorID := auth.UserID(r.Context())
 
 	var req SearchRequest
 	if err := readJSONBody(r, &req); err != nil {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request format"}}, http.StatusBadRequest)
 		return
+	}
+
+	if req.PageSize <= 0 {
+		req.PageSize = defaultSearchPageSize
+	}
+	if req.PageSize > maxSearchPageSize {
+		req.PageSize = maxSearchPageSize
 	}
 
 	// Build discovery query
@@ -97,7 +109,7 @@ func (h *SearchHandler) SearchH(w http.ResponseWriter, r *http.Request) {
 	// Execute search
 	result, err := h.searchUseCases.ExecuteSearch(r.Context(), actorID, query)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "SEARCH_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeJSON(w, ErrorResponse{Error: Error{Code: "SEARCH_FAILED", Message: "Search is temporarily unavailable"}}, http.StatusServiceUnavailable)
 		return
 	}
 
@@ -114,13 +126,9 @@ func (h *SearchHandler) SearchH(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, response, http.StatusOK)
 }
 
-// SuggestH handles GET /v1/search/suggest
+// SuggestH handles GET /v1/search/suggest (public, like search).
 func (h *SearchHandler) SuggestH(w http.ResponseWriter, r *http.Request) {
-	actorID := r.URL.Query().Get("user_id")
-	if actorID == "" {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
-		return
-	}
+	actorID := auth.UserID(r.Context())
 
 	text := r.URL.Query().Get("text")
 	if text == "" {
@@ -137,10 +145,15 @@ func (h *SearchHandler) SuggestH(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if limit > 20 {
+		limit = 20
+	}
 	req := domain.SuggestRequest{
-		Text:       text,
-		CategoryID: &categoryID,
-		Limit:      limit,
+		Text:  text,
+		Limit: limit,
+	}
+	if categoryID != "" {
+		req.CategoryID = &categoryID
 	}
 
 	result, err := h.searchUseCases.Suggest(r.Context(), actorID, req)

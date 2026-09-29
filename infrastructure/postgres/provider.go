@@ -3,7 +3,9 @@ package postgres
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -238,26 +240,16 @@ func encodeProviderConfig(config domain.ProviderConfig) string {
 	if len(config.Endpoints) == 0 && len(config.Settings) == 0 {
 		return ""
 	}
-	result := "{"
-	first := true
-	for k, v := range config.Endpoints {
-		if !first {
-			result += ","
-		}
-		result += fmt.Sprintf(`"endpoints.%s":"%s"`, k, v)
-		first = false
+	b, err := json.Marshal(config)
+	if err != nil {
+		return ""
 	}
-	for k, v := range config.Settings {
-		if !first {
-			result += ","
-		}
-		result += fmt.Sprintf(`"settings.%s":"%s"`, k, v)
-		first = false
-	}
-	result += "}"
-	return result
+	return string(b)
 }
 
+// decodeProviderConfig reads the JSON configuration. Rows written by the
+// earlier encoder used flat "endpoints.<k>"/"settings.<k>" keys; those are
+// accepted too.
 func decodeProviderConfig(s string) domain.ProviderConfig {
 	config := domain.ProviderConfig{
 		Endpoints: map[string]string{},
@@ -266,5 +258,38 @@ func decodeProviderConfig(s string) domain.ProviderConfig {
 	if s == "" {
 		return config
 	}
+	var structured domain.ProviderConfig
+	if err := json.Unmarshal([]byte(s), &structured); err == nil && (len(structured.Endpoints) > 0 || len(structured.Settings) > 0) {
+		for k, v := range structured.Endpoints {
+			config.Endpoints[k] = v
+		}
+		for k, v := range structured.Settings {
+			config.Settings[k] = v
+		}
+		return config
+	}
+	var flat map[string]string
+	if err := json.Unmarshal([]byte(s), &flat); err == nil {
+		for k, v := range flat {
+			if name, ok := strings.CutPrefix(k, "endpoints."); ok {
+				config.Endpoints[name] = v
+			} else if name, ok := strings.CutPrefix(k, "settings."); ok {
+				config.Settings[name] = v
+			}
+		}
+	}
 	return config
+}
+
+// FindAllByCode lists providers with the given code across all organizations
+// (used at payment-service startup to register provider adapters).
+func (r *ProviderRepository) FindAllByCode(ctx context.Context, code string) ([]*domain.IntegrationProvider, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, organization_id, code, name, type, status, capabilities, configuration, secret_ref, priority, health_status, created_at, updated_at, version
+		FROM providers WHERE code = $1 ORDER BY organization_id, priority DESC`, code)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list providers by code: %w", err)
+	}
+	defer rows.Close()
+	return scanProviders(rows)
 }

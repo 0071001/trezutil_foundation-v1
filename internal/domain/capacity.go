@@ -26,7 +26,7 @@ func NewCapacityUnit(inventoryID string, startAt, endAt int64, capacity int64, n
 		endAt = startAt + 3600 // default 1 hour
 	}
 	return &CapacityUnit{
-		ID:          "",
+		ID:          NewID(),
 		InventoryID: inventoryID,
 		StartAt:     startAt,
 		EndAt:       endAt,

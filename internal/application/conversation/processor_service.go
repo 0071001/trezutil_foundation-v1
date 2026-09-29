@@ -13,19 +13,21 @@ type ProcessConversationRequest struct {
 	SenderID         string
 	SenderExternalID string
 	MessageText      string
-	Locale           string
-	TenantID         string
-	Actor            domain.CommerceActor
+	// MessageIdempotencyKey deduplicates client retries / webhook redeliveries.
+	MessageIdempotencyKey string
+	Locale                string
+	TenantID              string
+	Actor                 domain.CommerceActor
 }
 
 // ProcessConversationResponse is the response from processing a conversation message.
 type ProcessConversationResponse struct {
-	ConversationID    string
-	Response          *domain.ConversationResponse
-	RequiresUserInput bool
-	IsConfirmation    bool
-	IsClarification   bool
-	MissingParams     []domain.MissingParameter
+	ConversationID    string                       `json:"conversation_id"`
+	Response          *domain.ConversationResponse `json:"response"`
+	RequiresUserInput bool                         `json:"requires_user_input"`
+	IsConfirmation    bool                         `json:"is_confirmation"`
+	IsClarification   bool                         `json:"is_clarification"`
+	MissingParams     []domain.MissingParameter    `json:"missing_params,omitempty"`
 }
 
 // ProcessorService adapts ConversationProcessor to the ConversationUseCases interface.
@@ -51,13 +53,14 @@ func (s *ProcessorService) ProcessMessage(ctx context.Context, req *ProcessConve
 	}
 
 	processReq := &ProcessRequest{
-		Channel:          req.Channel,
-		SenderID:         req.SenderID,
-		SenderExternalID: req.SenderExternalID,
-		MessageText:      req.MessageText,
-		Locale:           req.Locale,
-		TenantID:         req.TenantID,
-		Actor:            req.Actor,
+		Channel:               req.Channel,
+		SenderID:              req.SenderID,
+		SenderExternalID:      req.SenderExternalID,
+		MessageText:           req.MessageText,
+		MessageIdempotencyKey: req.MessageIdempotencyKey,
+		Locale:                req.Locale,
+		TenantID:              req.TenantID,
+		Actor:                 req.Actor,
 	}
 
 	result, err := s.processor.ProcessMessage(ctx, processReq)
@@ -76,8 +79,8 @@ func (s *ProcessorService) ProcessMessage(ctx context.Context, req *ProcessConve
 }
 
 // ConfirmAction confirms a pending action.
-func (s *ProcessorService) ConfirmAction(ctx context.Context, convID, token string) (*ProcessConversationResponse, error) {
-	result, err := s.processor.ConfirmAction(ctx, convID, token)
+func (s *ProcessorService) ConfirmAction(ctx context.Context, convID, token string, actor domain.CommerceActor) (*ProcessConversationResponse, error) {
+	result, err := s.processor.ConfirmAction(ctx, convID, token, actor)
 	if err != nil {
 		return nil, err
 	}
@@ -85,8 +88,8 @@ func (s *ProcessorService) ConfirmAction(ctx context.Context, convID, token stri
 }
 
 // RejectAction rejects a pending confirmation.
-func (s *ProcessorService) RejectAction(ctx context.Context, convID, token string) (*ProcessConversationResponse, error) {
-	result, err := s.processor.RejectAction(ctx, convID, token)
+func (s *ProcessorService) RejectAction(ctx context.Context, convID, token string, actor domain.CommerceActor) (*ProcessConversationResponse, error) {
+	result, err := s.processor.RejectAction(ctx, convID, token, actor)
 	if err != nil {
 		return nil, err
 	}

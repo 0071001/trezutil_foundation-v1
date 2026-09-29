@@ -37,6 +37,7 @@ type Config struct {
 	AllowedOrigins  []string      // explicit CORS allowlist (never "*")
 	RequestTimeout  time.Duration // total request deadline at the edge
 	UpstreamTimeout time.Duration // default upstream proxy deadline
+	MaxBodyBytes    int64         // maximum accepted request body (default 1 MiB)
 	Upstreams       map[string]*Upstream
 }
 
@@ -68,6 +69,16 @@ func defaultUpstreams() map[string]*Upstream {
 		"payment": {
 			Name:     "payment",
 			URL:      mustParseURL(env("PAYMENT_SERVICE_URL", "http://127.0.0.1:8083")),
+			StripAPI: false,
+		},
+		"commerce": {
+			Name:     "commerce",
+			URL:      mustParseURL(env("COMMERCE_SERVICE_URL", "http://127.0.0.1:8085")),
+			StripAPI: false,
+		},
+		"identity": {
+			Name:     "identity",
+			URL:      mustParseURL(env("IDENTITY_SERVICE_URL", "http://127.0.0.1:8086")),
 			StripAPI: false,
 		},
 	}

@@ -7,6 +7,18 @@ import (
 	"github.com/trezutil/trezutil/internal/domain"
 )
 
+// MissingParameterError reports a required parameter that is absent or empty.
+// The conversation layer uses Param to ask the user for exactly that value.
+type MissingParameterError struct {
+	Param      string
+	ActionType domain.CommerceActionType
+	Reason     string
+}
+
+func (e *MissingParameterError) Error() string {
+	return fmt.Sprintf("required parameter '%s' %s for action %s", e.Param, e.Reason, e.ActionType)
+}
+
 // ParameterValidator validates action parameters before execution.
 type ParameterValidator interface {
 	Validate(ctx context.Context, actionType domain.CommerceActionType, parameters map[string]interface{}) error
@@ -49,16 +61,20 @@ func (v *DefaultParameterValidator) Validate(ctx context.Context, actionType dom
 	for _, param := range required {
 		val, ok := parameters[param]
 		if !ok || val == nil {
-			return fmt.Errorf("required parameter '%s' is missing for action %s", param, actionType)
+			return &MissingParameterError{Param: param, ActionType: actionType, Reason: "is missing"}
 		}
 		switch v := val.(type) {
 		case string:
 			if v == "" {
-				return fmt.Errorf("required parameter '%s' must not be empty for action %s", param, actionType)
+				return &MissingParameterError{Param: param, ActionType: actionType, Reason: "must not be empty"}
 			}
 		case int:
 			if v <= 0 {
-				return fmt.Errorf("required parameter '%s' must be positive for action %s", param, actionType)
+				return &MissingParameterError{Param: param, ActionType: actionType, Reason: "must be positive"}
+			}
+		case float64:
+			if v <= 0 {
+				return &MissingParameterError{Param: param, ActionType: actionType, Reason: "must be positive"}
 			}
 		}
 	}

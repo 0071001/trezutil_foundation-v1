@@ -2,6 +2,7 @@ package commerce
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -95,16 +96,21 @@ func (r *CommerceActionRuntime) Execute(
 	// 4. Validate parameters.
 	if r.parameterValidator != nil {
 		if err := r.parameterValidator.Validate(ctx, action.ActionType, action.Parameters); err != nil {
+			field := ""
+			var missing *MissingParameterError
+			if errors.As(err, &missing) {
+				field = missing.Param
+			}
 			result.Status = domain.ActionResultValidationFailed
 			result.MessageKey = "ACTION_VALIDATION_FAILED"
-			result.Errors = append(result.Errors, domain.NewActionError("INVALID_PARAM", err.Error(), ""))
+			result.Errors = append(result.Errors, domain.NewActionError("INVALID_PARAM", err.Error(), field))
 			return result, nil
 		}
 	}
 
 	// 5. Check idempotency.
 	if action.IsIdempotent() && r.idempotencyStore != nil {
-		if status, data, found := r.idempotencyStore.Check(ctx, action.IdempotencyKey); found {
+		if status, data, found := r.idempotencyStore.Check(ctx, scopedIdempotencyKey(action)); found {
 			result.Status = status
 			result.MessageKey = "ACTION_IDEMPOTENT_CACHE_HIT"
 			if data != nil {
@@ -215,7 +221,7 @@ func (r *CommerceActionRuntime) Execute(
 		if result.NextAction != nil {
 			actionResult.SetNextAction(result.NextAction.ActionType, result.NextAction.Description)
 		}
-		if err := r.idempotencyStore.Store(ctx, action.IdempotencyKey, *actionResult); err != nil {
+		if err := r.idempotencyStore.Store(ctx, scopedIdempotencyKey(action), *actionResult); err != nil {
 			r.logger.Warn().Err(err).Str("action_id", action.ActionID).Msg("Failed to store idempotency result")
 		}
 	}
@@ -273,4 +279,11 @@ func (r *CommerceActionRuntime) releaseReservation(ctx context.Context, reservat
 	delete(r.reservations, reservationID)
 	r.mu.Unlock()
 	return nil
+}
+
+// scopedIdempotencyKey namespaces a client idempotency key by tenant, actor
+// and action type, so one caller replaying another caller's key can never
+// receive that caller's cached result.
+func scopedIdempotencyKey(action *domain.CommerceAction) string {
+	return action.TenantID + "|" + action.Actor.ID + "|" + string(action.ActionType) + "|" + action.IdempotencyKey
 }

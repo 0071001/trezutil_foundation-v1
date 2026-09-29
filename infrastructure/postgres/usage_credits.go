@@ -51,6 +51,7 @@ func (r *CreditAccountRepository) FindByID(ctx context.Context, accountID string
 		WHERE account_id = $1
 	`
 	var account domain.CreditAccount
+	var createdAt, updatedAt time.Time
 	err := r.db.QueryRowContext(ctx, q, accountID).Scan(
 		&account.AccountID,
 		&account.OwnerType,
@@ -61,12 +62,14 @@ func (r *CreditAccountRepository) FindByID(ctx context.Context, accountID string
 		&account.Granted,
 		&account.Reserved,
 		&account.Consumed,
-		&account.CreatedAt,
-		&account.UpdatedAt,
+		&createdAt,
+		&updatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find credit account by ID: %w", err)
 	}
+	account.CreatedAt = toUnix(createdAt)
+	account.UpdatedAt = toUnix(updatedAt)
 	return &account, nil
 }
 
@@ -77,6 +80,7 @@ func (r *CreditAccountRepository) FindByOwner(ctx context.Context, ownerType dom
 		WHERE owner_type = $1 AND owner_id = $2 AND tenant_id = $3
 	`
 	var account domain.CreditAccount
+	var createdAt, updatedAt time.Time
 	err := r.db.QueryRowContext(ctx, q, ownerType, ownerID, tenantID).Scan(
 		&account.AccountID,
 		&account.OwnerType,
@@ -87,12 +91,14 @@ func (r *CreditAccountRepository) FindByOwner(ctx context.Context, ownerType dom
 		&account.Granted,
 		&account.Reserved,
 		&account.Consumed,
-		&account.CreatedAt,
-		&account.UpdatedAt,
+		&createdAt,
+		&updatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find credit account by owner: %w", err)
 	}
+	account.CreatedAt = toUnix(createdAt)
+	account.UpdatedAt = toUnix(updatedAt)
 	return &account, nil
 }
 

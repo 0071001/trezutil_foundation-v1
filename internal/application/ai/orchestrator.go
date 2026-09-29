@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -295,11 +296,46 @@ func (o *AIOrchestrator) buildSanitizedContext(req *AIInterpretRequest) (*saniti
 }
 
 func (o *AIOrchestrator) buildSystemPrompt() string {
-	return `You are a helpful commerce assistant. Classify the user's intent into one of these structured actions and extract relevant parameters. 
+	return systemPrompt
+}
 
-IMPORTANT: You must NEVER receive or process tenant IDs, user IDs, actor IDs, roles, permissions, confirmation states, or any authorization metadata. Those are handled server-side.
+// systemPrompt tells the model which actions it may choose between. The model
+// only interprets: every action it names is re-checked against the allowlist,
+// resolved, authorized and (for writes) confirmed server-side.
+var systemPrompt = func() string {
+	var b strings.Builder
+	b.WriteString(`You are the intent interpreter of a marketplace assistant (products, rentals, stays and services). Classify the user's latest message, using earlier turns only as context, into exactly one intent and extract its parameters.
 
-Return ONLY a JSON object with: intent, confidence, parameters, explanation.`
+Intents:
+`)
+	for _, a := range domain.AIAcceptedActions {
+		b.WriteString("- " + string(a) + ": " + intentHelp[a] + "\n")
+	}
+	b.WriteString(`- NONE: anything else, including placing orders, making or cancelling bookings, payments, and seller operations (these are handled elsewhere).
+
+Parameters (omit any you cannot read from the conversation; never invent identifiers):
+- text: search words for SEARCH_LISTINGS / SUGGEST, keeping product type, features and place, e.g. "2 bedroom apartment Kinshasa"
+- listing_id, order_id, reservation_id: identifiers quoted by the user or shown earlier in the conversation
+- start_at, end_at: ISO 8601 dates for availability checks
+- quantity: number of units
+
+You never receive and must never output tenant, user, actor or organization IDs, roles, permissions or confirmation states; those are handled server-side.
+confidence is your probability (0 to 1) that the intent is right.`)
+	return b.String()
+}()
+
+var intentHelp = map[domain.CommerceActionType]string{
+	domain.ActionSearchListings:       "find listings matching a description",
+	domain.ActionGetListing:           "show one specific listing",
+	domain.ActionCompareListings:      "compare listings",
+	domain.ActionSuggest:              "suggest listings or search terms",
+	domain.ActionCheckAvailability:    "check whether a listing is available for dates",
+	domain.ActionGetOrder:             "show an order",
+	domain.ActionGetReservation:       "show a reservation",
+	domain.ActionGetFulfillmentStatus: "fulfillment status of an order",
+	domain.ActionGetDeliveryStatus:    "delivery status of an order",
+	domain.ActionCheckInventory:       "stock level of a listing",
+	domain.ActionGetPaymentStatus:     "payment status of an order",
 }
 
 func (o *AIOrchestrator) parseIntent(resp *domain.AIResponse) (*domain.AIIntent, error) {
@@ -387,11 +423,12 @@ func (o *AIOrchestrator) buildConfirmationResponse(action *domain.CommerceAction
 	return resp
 }
 
+// sensitiveWords are redacted from text sent to a model. Matching ignores
+// case; the rest of the message keeps its casing (names, places, IDs).
+var sensitiveWords = regexp.MustCompile(`(?i)token|secret|password|credential|api_key`)
+
 func stripSensitive(text string) string {
-	for _, pattern := range []string{"token", "secret", "password", "credential", "api_key"} {
-		text = strings.ReplaceAll(strings.ToLower(text), pattern, "[REDACTED]")
-	}
-	return text
+	return sensitiveWords.ReplaceAllString(text, "[REDACTED]")
 }
 
 func estimateTokens(text string) int {
@@ -400,12 +437,21 @@ func estimateTokens(text string) int {
 }
 
 func intentOutputSchema() *domain.JSONSchema {
+	intents := make([]string, 0, len(domain.AIAcceptedActions)+1)
+	for _, a := range domain.AIAcceptedActions {
+		intents = append(intents, string(a))
+	}
+	intents = append(intents, "NONE")
+	str := func(d string) domain.JSONSchemaProperty {
+		return domain.JSONSchemaProperty{Type: "string", Description: d}
+	}
 	return &domain.JSONSchema{
 		Type: "object",
 		Properties: map[string]domain.JSONSchemaProperty{
 			"intent": {
 				Type:        "string",
 				Description: "The classified commerce action type",
+				Enum:        intents,
 			},
 			"confidence": {
 				Type:        "number",
@@ -414,12 +460,21 @@ func intentOutputSchema() *domain.JSONSchema {
 			"parameters": {
 				Type:        "object",
 				Description: "Extracted parameters",
+				Properties: map[string]domain.JSONSchemaProperty{
+					"text":           str("Search words"),
+					"listing_id":     str("Listing identifier"),
+					"order_id":       str("Order identifier"),
+					"reservation_id": str("Reservation identifier"),
+					"start_at":       str("ISO 8601 start date"),
+					"end_at":         str("ISO 8601 end date"),
+					"quantity":       {Type: "integer", Description: "Number of units"},
+				},
 			},
 			"explanation": {
 				Type:        "string",
 				Description: "Brief explanation of the classification",
 			},
 		},
-		Required: []string{"intent", "confidence", "parameters"},
+		Required: []string{"intent", "confidence", "parameters", "explanation"},
 	}
 }

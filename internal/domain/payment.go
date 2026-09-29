@@ -80,6 +80,10 @@ const (
 //     processing has started (i.e. once status leaves CREATED).
 //   - No sensitive credentials are stored — only tokenized references.
 type Payment struct {
+	// ClientAction carries transient, payer-facing data returned by the
+	// provider for completing the payment in the browser (e.g. a Stripe
+	// client_secret). It is never persisted.
+	ClientAction      map[string]string
 	ID                string
 	TenantID          string
 	OrderID           string

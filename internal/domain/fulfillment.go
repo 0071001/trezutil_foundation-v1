@@ -127,7 +127,7 @@ func NewFulfillment(tenantID string, orderID, reservationID *string, ftype Fulfi
 	}
 
 	return &Fulfillment{
-		ID:            "",
+		ID:            NewID(),
 		TenantID:      tenantID,
 		OrderID:       orderID,
 		ReservationID: reservationID,

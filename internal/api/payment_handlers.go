@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/trezutil/trezutil/internal/domain"
+	"github.com/trezutil/trezutil/packages/auth"
 )
 
 // PaymentUseCases defines the interface for payment operations in the API layer.
@@ -31,10 +32,44 @@ type PaymentWebhookProcessor interface {
 	ProcessWebhook(ctx context.Context, orgID, providerCode string, signature string, body []byte) error
 }
 
+// PaymentAccess authorizes payment operations for the authenticated actor.
+type PaymentAccess interface {
+	CanCreate(ctx context.Context, actorID, orgID, orderID string) error
+	CanView(ctx context.Context, actorID, orgID, paymentID string) error
+	CanManage(ctx context.Context, actorID, orgID, paymentID string) error
+}
+
 // PaymentHandler handles payment HTTP requests.
 type PaymentHandler struct {
 	paymentUseCases PaymentUseCases
 	webhookHandler  PaymentWebhookProcessor
+	access          PaymentAccess
+}
+
+// WithAccessPolicy sets the authorization policy applied to every
+// non-webhook endpoint. Production wiring must always set it.
+func (h *PaymentHandler) WithAccessPolicy(access PaymentAccess) *PaymentHandler {
+	h.access = access
+	return h
+}
+
+// authorize runs check (when a policy is configured) and writes 403/404 on refusal.
+func (h *PaymentHandler) authorize(w http.ResponseWriter, check func(PaymentAccess) error) bool {
+	if h.access == nil {
+		return true
+	}
+	err := check(h.access)
+	switch {
+	case err == nil:
+		return true
+	case errors.Is(err, domain.ErrInsufficientPermissions):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
+	case errors.Is(err, domain.ErrOrderNotFound):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_NOT_FOUND", Message: "Order not found"}}, http.StatusNotFound)
+	default:
+		writeJSON(w, ErrorResponse{Error: Error{Code: "PAYMENT_NOT_FOUND", Message: "Payment not found"}}, http.StatusNotFound)
+	}
+	return false
 }
 
 // NewPaymentHandler creates a new PaymentHandler.
@@ -66,13 +101,9 @@ func (h *PaymentHandler) orgIDFromQuery(w http.ResponseWriter, r *http.Request) 
 	return orgID, true
 }
 
-func (h *PaymentHandler) actorIDFromQuery(w http.ResponseWriter, r *http.Request) (string, bool) {
-	actorID := r.URL.Query().Get("user_id")
-	if actorID == "" {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "user_id required"}}, http.StatusUnauthorized)
-		return "", false
-	}
-	return actorID, true
+// actorID returns the authenticated user; client-supplied user IDs are ignored.
+func (h *PaymentHandler) actorID(w http.ResponseWriter, r *http.Request) (string, bool) {
+	return auth.RequireUser(w, r)
 }
 
 // CreatePaymentH handles POST /api/v1/payments
@@ -81,7 +112,7 @@ func (h *PaymentHandler) CreatePaymentH(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	actorID, ok := h.actorIDFromQuery(w, r)
+	actorID, ok := h.actorID(w, r)
 	if !ok {
 		return
 	}
@@ -126,6 +157,16 @@ func (h *PaymentHandler) CreatePaymentH(w http.ResponseWriter, r *http.Request) 
 		idempotencyKey = r.Header.Get("Idempotency-Key")
 	}
 
+	// Keys that drive server-side settlement (credit purchases) are never
+	// accepted from clients.
+	for _, reserved := range []string{"credit_pack", "plan_id", "owner_type", "owner_id", "organization_id", "order_id"} {
+		delete(req.Metadata, reserved)
+	}
+
+	if !h.authorize(w, func(a PaymentAccess) error { return a.CanCreate(r.Context(), actorID, orgID, req.OrderID) }) {
+		return
+	}
+
 	p, err := h.paymentUseCases.CreatePayment(r.Context(), orgID, actorID, req.OrderID,
 		domain.Money{AmountMinor: req.AmountMinor, Currency: req.Currency},
 		methodType, req.PaymentMethodID, idempotencyKey, req.Metadata)
@@ -134,18 +175,33 @@ func (h *PaymentHandler) CreatePaymentH(w http.ResponseWriter, r *http.Request) 
 			writeJSON(w, ErrorResponse{Error: Error{Code: "IDEMPOTENCY_CONFLICT", Message: err.Error()}}, http.StatusConflict)
 			return
 		}
+		if errors.Is(err, domain.ErrOrderNotPayable) {
+			writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_NOT_PAYABLE", Message: err.Error()}}, http.StatusConflict)
+			return
+		}
+		if errors.Is(err, domain.ErrNoProvidersAvailable) || errors.Is(err, domain.ErrProviderNotUsable) {
+			writeJSON(w, ErrorResponse{Error: Error{Code: "PAYMENT_PROVIDER_UNAVAILABLE", Message: "No payment provider is currently available"}}, http.StatusServiceUnavailable)
+			return
+		}
 		writeJSON(w, ErrorResponse{Error: Error{Code: "PAYMENT_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
 		return
 	}
 
-	writeJSON(w, map[string]interface{}{
+	resp := map[string]interface{}{
 		"payment_id":          p.ID,
 		"status":              string(p.Status),
 		"amount":              p.Amount.AmountMinor,
 		"currency":            p.Amount.Currency,
 		"provider_id":         p.ProviderID,
 		"provider_payment_id": p.ProviderPaymentID,
-	}, http.StatusCreated)
+	}
+	if len(p.ClientAction) > 0 {
+		// Payer-facing completion data (e.g. Stripe client_secret +
+		// publishable key for Stripe.js). Only the authorized payer or
+		// organization staff reach this point.
+		resp["client_action"] = p.ClientAction
+	}
+	writeJSON(w, resp, http.StatusCreated)
 }
 
 // GetPaymentH handles GET /api/v1/payments/{payment_id}
@@ -156,6 +212,13 @@ func (h *PaymentHandler) GetPaymentH(w http.ResponseWriter, r *http.Request) {
 	}
 	paymentID, ok := h.paymentIDFromPath(w, r)
 	if !ok {
+		return
+	}
+	actorID, ok := h.actorID(w, r)
+	if !ok {
+		return
+	}
+	if !h.authorize(w, func(a PaymentAccess) error { return a.CanView(r.Context(), actorID, orgID, paymentID) }) {
 		return
 	}
 
@@ -178,7 +241,7 @@ func (h *PaymentHandler) CancelPaymentH(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	actorID, ok := h.actorIDFromQuery(w, r)
+	actorID, ok := h.actorID(w, r)
 	if !ok {
 		return
 	}
@@ -188,6 +251,9 @@ func (h *PaymentHandler) CancelPaymentH(w http.ResponseWriter, r *http.Request) 
 	}
 
 	idempotencyKey := r.Header.Get("Idempotency-Key")
+	if !h.authorize(w, func(a PaymentAccess) error { return a.CanView(r.Context(), actorID, orgID, paymentID) }) {
+		return
+	}
 
 	p, err := h.paymentUseCases.CancelPayment(r.Context(), orgID, actorID, paymentID, idempotencyKey)
 	if err != nil {
@@ -208,7 +274,7 @@ func (h *PaymentHandler) CapturePaymentH(w http.ResponseWriter, r *http.Request)
 	if !ok {
 		return
 	}
-	actorID, ok := h.actorIDFromQuery(w, r)
+	actorID, ok := h.actorID(w, r)
 	if !ok {
 		return
 	}
@@ -234,6 +300,10 @@ func (h *PaymentHandler) CapturePaymentH(w http.ResponseWriter, r *http.Request)
 		if amount.Currency == "" {
 			amount.Currency = "USD"
 		}
+	}
+
+	if !h.authorize(w, func(a PaymentAccess) error { return a.CanManage(r.Context(), actorID, orgID, paymentID) }) {
+		return
 	}
 
 	p, err := h.paymentUseCases.CapturePayment(r.Context(), orgID, actorID, paymentID, idempotencyKey, amount)
@@ -255,7 +325,7 @@ func (h *PaymentHandler) RefundPaymentH(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	actorID, ok := h.actorIDFromQuery(w, r)
+	actorID, ok := h.actorID(w, r)
 	if !ok {
 		return
 	}
@@ -281,6 +351,10 @@ func (h *PaymentHandler) RefundPaymentH(w http.ResponseWriter, r *http.Request) 
 		if amount.Currency == "" {
 			amount.Currency = "USD"
 		}
+	}
+
+	if !h.authorize(w, func(a PaymentAccess) error { return a.CanManage(r.Context(), actorID, orgID, paymentID) }) {
+		return
 	}
 
 	p, refund, err := h.paymentUseCases.RefundPayment(r.Context(), orgID, actorID, paymentID, idempotencyKey, amount)
@@ -321,6 +395,14 @@ func (h *PaymentHandler) GetRefundH(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	actorID, ok := h.actorID(w, r)
+	if !ok {
+		return
+	}
+	if !h.authorize(w, func(a PaymentAccess) error { return a.CanView(r.Context(), actorID, orgID, paymentID) }) {
+		return
+	}
+
 	refunds, err := h.paymentUseCases.ListRefunds(r.Context(), orgID, paymentID, 0, 100)
 	if err != nil {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "REFUND_LIST_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
@@ -343,7 +425,7 @@ func (h *PaymentHandler) GetPaymentStatusH(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
-	actorID, ok := h.actorIDFromQuery(w, r)
+	actorID, ok := h.actorID(w, r)
 	if !ok {
 		return
 	}
@@ -353,6 +435,10 @@ func (h *PaymentHandler) GetPaymentStatusH(w http.ResponseWriter, r *http.Reques
 	}
 
 	idempotencyKey := r.Header.Get("Idempotency-Key")
+
+	if !h.authorize(w, func(a PaymentAccess) error { return a.CanView(r.Context(), actorID, orgID, paymentID) }) {
+		return
+	}
 
 	p, err := h.paymentUseCases.GetPaymentStatus(r.Context(), orgID, actorID, paymentID, idempotencyKey)
 	if err != nil {
@@ -393,6 +479,9 @@ func (h *PaymentHandler) WebhookPaymentH(w http.ResponseWriter, r *http.Request)
 	signature := r.Header.Get("X-Signature")
 	if signature == "" {
 		signature = r.Header.Get("X-Payment-Signature")
+	}
+	if signature == "" {
+		signature = r.Header.Get("Stripe-Signature")
 	}
 
 	if h.webhookHandler == nil {

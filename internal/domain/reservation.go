@@ -35,7 +35,7 @@ type Reservation struct {
 // NewReservation creates a new Reservation in PENDING status.
 func NewReservation(organizationID, customerID, listingID string, startAt, endAt int64, quantity, partySize int, now int64) *Reservation {
 	return &Reservation{
-		ID:             "",
+		ID:             NewID(),
 		OrganizationID: organizationID,
 		CustomerID:     customerID,
 		ListingID:      listingID,

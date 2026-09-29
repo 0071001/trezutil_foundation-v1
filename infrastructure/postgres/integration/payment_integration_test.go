@@ -61,8 +61,12 @@ func (a *integrationTestProviderAdapter) CreatePayment(ctx context.Context, req 
 	return resp, nil
 }
 
+// GetPayment reports the provider-side state of an existing payment. After
+// creation the payer has completed authorization, so the provider reports it
+// authorized (AuthorizePayment syncs this state instead of creating a second
+// provider payment).
 func (a *integrationTestProviderAdapter) GetPayment(ctx context.Context, providerPaymentID string) (domain.PaymentProviderResponse, error) {
-	return a.createResp, nil
+	return domain.PaymentProviderResponse{ProviderPaymentID: providerPaymentID, Status: "authorized"}, nil
 }
 
 func (a *integrationTestProviderAdapter) CancelPayment(ctx context.Context, providerPaymentID string) (domain.PaymentProviderResponse, error) {
@@ -99,6 +103,8 @@ type testEnv struct {
 	orderID    string
 	providerID string
 	ctx        context.Context
+	adapter    *integrationTestProviderAdapter
+	orders     *postgres.OrderRepository
 }
 
 func setupPaymentIntegration(t *testing.T) *testEnv {
@@ -128,7 +134,7 @@ func setupPaymentIntegration(t *testing.T) *testEnv {
 		Items:          []*domain.OrderItem{},
 		TotalAmount:    domain.Money{AmountMinor: 1000, Currency: "USD"},
 		Currency:       "USD",
-		Status:         domain.OrderStatusConfirmed,
+		Status:         domain.OrderStatusPendingPayment,
 		Version:        1,
 		CreatedAt:      time.Now().Unix(),
 		UpdatedAt:      time.Now().Unix(),
@@ -198,6 +204,7 @@ func setupPaymentIntegration(t *testing.T) *testEnv {
 		Orders:       orderRepo,
 		Orchestrator: orchestrator,
 		Logger:       zerolog.Nop(),
+		Locker:       postgres.NewAdvisoryLocker(db.DB),
 	})
 
 	whHandler := payment.NewWebhookHandler(payment.WebhookHandlerConfig{
@@ -207,6 +214,7 @@ func setupPaymentIntegration(t *testing.T) *testEnv {
 		Events:            webhookStore,
 		Providers:         providerRepo,
 		SignatureVerifier: nil,
+		Orders:            orderRepo,
 		Logger:            zerolog.Nop(),
 	})
 
@@ -218,6 +226,8 @@ func setupPaymentIntegration(t *testing.T) *testEnv {
 		orderID:    orderID,
 		providerID: providerID,
 		ctx:        ctx,
+		adapter:    adapter,
+		orders:     orderRepo,
 	}
 }
 
@@ -992,5 +1002,94 @@ func TestPaymentIntegration_LedgerEntriesPersist(t *testing.T) {
 	}
 	if !creditFound {
 		t.Error("expected to find CREDIT entry for revenue account")
+	}
+}
+
+// Concurrent FULL refunds with distinct idempotency keys must result in exactly
+// one provider refund, one refund row and one refund ledger entry (money must
+// not leave twice). Uses the production PostgreSQL advisory locker.
+func TestPaymentIntegration_ConcurrentFullRefunds_ExactlyOneProviderRefund(t *testing.T) {
+	env := setupPaymentIntegration(t)
+	defer env.db.Close()
+
+	p, err := env.svc.CreatePayment(env.ctx, env.orgID, "actor-1", env.orderID,
+		domain.Money{AmountMinor: 1000, Currency: "USD"},
+		domain.PaymentMethodCard, "method-123", "idem-full-ref-create", nil)
+	if err != nil {
+		t.Fatalf("CreatePayment failed: %v", err)
+	}
+	if p, err = env.svc.AuthorizePayment(env.ctx, env.orgID, "actor-1", p.ID, "idem-full-ref-auth"); err != nil {
+		t.Fatalf("AuthorizePayment failed: %v", err)
+	}
+	if p, err = env.svc.CapturePayment(env.ctx, env.orgID, "actor-1", p.ID, "idem-full-ref-cap", nil); err != nil {
+		t.Fatalf("CapturePayment failed: %v", err)
+	}
+	before := atomic.LoadInt32(&env.adapter.refundCallCount)
+
+	var wg sync.WaitGroup
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			_, _, _ = env.svc.RefundPayment(env.ctx, env.orgID, "actor-1", p.ID,
+				fmt.Sprintf("idem-full-ref-%d", idx), &domain.Money{AmountMinor: 1000, Currency: "USD"})
+		}(i)
+	}
+	wg.Wait()
+
+	if calls := atomic.LoadInt32(&env.adapter.refundCallCount) - before; calls != 1 {
+		t.Fatalf("expected exactly 1 provider refund call, got %d", calls)
+	}
+	var succeeded int
+	if err := env.db.DB.QueryRow(`SELECT COUNT(*) FROM refunds WHERE payment_id = $1 AND status = 'succeeded'`, p.ID).Scan(&succeeded); err != nil {
+		t.Fatal(err)
+	}
+	if succeeded != 1 {
+		t.Fatalf("expected 1 succeeded refund row, got %d", succeeded)
+	}
+	updated, _ := env.svc.GetPayment(env.ctx, env.orgID, p.ID)
+	if updated.RefundedAmount.AmountMinor != 1000 {
+		t.Fatalf("expected refunded amount 1000, got %d", updated.RefundedAmount.AmountMinor)
+	}
+}
+
+// Capturing a payment must move its order to PAID (Order -> Payment -> Capture -> Ledger).
+func TestPaymentIntegration_CaptureMarksOrderPaid(t *testing.T) {
+	env := setupPaymentIntegration(t)
+	defer env.db.Close()
+
+	p, err := env.svc.CreatePayment(env.ctx, env.orgID, "actor-1", env.orderID,
+		domain.Money{AmountMinor: 1000, Currency: "USD"},
+		domain.PaymentMethodCard, "method-123", "idem-order-paid", nil)
+	if err != nil {
+		t.Fatalf("CreatePayment failed: %v", err)
+	}
+	if p, err = env.svc.AuthorizePayment(env.ctx, env.orgID, "actor-1", p.ID, "idem-order-paid-auth"); err != nil {
+		t.Fatalf("AuthorizePayment failed: %v", err)
+	}
+	if _, err = env.svc.CapturePayment(env.ctx, env.orgID, "actor-1", p.ID, "idem-order-paid-cap", nil); err != nil {
+		t.Fatalf("CapturePayment failed: %v", err)
+	}
+	order, err := env.orders.FindByIDAndOrg(env.ctx, env.orgID, env.orderID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if order.Status != domain.OrderStatusPaid {
+		t.Fatalf("expected order status paid after capture, got %s", order.Status)
+	}
+
+	// A paid order must not accept a second payment.
+	if _, err := env.svc.CreatePayment(env.ctx, env.orgID, "actor-1", env.orderID,
+		domain.Money{AmountMinor: 1000, Currency: "USD"},
+		domain.PaymentMethodCard, "method-123", "idem-order-paid-2", nil); err == nil {
+		t.Fatal("expected second payment for a paid order to be rejected")
+	}
+
+	var ledger int
+	if err := env.db.DB.QueryRow(`SELECT COUNT(*) FROM payment_ledger WHERE payment_id = $1`, p.ID).Scan(&ledger); err != nil {
+		t.Fatal(err)
+	}
+	if ledger != 2 {
+		t.Fatalf("expected 2 capture ledger entries (debit cash, credit revenue), got %d", ledger)
 	}
 }

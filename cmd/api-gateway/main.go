@@ -1,39 +1,23 @@
+// Command api-gateway is the single public entry point: it serves the SPA and
+// proxies /api/v1/* to internal services.
 package main
 
 import (
 	"log"
-	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 
-	"github.com/rs/zerolog"
 	"github.com/trezutil/trezutil/internal/gateway"
+	"github.com/trezutil/trezutil/packages/common"
 )
 
 func main() {
-	logger := zerolog.New(os.Stdout).With().Timestamp().Logger()
+	logger := common.Logger("api-gateway")
 	cfg := gateway.LoadConfig()
 	gw := gateway.New(cfg, logger)
 
-	server := &http.Server{
-		Addr:    cfg.Addr,
-		Handler: gw.Handler(),
-	}
-
-	go func() {
-		logger.Info().Str("addr", cfg.Addr).Msg("api-gateway starting")
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
-		}
-	}()
-
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
-
-	logger.Info().Msg("Shutting down api-gateway...")
-	if err := server.Close(); err != nil {
-		log.Fatalf("server shutdown error: %v", err)
+	srv := common.NewServer(cfg.Addr, gw.Handler())
+	// Proxied responses (e.g. search) may take longer than the default write timeout.
+	srv.WriteTimeout = cfg.UpstreamTimeout + 5e9
+	if err := common.Run(srv, logger, "api-gateway"); err != nil {
+		log.Fatalf("api-gateway: %v", err)
 	}
 }

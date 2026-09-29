@@ -6,6 +6,7 @@ import (
 
 	"github.com/trezutil/trezutil/internal/application/provider"
 	"github.com/trezutil/trezutil/internal/domain"
+	"github.com/trezutil/trezutil/packages/auth"
 )
 
 type ProviderHandler struct {
@@ -17,7 +18,7 @@ func NewProviderHandler(providerUseCases ProviderUseCases) *ProviderHandler {
 }
 
 func (h *ProviderHandler) ListProvidersH(w http.ResponseWriter, r *http.Request) {
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -66,7 +67,7 @@ func (h *ProviderHandler) GetProviderH(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -97,7 +98,7 @@ func (h *ProviderHandler) GetProviderH(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *ProviderHandler) CreateProviderH(w http.ResponseWriter, r *http.Request) {
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -159,7 +160,7 @@ func (h *ProviderHandler) EnableProviderH(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -194,7 +195,7 @@ func (h *ProviderHandler) DisableProviderH(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return
@@ -229,7 +230,7 @@ func (h *ProviderHandler) GetProviderCapabilitiesH(w http.ResponseWriter, r *htt
 		return
 	}
 
-	actorID := r.URL.Query().Get("user_id")
+	actorID := auth.UserID(r.Context())
 	if actorID == "" {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
 		return

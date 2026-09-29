@@ -75,7 +75,7 @@ type OrderItem struct {
 func NewOrderItem(orderID, listingID, title string, quantity int, unitPrice Money, now int64) *OrderItem {
 	totalAmount := unitPrice.AmountMinor * int64(quantity)
 	return &OrderItem{
-		ID:         "",
+		ID:         NewID(),
 		OrderID:    orderID,
 		ListingID:  listingID,
 		Title:      title,
@@ -226,15 +226,17 @@ type Order struct {
 	DeliveryReference DeliveryReference
 	Customer          CustomerReference
 	Seller            SellerReference
-	CreatedAt         int64
-	UpdatedAt         int64
-	Version           int64
+	// IdempotencyKey deduplicates retried checkouts per customer.
+	IdempotencyKey string
+	CreatedAt      int64
+	UpdatedAt      int64
+	Version        int64
 }
 
 // NewOrder creates a new Order in DRAFT status.
 func NewOrder(organizationID, sellerID, customerID, storeID string, items []*OrderItem, currency string, now int64) *Order {
 	order := &Order{
-		ID:             "",
+		ID:             NewID(),
 		OrganizationID: organizationID,
 		SellerID:       sellerID,
 		CustomerID:     customerID,

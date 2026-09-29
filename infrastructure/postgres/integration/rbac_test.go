@@ -55,8 +55,11 @@ func TestRoleRepository_GetAll(t *testing.T) {
 		t.Fatalf("GetAll failed: %v", err)
 	}
 
-	if len(roles) != 0 {
-		t.Fatalf("Expected 0 roles initially, got %d", len(roles))
+	// Migration 000018 seeds the platform roles (customer, seller, staff,
+	// admin, operator, moderator, delivery_partner).
+	seeded := len(roles)
+	if seeded != len(domain.AllRoles) {
+		t.Fatalf("Expected %d seeded roles initially, got %d", len(domain.AllRoles), seeded)
 	}
 
 	now := time.Now()
@@ -76,8 +79,8 @@ func TestRoleRepository_GetAll(t *testing.T) {
 		t.Fatalf("GetAll failed: %v", err)
 	}
 
-	if len(roles) != 2 {
-		t.Fatalf("Expected 2 roles, got %d", len(roles))
+	if len(roles) != seeded+2 {
+		t.Fatalf("Expected %d roles, got %d", seeded+2, len(roles))
 	}
 }
 
@@ -302,7 +305,8 @@ func TestRBAC_PlatformVsOrganizationRoles(t *testing.T) {
 	}
 
 	now := time.Now()
-	_, err := testDB.DB.ExecContext(ctx, "INSERT INTO roles (id, name, description, created_at) VALUES ($1, $2, $3, $4)",
+	// The admin role is seeded by migration 000018; inserting it again is a no-op.
+	_, err := testDB.DB.ExecContext(ctx, "INSERT INTO roles (id, name, description, created_at) VALUES ($1, $2, $3, $4) ON CONFLICT (name) DO NOTHING",
 		"123e4567-e89b-12d3-a456-426614174094", "admin", "Platform admin", now)
 	if err != nil {
 		t.Fatalf("Failed to insert platform role: %v", err)

@@ -73,19 +73,50 @@ func (r *OrderRepository) Create(ctx context.Context, order *domain.Order) error
 		return fmt.Errorf("failed to marshal seller reference: %w", err)
 	}
 
-	query := `INSERT INTO orders (id, organization_id, seller_id, customer_id, store_id, items, total_amount, currency, status, pricing_snapshot, payment_reference, delivery_reference, customer_reference, seller_reference, version, created_at, updated_at)
-	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`
+	query := `INSERT INTO orders (id, organization_id, seller_id, customer_id, store_id, items, total_amount, currency, status, pricing_snapshot, payment_reference, delivery_reference, customer_reference, seller_reference, version, created_at, updated_at, idempotency_key)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)`
+
+	var idem sql.NullString
+	if order.IdempotencyKey != "" {
+		idem = sql.NullString{String: order.IdempotencyKey, Valid: true}
+	}
 
 	_, err = r.db.ExecContext(ctx, query,
 		order.ID, order.OrganizationID, order.SellerID, order.CustomerID, order.StoreID,
 		string(itemsJSON), order.TotalAmount.AmountMinor, order.Currency, string(order.Status),
 		string(pricingJSON), string(paymentJSON), string(deliveryJSON), string(customerJSON), string(sellerJSON),
-		order.Version, toTime(order.CreatedAt), toTime(order.UpdatedAt),
+		order.Version, toTime(order.CreatedAt), toTime(order.UpdatedAt), idem,
 	)
 	if err != nil {
+		if isUniqueViolation(err) && order.IdempotencyKey != "" {
+			return domain.ErrIdempotencyConflict
+		}
 		return fmt.Errorf("failed to create order: %w", err)
 	}
 	return nil
+}
+
+// FindByCustomerIdempotencyKey retrieves the order a customer created with the given key.
+func (r *OrderRepository) FindByCustomerIdempotencyKey(ctx context.Context, customerID, idempotencyKey string) (*domain.Order, error) {
+	query := `SELECT id, organization_id, seller_id, customer_id, store_id, items, total_amount, currency, status, pricing_snapshot, payment_reference, delivery_reference, customer_reference, seller_reference, version, created_at, updated_at
+	          FROM orders WHERE customer_id = $1 AND idempotency_key = $2`
+	var u orderRow
+	err := r.db.QueryRowContext(ctx, query, customerID, idempotencyKey).Scan(
+		&u.ID, &u.OrganizationID, &u.SellerID, &u.CustomerID, &u.StoreID,
+		&u.ItemsJSON, &u.TotalAmount, &u.Currency, &u.Status,
+		&u.PricingSnapshotJSON, &u.PaymentReferenceJSON, &u.DeliveryReferenceJSON,
+		&u.CustomerReferenceJSON, &u.SellerReferenceJSON,
+		&u.Version, &u.CreatedAt, &u.UpdatedAt,
+	)
+	if err == sql.ErrNoRows {
+		return nil, domain.ErrOrderNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("failed to find order by idempotency key: %w", err)
+	}
+	order := unmarshalOrder(u)
+	order.IdempotencyKey = idempotencyKey
+	return order, nil
 }
 
 // FindByID retrieves an order by ID.
@@ -197,12 +228,12 @@ func (r *OrderRepository) Update(ctx context.Context, order *domain.Order) error
 	          items = $1, total_amount = $2, currency = $3, status = $4, pricing_snapshot = $5,
 	          payment_reference = $6, delivery_reference = $7, customer_reference = $8,
 	          seller_reference = $9, version = $10, updated_at = $11
-	          WHERE id = $12`
+	          WHERE id = $12 AND version = $13`
 
 	result, err := r.db.ExecContext(ctx, query,
 		string(itemsJSON), order.TotalAmount.AmountMinor, order.Currency, string(order.Status),
 		string(pricingJSON), string(paymentJSON), string(deliveryJSON), string(customerJSON), string(sellerJSON),
-		order.Version, toTime(order.UpdatedAt), order.ID,
+		order.Version, toTime(order.UpdatedAt), order.ID, order.Version-1,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update order: %w", err)
@@ -213,6 +244,10 @@ func (r *OrderRepository) Update(ctx context.Context, order *domain.Order) error
 		return fmt.Errorf("failed to check rows affected: %w", err)
 	}
 	if rowsAffected == 0 {
+		var exists bool
+		if err := r.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM orders WHERE id = $1)`, order.ID).Scan(&exists); err == nil && exists {
+			return domain.ErrOptimisticLock
+		}
 		return fmt.Errorf("order not found: %s", order.ID)
 	}
 
@@ -281,4 +316,54 @@ func unmarshalOrder(u orderRow) *domain.Order {
 	}
 
 	return order
+}
+
+// FindByCustomerID lists a customer's orders, newest first.
+func (r *OrderRepository) FindByCustomerID(ctx context.Context, customerID string, limit, offset int) ([]*domain.Order, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, organization_id, seller_id, customer_id, store_id, items, total_amount, currency, status, pricing_snapshot, payment_reference, delivery_reference, customer_reference, seller_reference, version, created_at, updated_at
+	          FROM orders WHERE customer_id = $1 ORDER BY created_at DESC, id LIMIT $2 OFFSET $3`, customerID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list orders: %w", err)
+	}
+	defer rows.Close()
+	var out []*domain.Order
+	for rows.Next() {
+		var u orderRow
+		if err := rows.Scan(
+			&u.ID, &u.OrganizationID, &u.SellerID, &u.CustomerID, &u.StoreID,
+			&u.ItemsJSON, &u.TotalAmount, &u.Currency, &u.Status,
+			&u.PricingSnapshotJSON, &u.PaymentReferenceJSON, &u.DeliveryReferenceJSON,
+			&u.CustomerReferenceJSON, &u.SellerReferenceJSON,
+			&u.Version, &u.CreatedAt, &u.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan order: %w", err)
+		}
+		out = append(out, unmarshalOrder(u))
+	}
+	return out, rows.Err()
+}
+
+// FindByOrganizationID lists an organization's orders, newest first.
+func (r *OrderRepository) FindByOrganizationID(ctx context.Context, organizationID string, limit, offset int) ([]*domain.Order, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT id, organization_id, seller_id, customer_id, store_id, items, total_amount, currency, status, pricing_snapshot, payment_reference, delivery_reference, customer_reference, seller_reference, version, created_at, updated_at
+	          FROM orders WHERE organization_id = $1 ORDER BY created_at DESC, id LIMIT $2 OFFSET $3`, organizationID, limit, offset)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list organization orders: %w", err)
+	}
+	defer rows.Close()
+	var out []*domain.Order
+	for rows.Next() {
+		var u orderRow
+		if err := rows.Scan(
+			&u.ID, &u.OrganizationID, &u.SellerID, &u.CustomerID, &u.StoreID,
+			&u.ItemsJSON, &u.TotalAmount, &u.Currency, &u.Status,
+			&u.PricingSnapshotJSON, &u.PaymentReferenceJSON, &u.DeliveryReferenceJSON,
+			&u.CustomerReferenceJSON, &u.SellerReferenceJSON,
+			&u.Version, &u.CreatedAt, &u.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan order: %w", err)
+		}
+		out = append(out, unmarshalOrder(u))
+	}
+	return out, rows.Err()
 }

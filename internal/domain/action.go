@@ -47,7 +47,7 @@ type ConfirmationData struct {
 func NewCommerceAction(actionType CommerceActionType, actor CommerceActor, conversationID string) *CommerceAction {
 	now := time.Now().Unix()
 	return &CommerceAction{
-		ActionID:          "",
+		ActionID:          NewID(),
 		ActionType:        actionType,
 		Actor:             actor,
 		TenantID:          "",

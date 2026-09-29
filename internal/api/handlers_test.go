@@ -60,6 +60,7 @@ func TestOrganizationHandler_CreateOrganization(t *testing.T) {
 			// Create request
 			payloadBytes, _ := json.Marshal(tt.payload)
 			req := httptest.NewRequest(http.MethodPost, "/v1/organizations?user_id="+tt.userID, bytes.NewReader(payloadBytes))
+			req = asQueryUser(req)
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
@@ -148,6 +149,7 @@ func TestSellerHandler_CreateSeller(t *testing.T) {
 			handler := NewSellerHandler(&mockSellerUseCases{})
 			payloadBytes, _ := json.Marshal(tt.payload)
 			req := httptest.NewRequest(http.MethodPost, "/v1/sellers?user_id="+tt.userID, bytes.NewReader(payloadBytes))
+			req = asQueryUser(req)
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
@@ -193,6 +195,7 @@ func TestStoreHandler_CreateStore(t *testing.T) {
 			handler := NewStoreHandler(&mockStoreUseCases{})
 			payloadBytes, _ := json.Marshal(tt.payload)
 			req := httptest.NewRequest(http.MethodPost, "/v1/stores?user_id="+tt.userID, bytes.NewReader(payloadBytes))
+			req = asQueryUser(req)
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
@@ -326,6 +329,7 @@ func TestListingHandler_CreateListing(t *testing.T) {
 			handler := NewListingHandler(&mockListingUseCases{})
 			payloadBytes, _ := json.Marshal(tt.payload)
 			req := httptest.NewRequest(http.MethodPost, "/v1/listings?user_id="+tt.actorID, bytes.NewReader(payloadBytes))
+			req = asQueryUser(req)
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
@@ -398,6 +402,7 @@ func TestListingHandler_PublishListing(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := NewListingHandler(&mockListingUseCases{})
 			req := httptest.NewRequest(http.MethodPost, "/v1/listings/publish?user_id="+tt.actorID+"&listing_id="+tt.listingID, nil)
+			req = asQueryUser(req)
 			w := httptest.NewRecorder()
 
 			handler.PublishListingH(w, req)
@@ -435,6 +440,7 @@ func TestListingHandler_PauseListing(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := NewListingHandler(&mockListingUseCases{})
 			req := httptest.NewRequest(http.MethodPost, "/v1/listings/pause?user_id="+tt.actorID+"&listing_id="+tt.listingID, nil)
+			req = asQueryUser(req)
 			w := httptest.NewRecorder()
 
 			handler.PauseListingH(w, req)
@@ -472,6 +478,7 @@ func TestListingHandler_ResumeListing(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := NewListingHandler(&mockListingUseCases{})
 			req := httptest.NewRequest(http.MethodPost, "/v1/listings/resume?user_id="+tt.actorID+"&listing_id="+tt.listingID, nil)
+			req = asQueryUser(req)
 			w := httptest.NewRecorder()
 
 			handler.ResumeListingH(w, req)
@@ -676,6 +683,7 @@ func TestOrderHandler_CreateOrder(t *testing.T) {
 			handler := NewOrderHandler(&mockOrderUseCases{})
 			payloadBytes, _ := json.Marshal(tt.payload)
 			req := httptest.NewRequest(http.MethodPost, "/v1/orders?user_id="+tt.actorID, bytes.NewReader(payloadBytes))
+			req = asQueryUser(req)
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
@@ -732,6 +740,7 @@ func TestOrderHandler_GetOrder(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := NewOrderHandler(&mockOrderUseCases{})
 			req := httptest.NewRequest(http.MethodGet, "/v1/orders?order_id="+tt.orderID+"&user_id="+tt.actorID, nil)
+			req = asQueryUser(req)
 			w := httptest.NewRecorder()
 
 			handler.GetOrderH(w, req)
@@ -793,6 +802,7 @@ func TestOrderHandler_CancelOrder(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := NewOrderHandler(&mockOrderUseCases{})
 			req := httptest.NewRequest(http.MethodPost, "/v1/orders/cancel?order_id="+tt.orderID+"&user_id="+tt.actorID, nil)
+			req = asQueryUser(req)
 			w := httptest.NewRecorder()
 
 			handler.CancelOrderH(w, req)
@@ -854,6 +864,7 @@ func TestOrderHandler_ConfirmOrder(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := NewOrderHandler(&mockOrderUseCases{})
 			req := httptest.NewRequest(http.MethodPost, "/v1/orders/confirm?order_id="+tt.orderID+"&user_id="+tt.actorID, nil)
+			req = asQueryUser(req)
 			w := httptest.NewRecorder()
 
 			handler.ConfirmOrderH(w, req)
@@ -940,6 +951,7 @@ func TestReservationHandler_CreateReservationH(t *testing.T) {
 			handler := NewReservationHandler(&mockReservationUseCases{}, &mockAvailabilityUseCases{})
 			payloadBytes, _ := json.Marshal(tt.payload)
 			req := httptest.NewRequest(http.MethodPost, "/v1/reservations?user_id="+tt.actorID, bytes.NewReader(payloadBytes))
+			req = asQueryUser(req)
 			req.Header.Set("Content-Type", "application/json")
 			w := httptest.NewRecorder()
 
@@ -968,6 +980,7 @@ func TestReservationHandler_CreateReservationH_Idempotency(t *testing.T) {
 
 	// First request
 	req1 := httptest.NewRequest(http.MethodPost, "/v1/reservations?user_id=user-123", bytes.NewReader(payloadBytes))
+	req1 = asQueryUser(req1)
 	req1.Header.Set("Content-Type", "application/json")
 	req1.Header.Set("Idempotency-Key", idempotencyKey)
 	w1 := httptest.NewRecorder()
@@ -975,6 +988,7 @@ func TestReservationHandler_CreateReservationH_Idempotency(t *testing.T) {
 
 	// Second request with same idempotency key
 	req2 := httptest.NewRequest(http.MethodPost, "/v1/reservations?user_id=user-123", bytes.NewReader(payloadBytes))
+	req2 = asQueryUser(req2)
 	req2.Header.Set("Content-Type", "application/json")
 	req2.Header.Set("Idempotency-Key", idempotencyKey)
 	w2 := httptest.NewRecorder()
@@ -1037,6 +1051,7 @@ func TestReservationHandler_GetReservationH(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := NewReservationHandler(&mockReservationUseCases{}, &mockAvailabilityUseCases{})
 			req := httptest.NewRequest(http.MethodGet, "/v1/reservations/"+tt.reservationID+"?user_id="+tt.actorID, nil)
+			req = asQueryUser(req)
 			w := httptest.NewRecorder()
 
 			handler.GetReservationH(w, req)
@@ -1098,6 +1113,7 @@ func TestReservationHandler_CancelReservationH(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := NewReservationHandler(&mockReservationUseCases{}, &mockAvailabilityUseCases{})
 			req := httptest.NewRequest(http.MethodPost, "/v1/reservations/"+tt.reservationID+"/cancel?user_id="+tt.actorID, nil)
+			req = asQueryUser(req)
 			w := httptest.NewRecorder()
 
 			handler.CancelReservationH(w, req)
@@ -1153,6 +1169,7 @@ func TestReservationHandler_CheckAvailabilityH(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			handler := NewReservationHandler(&mockReservationUseCases{}, &mockAvailabilityUseCases{})
 			req := httptest.NewRequest(http.MethodGet, "/v1/availability?"+tt.queryParams+"&user_id="+tt.actorID, nil)
+			req = asQueryUser(req)
 			w := httptest.NewRecorder()
 
 			handler.CheckAvailabilityH(w, req)

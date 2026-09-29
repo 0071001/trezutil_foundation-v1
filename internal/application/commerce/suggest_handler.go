@@ -29,7 +29,7 @@ func (h *SuggestHandler) Handle(ctx context.Context, actor domain.CommerceActor,
 	}
 
 	limit := 10
-	if v, ok := parameters["limit"].(int); ok && v > 0 {
+	if v, ok := intParam(parameters, "limit"); ok && v > 0 {
 		limit = v
 	}
 

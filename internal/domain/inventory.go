@@ -53,7 +53,7 @@ func NewInventoryResource(tenantID, listingID string, resourceType ResourceType,
 		total = 0
 	}
 	return &InventoryResource{
-		ID:           "",
+		ID:           NewID(),
 		TenantID:     tenantID,
 		ListingID:    listingID,
 		ResourceType: resourceType,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/trezutil/trezutil/internal/domain"
@@ -42,12 +43,12 @@ func (h *CreateReservationHandler) Handle(ctx context.Context, actor domain.Comm
 	}
 
 	quantity := 1
-	if v, ok := parameters["quantity"].(int); ok && v > 0 {
+	if v, ok := intParam(parameters, "quantity"); ok && v > 0 {
 		quantity = v
 	}
 
 	partySize := 0
-	if v, ok := parameters["party_size"].(int); ok && v >= 0 {
+	if v, ok := intParam(parameters, "party_size"); ok && v >= 0 {
 		partySize = v
 	}
 
@@ -176,12 +177,12 @@ func (h *CheckAvailabilityHandler) Handle(ctx context.Context, actor domain.Comm
 	}
 
 	quantity := 1
-	if v, ok := parameters["quantity"].(int); ok && v > 0 {
+	if v, ok := intParam(parameters, "quantity"); ok && v > 0 {
 		quantity = v
 	}
 
 	partySize := 0
-	if v, ok := parameters["party_size"].(int); ok && v >= 0 {
+	if v, ok := intParam(parameters, "party_size"); ok && v >= 0 {
 		partySize = v
 	}
 
@@ -219,10 +220,38 @@ func parseInt64(v interface{}) (int64, error) {
 	case float64:
 		return int64(val), nil
 	case string:
-		return strconv.ParseInt(val, 10, 64)
+		if n, err := strconv.ParseInt(strings.TrimSpace(val), 10, 64); err == nil {
+			return n, nil
+		}
+		// Human dates from conversations: "2026-10-01", "2026-10-01 14:00", RFC 3339.
+		for _, layout := range []string{time.RFC3339, "2006-01-02 15:04", "2006-01-02T15:04", "2006-01-02"} {
+			if t, err := time.Parse(layout, strings.TrimSpace(val)); err == nil {
+				return t.Unix(), nil
+			}
+		}
+		f, err := strconv.ParseFloat(strings.TrimSpace(val), 64)
+		if err != nil {
+			return 0, err
+		}
+		return int64(f), nil
 	default:
 		return 0, fmt.Errorf("cannot parse %T as int64", v)
 	}
+}
+
+// intParam reads an integer parameter regardless of how it was encoded:
+// Go int (internal callers), float64 (JSON) or string (AI / conversation
+// entities). It returns ok=false when the parameter is absent or not numeric.
+func intParam(parameters map[string]interface{}, key string) (int, bool) {
+	v, present := parameters[key]
+	if !present || v == nil {
+		return 0, false
+	}
+	n, err := parseInt64(v)
+	if err != nil {
+		return 0, false
+	}
+	return int(n), true
 }
 
 func parseTime(v interface{}) (time.Time, error) {

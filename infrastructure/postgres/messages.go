@@ -55,6 +55,9 @@ func (s *MessageStore) Create(ctx context.Context, message *domain.Message) erro
 		message.Language, toTime(message.CreatedAt),
 	)
 	if err != nil {
+		if isUniqueViolation(err) {
+			return domain.ErrDuplicateMessage
+		}
 		return fmt.Errorf("failed to create message: %w", err)
 	}
 	return nil

@@ -29,7 +29,7 @@ const (
 
 func NewUser(phone string, displayName string) *User {
 	return &User{
-		ID:          "",
+		ID:          NewID(),
 		Phone:       phone,
 		DisplayName: displayName,
 		Status:      UserStatusPendingVerified,

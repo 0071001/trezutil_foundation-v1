@@ -24,7 +24,7 @@ func (h *CreateOrderHandler) Handle(ctx context.Context, actor domain.CommerceAc
 	}
 
 	quantity := 1
-	if v, ok := parameters["quantity"].(int); ok && v > 0 {
+	if v, ok := intParam(parameters, "quantity"); ok && v > 0 {
 		quantity = v
 	}
 

@@ -56,11 +56,11 @@ func (s *SearchService) ExecuteSearch(ctx context.Context, actorID string, query
 		return domain.SearchResultPage{}, fmt.Errorf("unauthorized: %w", err)
 	}
 
-	// Inject visibility constraints into query
-	query.SellerID = actorID
-	if visibility.OrganizationID != nil {
-		query.StoreID = *visibility.OrganizationID
-	}
+	// Public discovery: the engine restricts results to published listings.
+	// The caller's identity must never be injected as a seller filter —
+	// doing so hid every listing not sold by the searching user. Explicit
+	// seller/store filters supplied in the query are preserved.
+	_ = visibility
 
 	// Execute search via engine
 	result, err := s.searchEngine.ExecuteSearch(ctx, query)
@@ -84,11 +84,28 @@ func (s *SearchService) Suggest(ctx context.Context, actorID string, req domain.
 		return domain.SuggestResponse{}, fmt.Errorf("unauthorized: %w", err)
 	}
 
-	// For now, return empty suggestions
-	// In the future, this will delegate to a suggest engine
-	return domain.SuggestResponse{
-		Suggestions: []domain.Suggestion{},
-	}, nil
+	suggester, ok := s.searchEngine.(suggestEngine)
+	if !ok || req.Text == "" {
+		return domain.SuggestResponse{Suggestions: []domain.Suggestion{}}, nil
+	}
+	limit := req.Limit
+	if limit <= 0 || limit > 20 {
+		limit = 10
+	}
+	suggestions, err := suggester.Suggest(ctx, req.Text, req.CategoryID, limit)
+	if err != nil {
+		return domain.SuggestResponse{}, fmt.Errorf("suggest engine error: %w", err)
+	}
+	if suggestions == nil {
+		suggestions = []domain.Suggestion{}
+	}
+	return domain.SuggestResponse{Suggestions: suggestions}, nil
+}
+
+// suggestEngine is implemented by search engines that support autocomplete
+// (the OpenSearch adapter).
+type suggestEngine interface {
+	Suggest(ctx context.Context, text string, categoryID *string, limit int) ([]domain.Suggestion, error)
 }
 
 // InMemorySearchEngine is a stub implementation of SearchEnginePort for testing.

@@ -224,14 +224,14 @@ func (f *fakeReservationRepo) ReserveCreditsTx(ctx context.Context, accountID st
 
 	resID := fmt.Sprintf("res-%s-%d", accountID, now)
 	reservation := &domain.UsageReservation{
-		ReservationID:   resID,
-		AccountID:       accountID,
-		ActionType:      actionType,
-		Amount:          cost,
-		ReservedAt:      now,
-		Status:          domain.UsageReservationActive,
-		IdempotencyKey:  idempotencyKey,
-		TenantID:        tenantID,
+		ReservationID:  resID,
+		AccountID:      accountID,
+		ActionType:     actionType,
+		Amount:         cost,
+		ReservedAt:     now,
+		Status:         domain.UsageReservationActive,
+		IdempotencyKey: idempotencyKey,
+		TenantID:       tenantID,
 	}
 
 	account.Reserved += cost

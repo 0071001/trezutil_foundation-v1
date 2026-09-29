@@ -57,6 +57,7 @@ func (u *AvailabilityUseCasesImpl) CheckAvailability(ctx context.Context, actorI
 		return domain.AvailabilityResult{}, fmt.Errorf("listing has no organization")
 	}
 
+	query.TenantID = tenantID
 	result, err := u.provider.CheckAvailability(ctx, query)
 	if err != nil {
 		return domain.AvailabilityResult{}, fmt.Errorf("availability check failed: %w", err)
