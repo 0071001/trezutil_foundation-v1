@@ -1,0 +1,67 @@
+# Minimal production alerts. Thresholds are deliberately conservative: they
+# should fire on a real problem, not on normal customer behaviour (a declined
+# card or a fully booked hotel is not an incident). Tune after the first weeks
+# of real traffic. Each alert's first operator action is in
+# docs/finalization/PRODUCTION_DEPLOYMENT.md, section "Alerts".
+groups:
+  - name: trezutil
+    rules:
+      - alert: TrezutilHigh5xxRate
+        # More than 5% of requests failing with 5xx for 10 minutes, ignoring near-idle periods.
+        expr: |
+          sum(rate(trezutil_http_errors_total{class="5xx",service!="api-gateway"}[5m]))
+            / sum(rate(trezutil_http_requests_total{service!="api-gateway"}[5m])) > 0.05
+          and sum(rate(trezutil_http_requests_total{service!="api-gateway"}[5m])) > 0.2
+        for: 10m
+        labels: {severity: page}
+        annotations:
+          summary: "More than 5% of requests fail with a server error"
+          runbook: "Open the service logs filtered by level=error; group by error_code and request_id."
+
+      - alert: TrezutilPaymentFailures
+        # Five failed payments in 15 minutes: card declines are normal one at a time; a burst points at the provider or configuration.
+        expr: sum(increase(trezutil_payment_failures_total[15m])) >= 5
+        labels: {severity: page}
+        annotations:
+          summary: "Payments are failing in bursts"
+          runbook: "Check event=payment_failed logs (stage, reason) and the Stripe dashboard; verify STRIPE_SECRET_KEY and provider status."
+
+      - alert: TrezutilWebhookFailures
+        # Rejected or unprocessable webhooks (Stripe, WhatsApp). A bad signature repeating means a wrong webhook secret or a forgery attempt.
+        expr: sum by (code) (increase(trezutil_webhook_failures_total[15m])) >= 3
+        labels: {severity: page}
+        annotations:
+          summary: "Webhook deliveries are failing ({{ $labels.code }})"
+          runbook: "WEBHOOK_SIGNATURE_INVALID: compare the configured webhook secret with the provider dashboard. Others: read event=webhook_failed logs by request_id."
+
+      - alert: TrezutilReservationErrors
+        # Only unexpected reservation outcomes: refusals such as conflict or capacity are normal business results.
+        expr: sum(increase(trezutil_reservation_failures_total{reason=~"error|unknown_availability"}[15m])) >= 3
+        labels: {severity: ticket}
+        annotations:
+          summary: "Reservations are failing for internal reasons"
+          runbook: "Read event=reservation_failed logs with reason=error or unknown_availability; check the database and provider executions."
+
+      - alert: TrezutilProviderFailures
+        expr: sum by (provider, capability) (increase(trezutil_provider_failures_total[15m])) >= 5
+        labels: {severity: ticket}
+        annotations:
+          summary: "Provider {{ $labels.provider }} ({{ $labels.capability }}) is failing"
+          runbook: "Read the 'provider execution' logs for error_code and retry_class; check provider_executions rows for the organization; disable the provider if it is down."
+
+      - alert: TrezutilNotReady
+        # A service reports not ready (database unreachable) for five minutes.
+        expr: sum(increase(trezutil_readiness_failures_total[5m])) > 0
+        for: 5m
+        labels: {severity: page}
+        annotations:
+          summary: "A service reports not ready"
+          runbook: "curl /readyz on the service; check PostgreSQL health and connectivity, then restart the service."
+
+      - alert: TrezutilServiceDown
+        expr: up{job=~"trezutil-.*"} == 0
+        for: 2m
+        labels: {severity: page}
+        annotations:
+          summary: "Prometheus cannot scrape {{ $labels.instance }}"
+          runbook: "Check the container is running (docker compose ps), its /healthz, and METRICS_TOKEN for the gateway job."

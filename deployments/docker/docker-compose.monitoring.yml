@@ -1,0 +1,36 @@
+# Optional monitoring overlay: Prometheus with the Trezutil alert rules.
+#
+#   docker compose -f deployments/docker/docker-compose.app.yml \
+#                  -f deployments/docker/docker-compose.monitoring.yml \
+#                  --env-file deployments/docker/app.env up -d
+#
+# Requires METRICS_TOKEN (the same value the gateway serves /metrics with) in
+# app.env. Prometheus publishes no port; reach it through the host's private
+# network or an SSH tunnel, and route alerts with Alertmanager or a hosted
+# alerting service (see docs/finalization/PRODUCTION_DEPLOYMENT.md, "Alerts").
+services:
+  prometheus-init:
+    image: alpine:3.20
+    # Writes the scrape token to a file Prometheus can read (never committed).
+    command: ["sh", "-c", "printf '%s' \"$$METRICS_TOKEN\" > /out/metrics_token"]
+    environment:
+      METRICS_TOKEN: ${METRICS_TOKEN:?METRICS_TOKEN is required for monitoring}
+    volumes: [prometheus_token:/out]
+    networks: [internal]
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    restart: unless-stopped
+    depends_on:
+      prometheus-init:
+        condition: service_completed_successfully
+    volumes:
+      - ../../infrastructure/prometheus/prometheus.app.yml:/etc/prometheus/prometheus.yml:ro
+      - ../../infrastructure/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_token:/etc/prometheus/token:ro
+      - prometheus_data:/prometheus
+    networks: [internal]
+
+volumes:
+  prometheus_token:
+  prometheus_data:
