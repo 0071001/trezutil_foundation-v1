@@ -5,6 +5,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -240,9 +241,24 @@ func buildIntentClassifier(logger zerolog.Logger, usage domain.UsageService) con
 			RequestTimeout: time.Duration(common.GetenvInt("AI_REQUEST_TIMEOUT_SECONDS", 15)) * time.Second,
 			MaxRetries:     common.GetenvInt("AI_MAX_RETRIES", 2),
 		})
+		if errors.Is(err, anthropicai.ErrInvalidModel) {
+			// A wrong AI_MODEL is a deployment mistake, not a reason to silently degrade.
+			logger.Fatal().Err(err).Msg("invalid AI_MODEL")
+		}
 		if err != nil {
 			logger.Warn().Err(err).Msg("AI provider not configured; using keyword classification")
 			return &conversation.KeywordClassifier{}
+		}
+		if common.Getenv("AI_VERIFY_ON_START", "true") != "false" {
+			vctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+			verr := p.Verify(vctx)
+			cancel()
+			switch {
+			case errors.Is(verr, anthropicai.ErrInvalidModel), errors.Is(verr, anthropicai.ErrKeyRejected):
+				logger.Fatal().Err(verr).Msg("AI provider configuration rejected by the API")
+			case verr != nil:
+				logger.Warn().Err(verr).Msg("AI provider could not be verified at startup; continuing (keyword fallback covers outages)")
+			}
 		}
 		provider = p
 	default:

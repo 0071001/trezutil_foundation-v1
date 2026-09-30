@@ -8,7 +8,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -21,8 +23,30 @@ import (
 // ProviderID is the router identifier and the AI_PROVIDER value selecting it.
 const ProviderID = "anthropic"
 
-// DefaultModel is used when AI_MODEL is not set.
+// DefaultModel is used when AI_MODEL is not set. It is the ONLY place the
+// default lives: every service reads AI_MODEL and falls back to this constant.
+// "claude-opus-5" is a documented Anthropic API model id; set AI_MODEL to move
+// to another model (for example "claude-opus-5-5") without a code change.
 const DefaultModel = "claude-opus-5"
+
+var (
+	// ErrInvalidModel means the configured model id is malformed or unknown to
+	// the API. It is a configuration error: the service refuses to start.
+	ErrInvalidModel = errors.New("anthropic: invalid model")
+	// ErrKeyRejected means the API rejected the configured key.
+	ErrKeyRejected = errors.New("anthropic: API key rejected")
+
+	modelIDPattern = regexp.MustCompile(`^claude-[a-z0-9]+(-[a-z0-9.]+)*$`)
+)
+
+// ValidateModelID checks the shape of a model id (claude-<family>-<version>,
+// optionally date-suffixed). Whether the API serves it is checked by Verify.
+func ValidateModelID(id string) error {
+	if !modelIDPattern.MatchString(id) || len(id) > 64 {
+		return fmt.Errorf("%w: %q is not a Claude model id (expected e.g. claude-opus-5-5)", ErrInvalidModel, id)
+	}
+	return nil
+}
 
 // Config configures the provider. APIKey must come from the environment or a
 // secret store; it is never logged or returned in errors.
@@ -57,6 +81,9 @@ func New(cfg Config) (*Provider, error) {
 	if cfg.Model == "" {
 		cfg.Model = DefaultModel
 	}
+	if err := ValidateModelID(cfg.Model); err != nil {
+		return nil, err
+	}
 	if cfg.RequestTimeout <= 0 {
 		cfg.RequestTimeout = 20 * time.Second
 	}
@@ -81,6 +108,29 @@ func New(cfg Config) (*Provider, error) {
 		effort = sdk.OutputConfigEffortLow
 	}
 	return &Provider{client: sdk.NewClient(opts...), model: cfg.Model, effort: effort}, nil
+}
+
+// Verify asks the API whether it serves the configured model (GET
+// /v1/models/{id}) so a wrong AI_MODEL or key is found at startup, not on the
+// first customer request. Only a definite answer is an error: ErrInvalidModel
+// for 400/404, ErrKeyRejected for 401/403. A network failure or a 5xx returns
+// the raw error and the caller decides (the service starts and keeps its
+// keyword fallback).
+func (p *Provider) Verify(ctx context.Context) error {
+	_, err := p.client.Models.Get(ctx, p.model, sdk.ModelGetParams{})
+	if err == nil {
+		return nil
+	}
+	var apiErr *sdk.Error
+	if errors.As(err, &apiErr) {
+		switch apiErr.StatusCode {
+		case http.StatusBadRequest, http.StatusNotFound:
+			return fmt.Errorf("%w: the API does not serve %q", ErrInvalidModel, p.model)
+		case http.StatusUnauthorized, http.StatusForbidden:
+			return ErrKeyRejected
+		}
+	}
+	return err
 }
 
 func (p *Provider) ID() string                      { return ProviderID }

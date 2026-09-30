@@ -11,3 +11,6 @@ trezutil_demo_catalog
 .env
 .env.*
 deployments/docker/app.env
+
+# On hold (not part of the production migration sequence 000001-000021)
+migrations/000022_dispatch.sql

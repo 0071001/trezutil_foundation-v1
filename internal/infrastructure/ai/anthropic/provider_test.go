@@ -220,3 +220,48 @@ func TestGenerate_Timeout(t *testing.T) {
 		t.Fatal("timeouts are retryable by callers")
 	}
 }
+
+func TestValidateModelID(t *testing.T) {
+	for _, ok := range []string{"claude-opus-5", "claude-opus-5-5", "claude-haiku-4-5-20251001", "claude-fable-5-1"} {
+		if err := ValidateModelID(ok); err != nil {
+			t.Errorf("%s: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{"", "gpt-4", "Claude-Opus-5", "claude", "claude opus", "claude-opus-5;drop", strings.Repeat("claude-x", 20)} {
+		if err := ValidateModelID(bad); !errors.Is(err, ErrInvalidModel) {
+			t.Errorf("%q accepted: %v", bad, err)
+		}
+	}
+}
+
+func TestNewRejectsMalformedModelBeforeAnyRequest(t *testing.T) {
+	_, err := New(Config{APIKey: testKey, Model: "not-a-model"})
+	if !errors.Is(err, ErrInvalidModel) {
+		t.Fatalf("got %v", err)
+	}
+	if _, err := New(Config{APIKey: "", Model: "claude-opus-5"}); err == nil || errors.Is(err, ErrInvalidModel) {
+		t.Fatalf("a missing key is a different error, got %v", err)
+	}
+}
+
+func TestVerifyDistinguishesBadModelBadKeyAndOutage(t *testing.T) {
+	srv := anthropicfake.New(testKey, nil)
+	defer srv.Close()
+	srv.KnownModels = []string{"claude-opus-5"}
+	ctx := context.Background()
+
+	if err := newProvider(t, srv.URL, func(c *Config) { c.Model = "claude-opus-5" }).Verify(ctx); err != nil {
+		t.Fatalf("served model: %v", err)
+	}
+	if err := newProvider(t, srv.URL, func(c *Config) { c.Model = "claude-opus-9" }).Verify(ctx); !errors.Is(err, ErrInvalidModel) {
+		t.Fatalf("unknown model: %v", err)
+	}
+	if err := newProvider(t, srv.URL, func(c *Config) { c.APIKey = "sk-ant-wrong" }).Verify(ctx); !errors.Is(err, ErrKeyRejected) {
+		t.Fatalf("bad key: %v", err)
+	}
+	srv.Close()
+	err := newProvider(t, srv.URL, nil).Verify(ctx)
+	if err == nil || errors.Is(err, ErrInvalidModel) || errors.Is(err, ErrKeyRejected) {
+		t.Fatalf("an unreachable API must be a transient error, got %v", err)
+	}
+}

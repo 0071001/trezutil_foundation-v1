@@ -30,6 +30,8 @@ type Responder func(req map[string]interface{}) Reply
 type Handler struct {
 	APIKey  string
 	Respond Responder
+	// KnownModels restricts GET /v1/models/{id}; empty serves any claude-* id.
+	KnownModels []string
 
 	mu       sync.Mutex
 	requests []map[string]interface{}
@@ -64,6 +66,10 @@ func (h *Handler) Headers() []http.Header {
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/models/") {
+		h.serveModel(w, r)
+		return
+	}
 	if r.Method != http.MethodPost || r.URL.Path != "/v1/messages" {
 		writeJSON(w, http.StatusNotFound, apiError("not_found_error", "Not found"), nil)
 		return
@@ -97,6 +103,28 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		body = Message(model, reply.Text, reply.Stop)
 	}
 	writeJSON(w, reply.Status, body, reply.Headers)
+}
+
+// serveModel answers GET /v1/models/{id}: any claude-* id is served unless
+// KnownModels is set, in which case only those are.
+func (h *Handler) serveModel(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("x-api-key") != h.APIKey {
+		writeJSON(w, http.StatusUnauthorized, apiError("authentication_error", "invalid x-api-key"), nil)
+		return
+	}
+	id := strings.TrimPrefix(r.URL.Path, "/v1/models/")
+	known := strings.HasPrefix(id, "claude-")
+	if len(h.KnownModels) > 0 {
+		known = false
+		for _, m := range h.KnownModels {
+			known = known || m == id
+		}
+	}
+	if !known {
+		writeJSON(w, http.StatusNotFound, apiError("not_found_error", "model: "+id), nil)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]interface{}{"id": id, "type": "model", "display_name": id, "created_at": "2026-01-01T00:00:00Z"}, nil)
 }
 
 // Message builds a Messages API response.
