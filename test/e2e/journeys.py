@@ -314,7 +314,7 @@ st, det = call("GET", f"/listings?listing_id={lid}")
 check("SELLER: listing detail exposes its media list", st == 200 and isinstance(det.get("Media"), list), (st, det))
 
 # ---------- Journey S: Stripe payments (provider emulator, signed webhooks) ----------
-config = json.dumps({"settings": {"base_url": "http://127.0.0.1:12111", "capture_method": "automatic",
+config = json.dumps({"settings": {"base_url": os.environ.get("E2E_STRIPE_BASE", "http://127.0.0.1:12111"), "capture_method": "automatic",
                                    "publishable_key": "pk_test_e2e", "webhook_secret_ref": "env:STRIPE_E2E_WEBHOOK"}})
 sql(f"INSERT INTO providers (organization_id, code, name, type, status, capabilities, configuration, secret_ref, health_status) "
     f"VALUES ('{org}','stripe','Stripe','PAYMENT','ACTIVE','{{PAYMENT}}','{config}','env:STRIPE_E2E_SECRET','HEALTHY')")

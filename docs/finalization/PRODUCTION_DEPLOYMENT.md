@@ -128,6 +128,10 @@ Set `AI_PROVIDER=anthropic` and `ANTHROPIC_API_KEY` for conversation-service. Th
 - **Upgrades:** build a new image, run `migrate` (forward-only, idempotent), then roll services. Roll back by redeploying the previous image; migrations are additive.
 - **Monitoring:** alert on the gateway `/readyz`, the 5xx rate (`trezutil_http_errors_total{class="5xx"}`), `trezutil_webhook_failures_total`, `trezutil_payment_failures_total`, `trezutil_provider_failures_total`, request latency, payment webhook rows without processing (`payment_webhook_events`), and OpenSearch health.
 
+## 9a. Hardening (pass 1)
+
+`HARDENING_PASS_1.md` holds the AI configuration reference, the configuration matrix (what is required, what has no default), the alert table with a first action for each alert, the security findings and the staging verification record. Behind a TLS proxy set `TRUSTED_PROXY_HOPS=1`. To run Prometheus with the alert rules, add `-f deployments/docker/docker-compose.monitoring.yml` (needs `METRICS_TOKEN`).
+
 ## 10. Pre-launch checklist
 
 - [ ] `APP_ENV=production`, strong `JWT_SECRET`, `CORS_ALLOWED_ORIGINS` set to the real origin

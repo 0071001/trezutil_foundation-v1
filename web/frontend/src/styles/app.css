@@ -289,3 +289,6 @@ ol.steps-flow { list-style: none; margin: 0; padding: 0; }
   .stay-form .form-grid { grid-template-columns: 1fr 1fr; }
   .room-panel { grid-template-columns: 1fr; }
 }
+
+/* The floating assistant dock and bottom navigation must never cover the last content on a phone. */
+@media (max-width: 760px) { .app-content { padding-bottom: 10rem; } }
