@@ -183,7 +183,7 @@ func (h *PaymentHandler) CreatePaymentH(w http.ResponseWriter, r *http.Request) 
 			writeJSON(w, ErrorResponse{Error: Error{Code: "PAYMENT_PROVIDER_UNAVAILABLE", Message: "No payment provider is currently available"}}, http.StatusServiceUnavailable)
 			return
 		}
-		writeJSON(w, ErrorResponse{Error: Error{Code: "PAYMENT_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "PAYMENT_CREATE_FAILED", err)
 		return
 	}
 
@@ -228,7 +228,7 @@ func (h *PaymentHandler) GetPaymentH(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, ErrorResponse{Error: Error{Code: "PAYMENT_NOT_FOUND", Message: "Payment not found"}}, http.StatusNotFound)
 			return
 		}
-		writeJSON(w, ErrorResponse{Error: Error{Code: "PAYMENT_GET_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "PAYMENT_GET_FAILED", err)
 		return
 	}
 
@@ -257,7 +257,7 @@ func (h *PaymentHandler) CancelPaymentH(w http.ResponseWriter, r *http.Request) 
 
 	p, err := h.paymentUseCases.CancelPayment(r.Context(), orgID, actorID, paymentID, idempotencyKey)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "PAYMENT_CANCEL_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "PAYMENT_CANCEL_FAILED", err)
 		return
 	}
 
@@ -308,7 +308,7 @@ func (h *PaymentHandler) CapturePaymentH(w http.ResponseWriter, r *http.Request)
 
 	p, err := h.paymentUseCases.CapturePayment(r.Context(), orgID, actorID, paymentID, idempotencyKey, amount)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "PAYMENT_CAPTURE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "PAYMENT_CAPTURE_FAILED", err)
 		return
 	}
 
@@ -359,7 +359,14 @@ func (h *PaymentHandler) RefundPaymentH(w http.ResponseWriter, r *http.Request) 
 
 	p, refund, err := h.paymentUseCases.RefundPayment(r.Context(), orgID, actorID, paymentID, idempotencyKey, amount)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "PAYMENT_REFUND_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		switch {
+		case errors.Is(err, domain.ErrRefundAlreadyExists):
+			writeJSON(w, ErrorResponse{Error: Error{Code: "REFUND_ALREADY_EXISTS", Message: "A refund with this key already exists"}}, http.StatusConflict)
+		case errors.Is(err, domain.ErrRefundExceedsRemaining):
+			writeJSON(w, ErrorResponse{Error: Error{Code: "REFUND_EXCEEDS_REMAINING", Message: "The refund amount exceeds what is left to refund"}}, http.StatusConflict)
+		default:
+			writeFailure(w, "PAYMENT_REFUND_FAILED", err)
+		}
 		return
 	}
 
@@ -405,7 +412,7 @@ func (h *PaymentHandler) GetRefundH(w http.ResponseWriter, r *http.Request) {
 
 	refunds, err := h.paymentUseCases.ListRefunds(r.Context(), orgID, paymentID, 0, 100)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "REFUND_LIST_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "REFUND_LIST_FAILED", err)
 		return
 	}
 
@@ -446,7 +453,7 @@ func (h *PaymentHandler) GetPaymentStatusH(w http.ResponseWriter, r *http.Reques
 			writeJSON(w, ErrorResponse{Error: Error{Code: "PAYMENT_NOT_FOUND", Message: "Payment not found"}}, http.StatusNotFound)
 			return
 		}
-		writeJSON(w, ErrorResponse{Error: Error{Code: "PAYMENT_STATUS_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "PAYMENT_STATUS_FAILED", err)
 		return
 	}
 
@@ -496,7 +503,7 @@ func (h *PaymentHandler) WebhookPaymentH(w http.ResponseWriter, r *http.Request)
 		case domain.ErrWebhookEventDuplicate:
 			writeJSON(w, map[string]interface{}{"status": "duplicate"}, http.StatusOK)
 		default:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "WEBHOOK_PROCESSING_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeFailure(w, "WEBHOOK_PROCESSING_FAILED", err)
 		}
 		return
 	}

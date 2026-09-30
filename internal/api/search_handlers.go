@@ -205,7 +205,7 @@ func (h *SearchHandler) SuggestH(w http.ResponseWriter, r *http.Request) {
 
 	result, err := h.searchUseCases.Suggest(r.Context(), actorID, req)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "SUGGEST_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "SUGGEST_FAILED", err)
 		return
 	}
 

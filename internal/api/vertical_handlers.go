@@ -85,7 +85,7 @@ type VerticalPackHandler struct {
 func (h *VerticalPackHandler) ListPacks(w http.ResponseWriter, r *http.Request) {
 	packs, err := h.service.ListPacks()
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "PACKS_LIST_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "PACKS_LIST_FAILED", err)
 		return
 	}
 
@@ -110,9 +110,9 @@ func (h *VerticalPackHandler) GetPack(w http.ResponseWriter, r *http.Request) {
 	pack, err := h.service.GetPack(code)
 	if err != nil {
 		if err == ErrNotFound {
-			writeJSON(w, ErrorResponse{Error: Error{Code: "PACK_NOT_FOUND", Message: err.Error()}}, http.StatusNotFound)
+			writeJSON(w, ErrorResponse{Error: Error{Code: "PACK_NOT_FOUND", Message: "Pack not found"}}, http.StatusNotFound)
 		} else {
-			writeJSON(w, ErrorResponse{Error: Error{Code: "PACK_FETCH_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeFailure(w, "PACK_FETCH_FAILED", err)
 		}
 		return
 	}
@@ -140,7 +140,7 @@ func (h *VerticalPackHandler) EnablePack(w http.ResponseWriter, r *http.Request)
 	}
 
 	if err := h.service.EnablePack(orgID, code); err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "PACK_ENABLE_FAILED", Message: err.Error()}}, http.StatusBadRequest)
+		writeJSON(w, ErrorResponse{Error: Error{Code: "PACK_ENABLE_FAILED", Message: "The pack could not be enabled"}}, http.StatusBadRequest)
 		return
 	}
 
@@ -167,7 +167,7 @@ func (h *VerticalPackHandler) DisablePack(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := h.service.DisablePack(orgID, code); err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "PACK_DISABLE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "PACK_DISABLE_FAILED", err)
 		return
 	}
 
@@ -183,7 +183,7 @@ func (h *VerticalPackHandler) ListOrgPacks(w http.ResponseWriter, r *http.Reques
 
 	packs, err := h.service.ListOrgPacks(orgID)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "ORG_PACKS_LIST_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "ORG_PACKS_LIST_FAILED", err)
 		return
 	}
 

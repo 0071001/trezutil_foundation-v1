@@ -235,6 +235,8 @@ var (
 	ReservationFailures = NewCounter("trezutil_reservation_failures_total", "Reservation requests that failed.", "reason")
 	// ProviderFailures counts failed provider attempts.
 	ProviderFailures = NewCounter("trezutil_provider_failures_total", "Failed provider attempts.", "provider", "capability", "error_code")
+	// ReadinessFailures counts readiness probes that answered "not ready".
+	ReadinessFailures = NewCounter("trezutil_readiness_failures_total", "Readiness probes that reported not ready.", "reason")
 	// WebhookFailures counts webhooks that were rejected or could not be processed.
 	WebhookFailures = NewCounter("trezutil_webhook_failures_total", "Webhook deliveries that failed.", "service", "code")
 )

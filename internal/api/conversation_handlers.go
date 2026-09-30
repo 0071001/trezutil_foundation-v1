@@ -141,7 +141,7 @@ func (h *ConversationHandler) HandleConfirmAction(w http.ResponseWriter, r *http
 			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "This conversation belongs to another user"}}, http.StatusForbidden)
 			return
 		}
-		writeJSON(w, ErrorResponse{Error: Error{Code: "CONFIRMATION_FAILED", Message: err.Error()}}, http.StatusBadRequest)
+		writeJSON(w, ErrorResponse{Error: Error{Code: "CONFIRMATION_FAILED", Message: "The confirmation could not be applied"}}, http.StatusBadRequest)
 		return
 	}
 
@@ -180,7 +180,7 @@ func (h *ConversationHandler) HandleRejectAction(w http.ResponseWriter, r *http.
 			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "This conversation belongs to another user"}}, http.StatusForbidden)
 			return
 		}
-		writeJSON(w, ErrorResponse{Error: Error{Code: "REJECTION_FAILED", Message: err.Error()}}, http.StatusBadRequest)
+		writeJSON(w, ErrorResponse{Error: Error{Code: "REJECTION_FAILED", Message: "The rejection could not be applied"}}, http.StatusBadRequest)
 		return
 	}
 

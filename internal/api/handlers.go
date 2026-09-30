@@ -33,7 +33,6 @@ func readJSONBody(r *http.Request, v interface{}) error {
 	return json.NewDecoder(r.Body).Decode(v)
 }
 
-// writeJSON writes a JSON response with the given status code.
 // reservationFailureReason maps a reservation error to a short, bounded reason
 // for logs and metrics.
 func reservationFailureReason(err error) string {
@@ -61,11 +60,41 @@ func reservationFailureReason(err error) string {
 	}
 }
 
+// InternalErrorMessage is the only text a client ever receives for a 5xx.
+const InternalErrorMessage = "An internal error occurred. Quote the request id (X-Request-ID) if you contact support."
+
+// writeFailure answers an unexpected failure of an operation: a permission
+// denial is the 403 it always was, an unavailable dependency is 503, anything
+// else a generic 500 whose detail goes to the log only (see writeJSON).
+func writeFailure(w http.ResponseWriter, code string, err error) {
+	switch {
+	case errors.Is(err, domain.ErrInsufficientPermissions):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, context.Canceled):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "SERVICE_UNAVAILABLE", Message: err.Error()}}, http.StatusServiceUnavailable)
+	default:
+		writeJSON(w, ErrorResponse{Error: Error{Code: code, Message: err.Error()}}, http.StatusInternalServerError)
+	}
+}
+
+// writeJSON writes a JSON response with the given status code.
+//
+// Error bodies never carry internal detail on a 5xx: handlers may pass the raw
+// error text as the message, but it is replaced by InternalErrorMessage and the
+// original goes to the server log (with the request id, route and error code)
+// through the internal X-Error-* headers that the service middleware consumes
+// and removes before the response is sent.
 func writeJSON(w http.ResponseWriter, v interface{}, statusCode ...int) {
 	w.Header().Set("Content-Type", "application/json")
 	if er, ok := v.(ErrorResponse); ok {
-		// Consumed (and removed) by the service middleware for logs and metrics.
 		w.Header().Set(common.ErrorCodeHeader, er.Error.Code)
+		if len(statusCode) > 0 && statusCode[0] >= 500 {
+			if er.Error.Message != "" && er.Error.Message != InternalErrorMessage {
+				w.Header().Set(common.ErrorDetailHeader, er.Error.Message)
+			}
+			er.Error.Message = InternalErrorMessage
+			v = er
+		}
 	}
 	if len(statusCode) > 0 {
 		w.WriteHeader(statusCode[0])
@@ -176,7 +205,7 @@ func (h *OrganizationHandler) CreateOrganizationH(w http.ResponseWriter, r *http
 
 	err := h.orgUseCases.CreateOrganization(r.Context(), userID, &req)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "ORGANIZATION_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "ORGANIZATION_CREATE_FAILED", err)
 		return
 	}
 
@@ -217,7 +246,7 @@ func (h *OrganizationHandler) UpdateOrganizationH(w http.ResponseWriter, r *http
 
 	err := h.orgUseCases.UpdateOrganization(r.Context(), userID, orgID, updates)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "ORGANIZATION_UPDATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "ORGANIZATION_UPDATE_FAILED", err)
 		return
 	}
 
@@ -245,7 +274,7 @@ func (h *OrganizationHandler) AddMemberH(w http.ResponseWriter, r *http.Request)
 	role := domain.OrganizationRole(req.MembershipRole)
 	err := h.orgUseCases.AddMember(r.Context(), actorID, orgID, req.UserID, role)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "ADD_MEMBER_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "ADD_MEMBER_FAILED", err)
 		return
 	}
 
@@ -262,7 +291,7 @@ func (h *OrganizationHandler) GetMembersH(w http.ResponseWriter, r *http.Request
 
 	members, err := h.orgUseCases.GetMembers(r.Context(), orgID)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "GET_MEMBERS_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "GET_MEMBERS_FAILED", err)
 		return
 	}
 
@@ -281,7 +310,7 @@ func (h *OrganizationHandler) RemoveMemberH(w http.ResponseWriter, r *http.Reque
 
 	err := h.orgUseCases.RemoveMember(r.Context(), actorID, orgID, userID)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "REMOVE_MEMBER_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "REMOVE_MEMBER_FAILED", err)
 		return
 	}
 
@@ -314,7 +343,7 @@ func (h *SellerHandler) CreateSellerH(w http.ResponseWriter, r *http.Request) {
 
 	err := h.sellerUseCases.CreateSellerProfile(r.Context(), userID, &req)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "SELLER_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "SELLER_CREATE_FAILED", err)
 		return
 	}
 
@@ -355,7 +384,7 @@ func (h *SellerHandler) UpdateSellerH(w http.ResponseWriter, r *http.Request) {
 
 	err := h.sellerUseCases.UpdateSellerProfile(r.Context(), userID, sellerID, updates)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "SELLER_UPDATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "SELLER_UPDATE_FAILED", err)
 		return
 	}
 
@@ -388,7 +417,7 @@ func (h *StoreHandler) CreateStoreH(w http.ResponseWriter, r *http.Request) {
 
 	err := h.storeUseCases.CreateStore(r.Context(), userID, &req)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "STORE_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "STORE_CREATE_FAILED", err)
 		return
 	}
 
@@ -429,7 +458,7 @@ func (h *StoreHandler) UpdateStoreH(w http.ResponseWriter, r *http.Request) {
 
 	err := h.storeUseCases.UpdateStore(r.Context(), userID, storeID, updates)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "STORE_UPDATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "STORE_UPDATE_FAILED", err)
 		return
 	}
 
@@ -444,6 +473,17 @@ type OrderHandler struct {
 // NewOrderHandler creates a new OrderHandler.
 func NewOrderHandler(orderUseCases OrderUseCases) *OrderHandler {
 	return &OrderHandler{orderUseCases: orderUseCases}
+}
+
+// writeOrderCreateFailure answers an order-creation error that is not one of
+// the known public outcomes: an unavailable dependency (deadline, cancelled
+// request) is 503, everything else a generic 500. The detail is logged, never sent.
+func writeOrderCreateFailure(w http.ResponseWriter, err error) {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "SERVICE_UNAVAILABLE", Message: err.Error()}}, http.StatusServiceUnavailable)
+		return
+	}
+	writeFailure(w, "ORDER_CREATE_FAILED", err)
 }
 
 // createCartOrder handles POST /v1/orders with an items array.
@@ -480,7 +520,7 @@ func (h *OrderHandler) createCartOrder(w http.ResponseWriter, r *http.Request, a
 		case errors.Is(err, domain.ErrIdempotencyConflict):
 			writeJSON(w, ErrorResponse{Error: Error{Code: "IDEMPOTENCY_CONFLICT", Message: "Idempotency-Key was already used for a different order"}}, http.StatusConflict)
 		default:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeOrderCreateFailure(w, err)
 		}
 		return
 	}
@@ -539,17 +579,17 @@ func (h *OrderHandler) CreateOrderH(w http.ResponseWriter, r *http.Request) {
 		order, err = h.orderUseCases.CreateOrder(r.Context(), actorID, req.ListingID, req.Quantity)
 	}
 	if err != nil {
-		switch err {
-		case domain.ErrOrderNotFound:
+		switch {
+		case errors.Is(err, domain.ErrOrderNotFound):
 			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_NOT_FOUND", Message: "Listing not found"}}, http.StatusNotFound)
-		case domain.ErrInsufficientPermissions:
+		case errors.Is(err, domain.ErrInsufficientPermissions):
 			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
-		case domain.ErrListingUnavailable:
+		case errors.Is(err, domain.ErrListingUnavailable):
 			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_UNAVAILABLE", Message: "This listing is not available for purchase"}}, http.StatusConflict)
-		case domain.ErrIdempotencyConflict:
+		case errors.Is(err, domain.ErrIdempotencyConflict):
 			writeJSON(w, ErrorResponse{Error: Error{Code: "IDEMPOTENCY_CONFLICT", Message: "Idempotency-Key was already used for a different order"}}, http.StatusConflict)
 		default:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeOrderCreateFailure(w, err)
 		}
 		return
 	}
@@ -584,7 +624,7 @@ func (h *OrderHandler) GetOrderH(w http.ResponseWriter, r *http.Request) {
 		if err == domain.ErrOrderNotFound || err == domain.ErrInsufficientPermissions {
 			writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_NOT_FOUND", Message: "Order not found"}}, http.StatusNotFound)
 		} else {
-			writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_GET_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeFailure(w, "ORDER_GET_FAILED", err)
 		}
 		return
 	}
@@ -616,7 +656,7 @@ func (h *OrderHandler) CancelOrderH(w http.ResponseWriter, r *http.Request) {
 		case domain.ErrOrderCannotBeCancelled:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_TRANSITION", Message: "Order cannot be cancelled in current state"}}, http.StatusBadRequest)
 		default:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_CANCEL_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeFailure(w, "ORDER_CANCEL_FAILED", err)
 		}
 		return
 	}
@@ -646,7 +686,7 @@ func (h *OrderHandler) ConfirmOrderH(w http.ResponseWriter, r *http.Request) {
 		case domain.ErrInsufficientPermissions:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
 		default:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "CONFIRM_ORDER_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeFailure(w, "CONFIRM_ORDER_FAILED", err)
 		}
 		return
 	}
@@ -700,7 +740,7 @@ func (h *ListingHandler) CreateListingH(w http.ResponseWriter, r *http.Request) 
 		case errors.Is(err, domain.ErrInsufficientPermissions):
 			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
 		default:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeFailure(w, "LISTING_CREATE_FAILED", err)
 		}
 		return
 	}
@@ -752,7 +792,7 @@ func (h *ListingHandler) PublishListingH(w http.ResponseWriter, r *http.Request)
 
 	err := h.listingUseCases.PublishListing(r.Context(), actorID, listingID)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_PUBLISH_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "LISTING_PUBLISH_FAILED", err)
 		return
 	}
 
@@ -778,7 +818,7 @@ func (h *ListingHandler) PauseListingH(w http.ResponseWriter, r *http.Request) {
 		case domain.ErrInvalidStatusTransition:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_TRANSITION", Message: "Invalid status transition"}}, http.StatusBadRequest)
 		default:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_PAUSE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeFailure(w, "LISTING_PAUSE_FAILED", err)
 		}
 		return
 	}
@@ -805,7 +845,7 @@ func (h *ListingHandler) ResumeListingH(w http.ResponseWriter, r *http.Request) 
 		case domain.ErrInvalidStatusTransition:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_TRANSITION", Message: "Invalid status transition"}}, http.StatusBadRequest)
 		default:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_RESUME_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeFailure(w, "LISTING_RESUME_FAILED", err)
 		}
 		return
 	}
@@ -897,7 +937,7 @@ func (h *ReservationHandler) CreateReservationH(w http.ResponseWriter, r *http.R
 		case errors.Is(err, domain.ErrInvalidParameter):
 			writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_PARAMETER", Message: err.Error()}}, http.StatusBadRequest)
 		default:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "RESERVATION_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeFailure(w, "RESERVATION_CREATE_FAILED", err)
 		}
 		return
 	}
@@ -950,7 +990,7 @@ func (h *ReservationHandler) GetReservationH(w http.ResponseWriter, r *http.Requ
 		case domain.ErrInsufficientPermissions:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
 		default:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "RESERVATION_GET_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeFailure(w, "RESERVATION_GET_FAILED", err)
 		}
 		return
 	}
@@ -989,7 +1029,7 @@ func (h *ReservationHandler) CancelReservationH(w http.ResponseWriter, r *http.R
 		case domain.ErrReservationCannotBeCancelled:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_TRANSITION", Message: "Reservation cannot be cancelled in current state"}}, http.StatusBadRequest)
 		default:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "RESERVATION_CANCEL_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeFailure(w, "RESERVATION_CANCEL_FAILED", err)
 		}
 		return
 	}
@@ -1064,7 +1104,7 @@ func (h *ReservationHandler) CheckAvailabilityH(w http.ResponseWriter, r *http.R
 			writeJSON(w, ErrorResponse{Error: Error{Code: "AVAILABILITY_UNKNOWN", Message: "Availability could not be confirmed right now"}}, http.StatusServiceUnavailable)
 			return
 		}
-		writeJSON(w, ErrorResponse{Error: Error{Code: "AVAILABILITY_CHECK_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "AVAILABILITY_CHECK_FAILED", err)
 		return
 	}
 
@@ -1123,7 +1163,7 @@ func (h *InventoryHandler) ListInventory(w http.ResponseWriter, r *http.Request)
 
 	resources, err := h.inventoryUseCases.ListInventory(r.Context(), tenantID, offset, limit)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "INVENTORY_LIST_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "INVENTORY_LIST_FAILED", err)
 		return
 	}
 
@@ -1146,7 +1186,7 @@ func (h *InventoryHandler) GetInventory(w http.ResponseWriter, r *http.Request) 
 
 	resource, err := h.inventoryUseCases.GetInventoryByID(r.Context(), tenantID, id)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "INVENTORY_NOT_FOUND", Message: err.Error()}}, http.StatusNotFound)
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVENTORY_NOT_FOUND", Message: "Inventory not found"}}, http.StatusNotFound)
 		return
 	}
 
@@ -1174,7 +1214,7 @@ func (h *FulfillmentHandler) GetFulfillment(w http.ResponseWriter, r *http.Reque
 
 	fulfillment, err := h.fulfillmentUseCases.GetFulfillment(r.Context(), tenantID, id)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "FULFILLMENT_NOT_FOUND", Message: err.Error()}}, http.StatusNotFound)
+		writeJSON(w, ErrorResponse{Error: Error{Code: "FULFILLMENT_NOT_FOUND", Message: "Fulfillment not found"}}, http.StatusNotFound)
 		return
 	}
 
@@ -1192,7 +1232,7 @@ func (h *FulfillmentHandler) GetFulfillmentByOrder(w http.ResponseWriter, r *htt
 
 	fulfillment, err := h.fulfillmentUseCases.GetFulfillmentByOrder(r.Context(), tenantID, orderID)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "FULFILLMENT_NOT_FOUND", Message: err.Error()}}, http.StatusNotFound)
+		writeJSON(w, ErrorResponse{Error: Error{Code: "FULFILLMENT_NOT_FOUND", Message: "Fulfillment not found"}}, http.StatusNotFound)
 		return
 	}
 
@@ -1210,7 +1250,7 @@ func (h *FulfillmentHandler) GetFulfillmentByReservation(w http.ResponseWriter, 
 
 	fulfillment, err := h.fulfillmentUseCases.GetFulfillmentByReservation(r.Context(), tenantID, reservationID)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "FULFILLMENT_NOT_FOUND", Message: err.Error()}}, http.StatusNotFound)
+		writeJSON(w, ErrorResponse{Error: Error{Code: "FULFILLMENT_NOT_FOUND", Message: "Fulfillment not found"}}, http.StatusNotFound)
 		return
 	}
 
@@ -1254,7 +1294,7 @@ func (h *FulfillmentHandler) TransitionFulfillment(w http.ResponseWriter, r *htt
 
 	fulfillment, err := h.fulfillmentUseCases.TransitionFulfillment(r.Context(), actorID, tenantID, id, targetStatus, req.IdempotencyKey)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "FULFILLMENT_TRANSITION_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "FULFILLMENT_TRANSITION_FAILED", err)
 		return
 	}
 
@@ -1291,7 +1331,7 @@ func (h *FulfillmentHandler) AssignFulfillment(w http.ResponseWriter, r *http.Re
 
 	fulfillment, err := h.fulfillmentUseCases.AssignFulfillment(r.Context(), actorID, tenantID, id, req.IdempotencyKey)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "FULFILLMENT_ASSIGN_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "FULFILLMENT_ASSIGN_FAILED", err)
 		return
 	}
 
@@ -1329,7 +1369,7 @@ func (h *FulfillmentHandler) UpdateTracking(w http.ResponseWriter, r *http.Reque
 
 	fulfillment, err := h.fulfillmentUseCases.UpdateTracking(r.Context(), actorID, tenantID, id, req.TrackingRef, req.IdempotencyKey)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "FULFILLMENT_TRACKING_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		writeFailure(w, "FULFILLMENT_TRACKING_FAILED", err)
 		return
 	}
 

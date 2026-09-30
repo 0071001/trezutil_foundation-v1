@@ -74,6 +74,7 @@ func ReadyHandler(db *sql.DB) http.HandlerFunc {
 		if db != nil {
 			if err := db.PingContext(ctx); err != nil {
 				status, code = "database_unavailable", http.StatusServiceUnavailable
+				observability.ReadinessFailures.Inc(status)
 			}
 		}
 		w.Header().Set("Content-Type", "application/json")
@@ -183,6 +184,9 @@ func Observe(service string, logger zerolog.Logger, next http.Handler) http.Hand
 		if sw.errCode != "" {
 			event = event.Str("error_code", sw.errCode)
 		}
+		if sw.detail != "" {
+			event = event.Str("error_detail", sw.detail)
+		}
 		if webhookFailed {
 			event = event.Str("event", "webhook_failed")
 		}
@@ -222,11 +226,16 @@ type statusWriter struct {
 	status  int
 	wrote   bool
 	errCode string
+	detail  string
 }
 
 // ErrorCodeHeader is set by handlers that write an API error; the Observe
 // middleware consumes and removes it.
 const ErrorCodeHeader = "X-Error-Code"
+
+// ErrorDetailHeader carries the raw error text of a 5xx from the handler to the
+// middleware's log line; it is removed before the response is sent.
+const ErrorDetailHeader = "X-Error-Detail"
 
 func (w *statusWriter) WriteHeader(code int) {
 	if w.wrote {
@@ -236,6 +245,8 @@ func (w *statusWriter) WriteHeader(code int) {
 	w.status = code
 	w.errCode = w.Header().Get(ErrorCodeHeader)
 	w.Header().Del(ErrorCodeHeader)
+	w.detail = sanitizeDetail(w.Header().Get(ErrorDetailHeader))
+	w.Header().Del(ErrorDetailHeader)
 	w.ResponseWriter.WriteHeader(code)
 }
 
@@ -248,3 +259,17 @@ func (w *statusWriter) Write(b []byte) (int, error) {
 
 // Unwrap lets http.ResponseController reach Flush and friends.
 func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+// sanitizeDetail keeps a log-safe, bounded single line.
+func sanitizeDetail(d string) string {
+	d = strings.Map(func(r rune) rune {
+		if r < 0x20 {
+			return ' '
+		}
+		return r
+	}, d)
+	if len(d) > 500 {
+		d = d[:500]
+	}
+	return d
+}

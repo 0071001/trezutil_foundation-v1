@@ -389,6 +389,7 @@ var (
 	ErrPaymentNotRefundable         = fmt.Errorf("payment is not in a refundable state")
 	ErrRefundNotFound               = fmt.Errorf("refund not found")
 	ErrRefundAlreadyExists          = fmt.Errorf("refund already exists")
+	ErrRefundExceedsRemaining       = fmt.Errorf("refund amount exceeds the refundable balance")
 	ErrRefundExceedsCapturedAmount  = fmt.Errorf("refund amount exceeds captured amount")
 	ErrRefundInvalidTransition      = fmt.Errorf("invalid refund state transition")
 	ErrPaymentOperationNotSupported = fmt.Errorf("payment operation not supported by provider")

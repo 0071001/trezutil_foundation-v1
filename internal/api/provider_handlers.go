@@ -45,7 +45,7 @@ func (h *ProviderHandler) ListProvidersH(w http.ResponseWriter, r *http.Request)
 		case domain.ErrOrganizationNotFound:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "ORGANIZATION_NOT_FOUND", Message: "Organization not found"}}, http.StatusNotFound)
 		default:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "PROVIDER_LIST_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeFailure(w, "PROVIDER_LIST_FAILED", err)
 		}
 		return
 	}
@@ -89,7 +89,7 @@ func (h *ProviderHandler) GetProviderH(w http.ResponseWriter, r *http.Request) {
 		case domain.ErrOrganizationNotFound:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "ORGANIZATION_NOT_FOUND", Message: "Organization not found"}}, http.StatusNotFound)
 		default:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "PROVIDER_GET_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeFailure(w, "PROVIDER_GET_FAILED", err)
 		}
 		return
 	}
@@ -145,7 +145,7 @@ func (h *ProviderHandler) CreateProviderH(w http.ResponseWriter, r *http.Request
 		case domain.ErrOrganizationNotFound:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "ORGANIZATION_NOT_FOUND", Message: "Organization not found"}}, http.StatusNotFound)
 		default:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "PROVIDER_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeFailure(w, "PROVIDER_CREATE_FAILED", err)
 		}
 		return
 	}
@@ -180,7 +180,7 @@ func (h *ProviderHandler) EnableProviderH(w http.ResponseWriter, r *http.Request
 		case domain.ErrInsufficientPermissions:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
 		default:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "PROVIDER_ENABLE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeFailure(w, "PROVIDER_ENABLE_FAILED", err)
 		}
 		return
 	}
@@ -215,7 +215,7 @@ func (h *ProviderHandler) DisableProviderH(w http.ResponseWriter, r *http.Reques
 		case domain.ErrInsufficientPermissions:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
 		default:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "PROVIDER_DISABLE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeFailure(w, "PROVIDER_DISABLE_FAILED", err)
 		}
 		return
 	}
@@ -250,7 +250,7 @@ func (h *ProviderHandler) GetProviderCapabilitiesH(w http.ResponseWriter, r *htt
 		case domain.ErrInsufficientPermissions:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
 		default:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "PROVIDER_CAPABILITIES_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+			writeFailure(w, "PROVIDER_CAPABILITIES_FAILED", err)
 		}
 		return
 	}

@@ -551,7 +551,7 @@ func (s *PaymentService) refundPayment(ctx context.Context, orgID, actorID, paym
 		refundAmount = p.Amount
 	}
 	if refundAmount.AmountMinor > p.RemainingRefundable().AmountMinor {
-		return nil, nil, fmt.Errorf("refund amount %d exceeds remaining refundable %d",
+		return nil, nil, fmt.Errorf("%w: refund amount %d exceeds remaining refundable %d", domain.ErrRefundExceedsRemaining,
 			refundAmount.AmountMinor, p.RemainingRefundable().AmountMinor)
 	}
 
