@@ -128,3 +128,25 @@ Legacy vanilla web app in `web/js` + `web/index.html` and `HomepageDesign/` (not
 ## 6. Keyword sweep (brief §6)
 
 `TODO/FIXME/HACK/XXX`: none left in production Go code (the one TODO — order idempotency — was implemented). `panic`/`log.Fatal`: only in `cmd/*` startup paths. SQL string formatting: none in production code (test harness only, constant names). `NOT_IMPLEMENTED`: runtime response for chat actions without a handler (payments, listing creation from chat) — now answered honestly. `mock`: `infrastructure/ai/mock_provider.go` is test-only and not wired. `localhost`/ports: env-overridable development defaults only; the SPA contains none.
+
+## 7. Finalization phase (2026-09-28/29) — gaps closed
+
+| Area | Change | Verified by |
+|---|---|---|
+| Payments | **Stripe adapter** (`internal/infrastructure/payment/stripe`): PaymentIntents (automatic/manual capture, server confirmation with `pm_` tokens, Stripe.js client action), capture, cancel, refunds (sync and async), `Idempotency-Key` on every mutation, timeouts, typed error mapping (declines vs retryable), `Stripe-Signature` verification with 5-minute replay tolerance; provider rows loaded from `providers` with `env:` secret references and periodic refresh | adapter + webhook unit tests; 7 real-PostgreSQL integration tests (success, decline→retry, browser confirmation via webhook, timeout→resume, capture replay, refund replay/over-refund/async, signature/tenant/amount guards); E2E journey S |
+| Payment Core defects | P1: a replayed create or authorize created a **second provider intent** → now resumes the existing one; P1: the provider-config codec never decoded (settings lost) → JSON codec with legacy fallback; P1: async refund updated without a version bump (optimistic-lock failure) → `Refund.MarkSubmitted`; P2: payment/ledger/order were touched for non-succeeded refunds → only on success; P2: reserved metadata keys accepted from clients → stripped | tests above |
+| Seller console backend | `GET /sellers/me`, `GET /listings/manage`, `POST /listings/update` (draft/paused only, owner/admin/manager), `GET /orders/incoming`, `GET /reservations/incoming`, all under server-side membership/role guards; listing detail now returns `Media` | real-PostgreSQL isolation tests; E2E SELLER checks (cross-org 403s, edit guard) |
+| **Order authorization (P1)** | A **buyer could confirm their own order** (and could reach `ReadyForFulfillment`/`CompleteOrder`) because the seller transitions reused the buyer-inclusive access check. New `canManageOrder` (seller owner, org owner/admin/manager, platform admin/operator) | `TestSellerConsole_OrderConfirmationIsSellerOnly`; E2E "customer cannot confirm their own order as seller" |
+| Conversation | Pause/resume/publish routing; "book it" / "buy it" / "pause this listing" resolve the listing in focus; contextual resolution only for `*_id` parameters | `contextual_flow_test.go`; E2E AI journey |
+| AI | **Anthropic provider** (`internal/infrastructure/ai/anthropic`) behind the existing AI gateway/router/allowlist; strict JSON-schema output; usage metering on the classifier path; timeouts owned by the gateway; env-configured (`AI_PROVIDER`) with keyword fallback. P1 defect fixed: the AI sanitizer **lowercased every user message** sent to the model (names, places and IDs lost) → case-preserving redaction. The system prompt now lists the allowed intents and parameters (previously the model was never told them) | provider contract tests against an emulator (request shape, retries, 401/404/429/5xx, timeout, malformed/refused/truncated output); classifier tests (allowlist, confidence, identity injection, metering, guests); E2E AI journey |
+| Deployment | compose/env templates carry the Stripe and AI settings; SPA build argument for the public WhatsApp number | `docker compose config` |
+
+## 8. Frontend (Figma implementation)
+
+The web app was rebuilt on the Figma "Premium Homepage Design" export (see docs/design/FIGMA_IMPLEMENTATION_MAP.md and FRONTEND_PRODUCTION_READINESS.md). Defects found and fixed while connecting it to the real stack:
+
+- **API contract:** `POST /orders` and `POST /reservations` return short DTOs without the organization or items, while payment needs the organization. The client now reads back the canonical entity (a unit test had masked this by mocking the aggregate; the mocks now use the real shape).
+- **Sign-out race:** signing out on a protected page redirected to sign-in (the router navigation is a transition while clearing the session is urgent). Fixed with an explicit signed-out state.
+- **Dark mode:** Figma swaps tokens on `.app.dark` but never sets `.app { color }`, so uncolored text (brand, prices, chat header) was dark on dark. Fixed.
+- **Mobile (Figma gaps):** filter options, the conversation sidebar, the seller navigation and seller row actions are all hidden below 760 px with no alternative. Added a filter sheet, a chat panel toggle, seller tabs and visible row actions.
+- **Honesty:** the listing editor's "stock quantity" was stored in a table that nothing enforces. It was removed, and the gap is documented (KNOWN_LIMITATIONS L2).

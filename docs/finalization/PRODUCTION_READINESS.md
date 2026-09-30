@@ -1,6 +1,23 @@
 # Trezutil — Production Readiness (MVP finalization report)
 
-Date: 2026-09-28 · Details of every defect: [PLATFORM_AUDIT.md](PLATFORM_AUDIT.md) · Open items: [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md)
+Date: 2026-09-28, updated 2026-09-29 · Details of every defect: [PLATFORM_AUDIT.md](PLATFORM_AUDIT.md) · Open items: [KNOWN_LIMITATIONS.md](KNOWN_LIMITATIONS.md) · Certification: [MVP_FINAL_CERTIFICATION.md](MVP_FINAL_CERTIFICATION.md) · Operations: [PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md)
+
+## Update — finalization phase (2026-09-29)
+
+The gaps that made this report *conditional* on code are closed:
+- **Stripe payments** are integrated: adapter, Stripe.js checkout and signed webhooks.
+- The **seller workspace** exists (backend endpoints and UI).
+- **Model-assisted conversation** runs through the AI gateway (Anthropic adapter, keyword fallback).
+- The **web app was rebuilt on the Figma design** and connected to every flow.
+- One new authorization defect was found and fixed: a buyer could confirm their own order.
+
+Current evidence:
+- Go: 1,226 passing test cases, 106 of them on real PostgreSQL, 0 failures.
+- Frontend: 27 tests pass.
+- API end to end: 101/101, twice.
+- Browser journeys: 16/16 at desktop and mobile sizes (final clean run).
+
+What remains is external configuration: Stripe merchant accounts, WhatsApp Cloud API credentials, and optionally an AI key. **Status: MVP READY** (see MVP_FINAL_CERTIFICATION.md). The sections below are the original 2026-09-28 report, kept for history; where they conflict with this update, this update wins.
 
 ## Executive summary
 

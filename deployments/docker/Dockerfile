@@ -9,6 +9,9 @@
 FROM node:22-alpine AS web
 WORKDIR /src/web/frontend
 RUN corepack enable
+# Public build-time value (digits only); empty hides WhatsApp calls-to-action.
+ARG VITE_WHATSAPP_NUMBER=""
+ENV VITE_WHATSAPP_NUMBER=$VITE_WHATSAPP_NUMBER
 COPY web/frontend/package.json web/frontend/pnpm-lock.yaml web/frontend/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY web/frontend/ ./
