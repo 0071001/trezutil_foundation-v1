@@ -842,19 +842,26 @@ func (h *ReservationHandler) CreateReservationH(w http.ResponseWriter, r *http.R
 
 	reservation, err := h.reservationUseCases.CreateReservation(r.Context(), actorID, req.ListingID, req.StartAt, req.EndAt, req.Quantity, req.PartySize, idempotencyKey)
 	if err != nil {
-		switch err {
-		case domain.ErrListingNotFound:
+		switch {
+		case errors.Is(err, domain.ErrListingNotFound):
 			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_NOT_FOUND", Message: "Listing not found"}}, http.StatusNotFound)
-		case domain.ErrInsufficientPermissions:
+		case errors.Is(err, domain.ErrInsufficientPermissions):
 			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
-		case domain.ErrAvailabilityUnavailable:
+		case errors.Is(err, domain.ErrAvailabilityUnavailable):
 			writeJSON(w, ErrorResponse{Error: Error{Code: "UNAVAILABLE", Message: "Requested period not available"}}, http.StatusConflict)
-		case domain.ErrReservationConflict:
+		case errors.Is(err, domain.ErrReservationConflict):
 			writeJSON(w, ErrorResponse{Error: Error{Code: "CONFLICT", Message: "Reservation conflict: period not available"}}, http.StatusConflict)
-		case domain.ErrListingUnavailable:
+		case errors.Is(err, domain.ErrListingUnavailable):
 			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_UNAVAILABLE", Message: "This listing cannot be booked"}}, http.StatusConflict)
-		case domain.ErrIdempotencyConflict:
+		case errors.Is(err, domain.ErrIdempotencyConflict):
 			writeJSON(w, ErrorResponse{Error: Error{Code: "IDEMPOTENCY_CONFLICT", Message: "Idempotency-Key was already used for a different booking"}}, http.StatusConflict)
+		case errors.Is(err, domain.ErrAvailabilityUnknown):
+			writeJSON(w, ErrorResponse{Error: Error{Code: "AVAILABILITY_UNKNOWN", Message: "Availability could not be confirmed right now"}}, http.StatusServiceUnavailable)
+		case errors.Is(err, domain.ErrInsufficientCapacity):
+			// Lost a race for the last rooms or places: the capacity windows refused it.
+			writeJSON(w, ErrorResponse{Error: Error{Code: "UNAVAILABLE", Message: "Requested period not available"}}, http.StatusConflict)
+		case errors.Is(err, domain.ErrInvalidParameter):
+			writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_PARAMETER", Message: err.Error()}}, http.StatusBadRequest)
 		default:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "RESERVATION_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
 		}
@@ -1018,6 +1025,11 @@ func (h *ReservationHandler) CheckAvailabilityH(w http.ResponseWriter, r *http.R
 		PartySize: partySize,
 	})
 	if err != nil {
+		if errors.Is(err, domain.ErrAvailabilityUnknown) {
+			// An external provider could not establish availability: say so, never "available".
+			writeJSON(w, ErrorResponse{Error: Error{Code: "AVAILABILITY_UNKNOWN", Message: "Availability could not be confirmed right now"}}, http.StatusServiceUnavailable)
+			return
+		}
 		writeJSON(w, ErrorResponse{Error: Error{Code: "AVAILABILITY_CHECK_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
 		return
 	}

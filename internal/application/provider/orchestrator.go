@@ -2,6 +2,7 @@ package provider
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -41,8 +42,13 @@ type ExecuteOptions struct {
 	Capability     domain.Capability
 	Operation      string
 	IdempotencyKey string
-	Timeout        time.Duration
-	MaxAttempts    int
+	// RequestID correlates the attempts of this call in provider_executions
+	// (generated when empty).
+	RequestID string
+	// Timeout bounds each attempt (default 30s). A timed-out attempt counts as
+	// retryable, so it can fall back to the next provider.
+	Timeout     time.Duration
+	MaxAttempts int
 }
 
 type ExecuteResult struct {
@@ -54,8 +60,23 @@ type ExecuteResult struct {
 	ErrorMessage      string
 	RetryCount        int
 	DurationMs        int64
+	RequestID         string
+	Attempts          int
 }
 
+// ExecuteCapability runs perform against the organization's usable providers
+// for the capability, highest priority first, and records every attempt.
+//
+//   - (Success true, nil): a provider performed the operation.
+//   - (Success false, nil): a provider answered and refused (a business
+//     outcome reported in its result, e.g. a decline); not retried.
+//   - (Success false, err): no provider performed it; ErrorCode says why.
+//
+// Success comes from the provider result, never from the call returning
+// without error. A retryable failure (timeout, connection error) is retried
+// with backoff on the next provider in priority order (fallback); any other
+// failure stops. The idempotency key reaches the adapter on every attempt, so
+// a retry never repeats a side effect.
 func (o *ProviderOrchestrator) ExecuteCapability(
 	ctx context.Context,
 	orgID, actorID string,
@@ -76,14 +97,17 @@ func (o *ProviderOrchestrator) ExecuteCapability(
 	if maxAttempts <= 0 {
 		maxAttempts = o.retryPolicy.MaxAttempts
 	}
-
 	timeout := opts.Timeout
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
-
-	ctx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
+	requestID := opts.RequestID
+	if requestID == "" {
+		requestID = generateRequestID()
+	}
+	if opts.IdempotencyKey != "" && domain.ProviderIdempotencyKey(ctx) == "" {
+		ctx = domain.WithProviderIdempotencyKey(ctx, opts.IdempotencyKey)
+	}
 
 	entries, err := o.registry.FindByCapability(ctx, orgID, opts.Capability)
 	if err != nil {
@@ -93,80 +117,91 @@ func (o *ProviderOrchestrator) ExecuteCapability(
 		return nil, domain.ErrNoProvidersAvailable
 	}
 
+	var last *ExecuteResult
 	var lastErr error
-	var lastResult *ExecuteResult
-
 	for attempt := 0; attempt < maxAttempts; attempt++ {
 		entry := entries[attempt%len(entries)]
+		providerID := entry.GetProvider().ID
+		started := time.Now()
 
-		if !entry.GetProvider().IsUsable() {
-			lastErr = fmt.Errorf("provider %s is not usable", entry.GetProvider().ID)
-			continue
-		}
-
-		startTime := time.Now()
-
+		attemptCtx, cancel := context.WithTimeout(ctx, timeout)
 		execCtx := &domain.ProviderExecutionContext{
-			Context:        ctx,
+			Context:        attemptCtx,
 			Capability:     opts.Capability,
 			Operation:      opts.Operation,
 			TenantID:       orgID,
 			ActorID:        actorID,
 			IdempotencyKey: opts.IdempotencyKey,
-			Deadline:       time.Now().Add(timeout),
-			RequestID:      generateRequestID(),
+			Deadline:       started.Add(timeout),
+			RequestID:      requestID,
 		}
+		result, execErr := perform(attemptCtx, execCtx, entry.GetAdapter())
+		timedOut := execErr != nil && (errors.Is(execErr, context.DeadlineExceeded) || errors.Is(attemptCtx.Err(), context.DeadlineExceeded))
+		cancel()
+		duration := time.Since(started)
 
-		result, execErr := perform(ctx, execCtx, entry.GetAdapter())
-
-		duration := time.Since(startTime)
-
-		lastResult = &ExecuteResult{
-			ProviderID:        entry.GetProvider().ID,
-			ExternalReference: result.ExternalReference,
+		last = &ExecuteResult{
+			ProviderID:        providerID,
 			Data:              result.Data,
+			ExternalReference: result.ExternalReference,
 			RetryCount:        attempt,
 			DurationMs:        duration.Milliseconds(),
+			RequestID:         requestID,
+			Attempts:          attempt + 1,
 		}
 
-		if execErr != nil {
-			lastErr = execErr
-			classification := o.retryPolicy.ClassifyError(execErr)
-
-			if attempt < maxAttempts-1 && classification == domain.Retryable {
-				backoff := o.calculateBackoff(attempt)
-				o.logger.Warn().
-					Str("provider", entry.GetProvider().ID).
-					Str("capability", string(opts.Capability)).
-					Err(execErr).
-					Int("attempt", attempt+1).
-					Dur("backoff", backoff).
-					Msg("Provider execution failed, retrying")
-				time.Sleep(backoff)
-				continue
+		if execErr == nil {
+			if result.Success {
+				last.Success = true
+				o.record(orgID, actorID, opts, requestID, attempt, providerID, domain.ExecutionStatusSuccess, "", "", started, duration, result.ExternalReference, nil)
+				return last, nil
 			}
-
-			lastResult.Success = false
-			lastResult.ErrorCode = result.ErrorCode
-			lastResult.ErrorMessage = execErr.Error()
-
-			if classification == domain.NonRetryable || classification == domain.UnknownRetry {
-				break
+			// The provider answered and refused: a business outcome, not a
+			// failure to retry elsewhere.
+			last.ErrorCode = result.ErrorCode
+			if last.ErrorCode == "" {
+				last.ErrorCode = domain.ErrCodeProviderRejected
 			}
-			o.logExecution(entry.GetProvider().ID, orgID, actorID, opts, false, duration, execErr)
-			return lastResult, nil
+			last.ErrorMessage = result.ErrorMessage
+			o.record(orgID, actorID, opts, requestID, attempt, providerID, domain.ExecutionStatusFailed, last.ErrorCode, domain.NonRetryable, started, duration, result.ExternalReference, nil)
+			return last, nil
 		}
 
-		lastResult.Success = true
-		o.logExecution(entry.GetProvider().ID, orgID, actorID, opts, true, duration, nil)
-		return lastResult, nil
-	}
+		class := o.retryPolicy.ClassifyError(execErr)
+		if timedOut {
+			class = domain.Retryable
+		}
+		last.ErrorCode = normalizeErrorCode(execErr, result.ErrorCode, timedOut)
+		last.ErrorMessage = execErr.Error()
+		lastErr = execErr
+		o.record(orgID, actorID, opts, requestID, attempt, providerID, domain.ExecutionStatusFailed, last.ErrorCode, class, started, duration, result.ExternalReference, execErr)
 
-	if lastResult != nil {
-		lastResult.ErrorCode = domain.ErrCodeProviderUnavailable
-		lastResult.ErrorMessage = lastErr.Error()
+		if class != domain.Retryable || attempt == maxAttempts-1 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return last, lastErr
+		case <-time.After(o.calculateBackoff(attempt)):
+		}
 	}
-	return lastResult, lastErr
+	return last, lastErr
+}
+
+// normalizeErrorCode maps a failed attempt to the normalized provider error
+// codes: timeouts and unsupported capabilities are recognized, otherwise the
+// adapter's code is kept, or UNKNOWN_PROVIDER_ERROR.
+func normalizeErrorCode(err error, adapterCode domain.ProviderErrorCode, timedOut bool) domain.ProviderErrorCode {
+	switch {
+	case timedOut:
+		return domain.ErrCodeProviderTimeout
+	case errors.Is(err, domain.ErrUnsupportedCapability):
+		return domain.ErrCodeUnsupportedCapability
+	case adapterCode != "":
+		return adapterCode
+	default:
+		return domain.ErrCodeUnknown
+	}
 }
 
 func (o *ProviderOrchestrator) SelectProvider(
@@ -204,36 +239,66 @@ func (o *ProviderOrchestrator) calculateBackoff(attempt int) time.Duration {
 	return time.Duration(delay) * time.Millisecond
 }
 
-func (o *ProviderOrchestrator) logExecution(
-	providerID, orgID, actorID string,
+// record logs an attempt and persists it in provider_executions. Recording
+// never changes the outcome of the call: it runs on its own short context
+// (the call's may already be cancelled) and failures are only logged.
+func (o *ProviderOrchestrator) record(
+	orgID, actorID string,
 	opts ExecuteOptions,
-	success bool,
+	requestID string,
+	attempt int,
+	providerID string,
+	status domain.ProviderExecutionStatus,
+	code domain.ProviderErrorCode,
+	class domain.RetryClassification,
+	started time.Time,
 	duration time.Duration,
+	externalRef string,
 	err error,
 ) {
-	if err != nil {
-		o.logger.Error().
-			Str("provider", providerID).
-			Str("capability", string(opts.Capability)).
-			Str("operation", opts.Operation).
-			Str("tenant", orgID).
-			Str("actor", actorID).
-			Dur("duration", duration).
-			Err(err).
-			Msg("Provider execution failed")
-	} else {
-		o.logger.Info().
-			Str("provider", providerID).
-			Str("capability", string(opts.Capability)).
-			Str("operation", opts.Operation).
-			Str("tenant", orgID).
-			Str("actor", actorID).
-			Dur("duration", duration).
-			Bool("success", success).
-			Msg("Provider execution completed")
+	event := o.logger.Info()
+	if err != nil || status != domain.ExecutionStatusSuccess {
+		event = o.logger.Warn().Err(err).Str("error_code", string(code)).Str("retry_class", string(class))
+	}
+	event.Str("provider", providerID).
+		Str("capability", string(opts.Capability)).
+		Str("operation", opts.Operation).
+		Str("tenant", orgID).
+		Str("actor", actorID).
+		Str("request_id", requestID).
+		Int("attempt", attempt+1).
+		Dur("duration", duration).
+		Str("status", string(status)).
+		Msg("provider execution")
+
+	if o.repo == nil {
+		return
+	}
+	exec := &domain.ProviderExecution{
+		ID:                domain.NewID(),
+		ProviderID:        providerID,
+		Capability:        opts.Capability,
+		Operation:         opts.Operation,
+		TenantID:          orgID,
+		ActorID:           actorID,
+		IdempotencyKey:    opts.IdempotencyKey,
+		RequestID:         requestID,
+		Attempt:           attempt + 1,
+		RetryClass:        class,
+		Status:            status,
+		ErrorCode:         code,
+		StartedAt:         started.Unix(),
+		CompletedAt:       started.Add(duration).Unix(),
+		DurationMs:        duration.Milliseconds(),
+		ExternalReference: externalRef,
+	}
+	rctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if rerr := o.repo.Create(rctx, exec); rerr != nil {
+		o.logger.Warn().Err(rerr).Str("request_id", requestID).Msg("provider execution not recorded")
 	}
 }
 
 func generateRequestID() string {
-	return fmt.Sprintf("req_%d", time.Now().UnixNano())
+	return "req_" + domain.NewID()
 }

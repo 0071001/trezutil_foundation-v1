@@ -128,6 +128,10 @@ type ProviderAdapter interface {
 	Health(ctx context.Context) ProviderHealthStatus
 }
 
+// AvailabilityProviderAdapter checks availability with an external provider.
+// The adapter must set AvailabilityResult.State from the provider's explicit
+// answer; a response that does not establish availability leaves it empty (or
+// UNKNOWN), and a transport success is never an AVAILABLE answer by itself.
 type AvailabilityProviderAdapter interface {
 	ProviderAdapter
 	CheckAvailability(ctx context.Context, query AvailabilityQuery) (AvailabilityResult, error)

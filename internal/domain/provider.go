@@ -173,14 +173,20 @@ const (
 	ExecutionStatusCancelled ProviderExecutionStatus = "CANCELLED"
 )
 
+// ProviderExecution records one attempt of an orchestrated provider call.
 type ProviderExecution struct {
-	ID                string
-	ProviderID        string
-	Capability        Capability
-	Operation         string
-	TenantID          string
-	ActorID           string
-	IdempotencyKey    string
+	ID             string
+	ProviderID     string
+	Capability     Capability
+	Operation      string
+	TenantID       string
+	ActorID        string
+	IdempotencyKey string
+	// RequestID correlates the attempts of one orchestrated call; Attempt is
+	// 1-based; RetryClass classifies a failed attempt.
+	RequestID         string
+	Attempt           int
+	RetryClass        RetryClassification
 	Status            ProviderExecutionStatus
 	ErrorCode         ProviderErrorCode
 	StartedAt         int64
@@ -202,7 +208,10 @@ const (
 	ErrCodeResourceUnavailable   ProviderErrorCode = "RESOURCE_UNAVAILABLE"
 	ErrCodeConflict              ProviderErrorCode = "CONFLICT"
 	ErrCodeProviderRejected      ProviderErrorCode = "PROVIDER_REJECTED"
-	ErrCodeUnknown               ProviderErrorCode = "UNKNOWN_PROVIDER_ERROR"
+	// ErrCodeInvalidResponse: the provider answered but the answer is
+	// missing or contradictory (e.g. no availability state).
+	ErrCodeInvalidResponse ProviderErrorCode = "PROVIDER_INVALID_RESPONSE"
+	ErrCodeUnknown         ProviderErrorCode = "UNKNOWN_PROVIDER_ERROR"
 )
 
 type ProviderExecutionRepository interface {
