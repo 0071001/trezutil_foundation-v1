@@ -9,6 +9,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/trezutil/trezutil/internal/application/provider"
 	"github.com/trezutil/trezutil/internal/domain"
+	"github.com/trezutil/trezutil/packages/observability"
 )
 
 // PaymentService is the application-use-case layer for the Payment Core.
@@ -334,6 +335,9 @@ func (s *PaymentService) applyProviderResult(ctx context.Context, p *domain.Paym
 		err = p.Capture(providerPaymentID, now, now)
 	case domain.PaymentStatusFailed:
 		err = p.Fail("provider declined payment", now)
+		if err == nil {
+			observability.PaymentFailed(ctx, p.ID, p.OrderID, "provider_decline", "provider declined payment")
+		}
 	default:
 		if terr := p.ValidateTransition(target); terr == nil {
 			err = p.TransitionTo(target, now)
@@ -354,6 +358,7 @@ func (s *PaymentService) failPayment(ctx context.Context, p *domain.Payment, rea
 	if err := p.Fail(reason, now); err != nil {
 		return err
 	}
+	observability.PaymentFailed(ctx, p.ID, p.OrderID, "failed", reason)
 	return s.payments.Update(ctx, p)
 }
 
@@ -714,11 +719,13 @@ func (s *PaymentService) authorizePayment(ctx context.Context, orgID, actorID, p
 	now := unixNow()
 	if execErr != nil {
 		s.logger.Warn().Err(execErr).Str("payment", p.ID).Msg("payment authorization failed")
+		observability.PaymentFailed(ctx, p.ID, p.OrderID, "provider_error", execErr.Error())
 		return p, nil
 	}
 
 	if !result.Success {
 		_ = p.Fail(result.ErrorMessage, now)
+		observability.PaymentFailed(ctx, p.ID, p.OrderID, "provider_decline", result.ErrorMessage)
 		_ = s.payments.Update(ctx, p)
 		return p, nil
 	}

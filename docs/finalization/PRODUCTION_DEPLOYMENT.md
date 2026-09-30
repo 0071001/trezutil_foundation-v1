@@ -59,7 +59,7 @@ docker compose --env-file app.env -f deployments/docker/docker-compose.app.yml u
 
 The startup order is enforced by the compose dependencies:
 1. PostgreSQL and OpenSearch become healthy.
-2. `migrate` applies migrations `000001`–`000022` (tracked, idempotent; re-running is a no-op). 000022 adds the dispatch tables (`dispatch_agents`, `dispatch_jobs`, `dispatch_offers`, `dispatch_positions`) used by food delivery and rides. 000020 adds the Hotel pack (`hotel_room_types`, capacity-managed reservations, non-overlapping capacity windows) and 000021 the provider execution audit fields. 000019 adds `listings.vertical` and backfills existing listings from their listing type; services built before it keep working during a rolling deploy.
+2. `migrate` applies migrations `000001`–`000021` (tracked, idempotent; re-running is a no-op). Migration `000022` (dispatch tables for food delivery and rides) is on hold and not part of the production sequence. 000020 adds the Hotel pack (`hotel_room_types`, capacity-managed reservations, non-overlapping capacity windows) and 000021 the provider execution audit fields. 000019 adds `listings.vertical` and backfills existing listings from their listing type; services built before it keep working during a rolling deploy.
 3. The services start, then the gateway.
 
 **Health:**
@@ -120,12 +120,13 @@ Set `AI_PROVIDER=anthropic` and `ANTHROPIC_API_KEY` for conversation-service. Th
 ## 9. Operations
 
 - **Backups:** daily `pg_dump` (or managed PITR) of the PostgreSQL database is the only backup that matters. OpenSearch is a rebuildable projection: search-service resynchronizes it hourly and on start, so after data loss, delete the index and restart search-service.
-- **Logs:** JSON on stdout (zerolog), with request IDs propagated by the gateway (`X-Request-ID`). Ship them to the platform's log store. No OTP codes are logged outside `development`.
+- **Logs:** JSON on stdout (zerolog). Every request line carries `request_id` (the gateway's `X-Request-ID`, also returned to the client and present in the service logs), status, duration and, for a refused or failed request, `error_code`; the level follows the status (5xx `error`, 4xx `warn`). Critical failures are structured events: `payment_failed`, `reservation_failed`, `webhook_failed`, `provider execution` (with retry class) and `panic`. Critical commerce actions (order, reservation, listing, inventory, capacity and fulfilment changes) write an `audit` line with actor, action, target and request id; it is a log trail, not a tamper-proof store. Ship logs to the platform's log store. No OTP codes are logged outside `development`.
+- **Metrics:** every service serves Prometheus text on `GET /metrics`: `trezutil_http_requests_total`, `trezutil_http_errors_total`, `trezutil_http_request_duration_seconds`, `trezutil_api_errors_total{code}`, `trezutil_payment_failures_total`, `trezutil_reservation_failures_total`, `trezutil_provider_failures_total` and `trezutil_webhook_failures_total`. Labels are bounded (service, method, normalized route, status, error code). Services answer only loopback and private-network clients; the internet-facing gateway answers only when `METRICS_TOKEN` is set and sent as a bearer token. `infrastructure/prometheus/prometheus.yml` lists the scrape targets. Probes: `/healthz` (liveness) and `/readyz` (database and upstreams) on the gateway and every service.
 - **Scaling:**
   - Services are stateless except the in-process OTP per-IP limiter and the chat action idempotency cache (durable idempotency is in PostgreSQL). Add an edge rate limiter when running several identity-service replicas.
   - Keep one payment-service replica per provider set, or several: webhook processing is idempotent and money moves under per-payment advisory locks.
 - **Upgrades:** build a new image, run `migrate` (forward-only, idempotent), then roll services. Roll back by redeploying the previous image; migrations are additive.
-- **Monitoring:** alert on the gateway `/readyz`, 5xx rate, payment webhook failures (`payment_webhook_events` rows without processing), and OpenSearch health.
+- **Monitoring:** alert on the gateway `/readyz`, the 5xx rate (`trezutil_http_errors_total{class="5xx"}`), `trezutil_webhook_failures_total`, `trezutil_payment_failures_total`, `trezutil_provider_failures_total`, request latency, payment webhook rows without processing (`payment_webhook_events`), and OpenSearch health.
 
 ## 10. Pre-launch checklist
 

@@ -21,6 +21,7 @@ import (
 	"github.com/trezutil/trezutil/packages/auth"
 	"github.com/trezutil/trezutil/packages/common"
 	"github.com/trezutil/trezutil/packages/database"
+	"github.com/trezutil/trezutil/packages/observability"
 )
 
 func main() {
@@ -123,6 +124,7 @@ func main() {
 	mux.HandleFunc("GET /v1/categories", api.ListCategoriesH(categoryRepo))
 	mux.HandleFunc("GET /v1/verticals", api.ListVerticalsH(vertical.DefaultCatalog()))
 	mux.HandleFunc("POST /v1/categories", api.CreateCategoryH(categoryRepo, postgres.NewUserRepository(db)))
+	mux.Handle("GET /metrics", observability.MetricsHandler())
 	mux.HandleFunc("GET /healthz", common.HealthHandler)
 	mux.HandleFunc("GET /health", common.HealthHandler)
 	mux.HandleFunc("GET /readyz", func(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +137,7 @@ func main() {
 		common.ReadyHandler(db)(w, r)
 	})
 
-	srv := common.NewServer(":"+common.Getenv("HTTP_PORT", "8081"), common.AccessLog(logger, authn.Middleware(mux)))
+	srv := common.NewServer(":"+common.Getenv("HTTP_PORT", "8081"), common.Observe("search-service", logger, authn.Middleware(mux)))
 	if err := common.Run(srv, logger, "search-service"); err != nil {
 		log.Fatalf("search-service: %v", err)
 	}

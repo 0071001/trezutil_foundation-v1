@@ -1,10 +1,33 @@
+# Scrape configuration for the Trezutil services.
+#
+# Every service serves /metrics (Prometheus text format) on its HTTP port:
+#   trezutil_http_requests_total, trezutil_http_errors_total,
+#   trezutil_http_request_duration_seconds, trezutil_api_errors_total,
+#   trezutil_payment_failures_total, trezutil_reservation_failures_total,
+#   trezutil_provider_failures_total, trezutil_webhook_failures_total.
+#
+# Services answer /metrics only to loopback and private-network clients (or, with
+# METRICS_TOKEN set, to that bearer token). The API gateway faces the internet,
+# so it answers only with METRICS_TOKEN set: put the same token in
+# /etc/prometheus/metrics_token for the gateway job below.
+#
+# Targets below assume the services run on the Docker host (development). With
+# docker-compose.app.yml, scrape "<service-name>:<port>" on the compose network.
 global:
   scrape_interval: 15s
 
 scrape_configs:
-  - job_name: trezutil-api
+  - job_name: trezutil-gateway
+    authorization:
+      credentials_file: /etc/prometheus/metrics_token
     static_configs:
-      - targets: ["host.docker.internal:8081"]
-  - job_name: trezutil-search
+      - targets: ["host.docker.internal:8080"]
+  - job_name: trezutil-services
     static_configs:
-      - targets: ["host.docker.internal:8082"]
+      - targets:
+          - "host.docker.internal:8081"   # search
+          - "host.docker.internal:8082"   # catalog
+          - "host.docker.internal:8083"   # payment
+          - "host.docker.internal:8085"   # orders and reservations
+          - "host.docker.internal:8086"   # identity
+          - "host.docker.internal:8091"   # conversation

@@ -8,6 +8,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/trezutil/trezutil/internal/domain"
+	"github.com/trezutil/trezutil/packages/observability"
 )
 
 // WebhookHandler processes incoming payment provider webhook callbacks.
@@ -228,6 +229,7 @@ func (h *WebhookHandler) reconcilePayment(ctx context.Context, payload *WebhookP
 		if err := p.Fail("provider webhook: "+payload.Status, now); err != nil {
 			return fmt.Errorf("failed to fail payment: %w", err)
 		}
+		observability.PaymentFailed(ctx, p.ID, p.OrderID, "webhook", "provider webhook: "+payload.Status)
 	case domain.PaymentStatusCancelled:
 		if err := p.Cancel(now); err != nil {
 			return fmt.Errorf("failed to cancel payment: %w", err)

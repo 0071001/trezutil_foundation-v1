@@ -18,6 +18,7 @@ import (
 	"github.com/trezutil/trezutil/packages/auth"
 	"github.com/trezutil/trezutil/packages/common"
 	"github.com/trezutil/trezutil/packages/database"
+	"github.com/trezutil/trezutil/packages/observability"
 )
 
 func main() {
@@ -86,11 +87,12 @@ func main() {
 	}))
 	mux.HandleFunc("POST /api/v1/stores", stores.CreateStoreH)
 	mux.HandleFunc("GET /api/v1/stores", stores.GetStoreH)
+	mux.Handle("GET /metrics", observability.MetricsHandler())
 	mux.HandleFunc("GET /healthz", common.HealthHandler)
 	mux.HandleFunc("GET /readyz", common.ReadyHandler(db))
 
 	authn := auth.NewAuthenticator(tokens)
-	srv := common.NewServer(":"+common.Getenv("HTTP_PORT", "8086"), common.AccessLog(logger, authn.Middleware(mux)))
+	srv := common.NewServer(":"+common.Getenv("HTTP_PORT", "8086"), common.Observe("identity-service", logger, authn.Middleware(mux)))
 	if err := common.Run(srv, logger, "identity-service"); err != nil {
 		log.Fatalf("identity-service: %v", err)
 	}

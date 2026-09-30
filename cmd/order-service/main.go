@@ -16,9 +16,11 @@ import (
 	"github.com/trezutil/trezutil/internal/application/reservations"
 	"github.com/trezutil/trezutil/internal/application/vertical"
 	"github.com/trezutil/trezutil/internal/domain"
+	"github.com/trezutil/trezutil/internal/infrastructure/audit"
 	"github.com/trezutil/trezutil/packages/auth"
 	"github.com/trezutil/trezutil/packages/common"
 	"github.com/trezutil/trezutil/packages/database"
+	"github.com/trezutil/trezutil/packages/observability"
 )
 
 func main() {
@@ -45,7 +47,9 @@ func main() {
 	reservationRepo := postgres.NewReservationRepository(db)
 	orderRepo := postgres.NewOrderRepository(db)
 
-	orderUseCases := application.NewOrderUseCases(orderRepo, listingRepo, sellerRepo, orgRepo, userRepo, inventoryRepo, fulfillmentRepo, nil)
+	// Critical commerce actions leave a structured audit line (internal/infrastructure/audit).
+	auditLog := audit.NewLogger(logger)
+	orderUseCases := application.NewOrderUseCases(orderRepo, listingRepo, sellerRepo, orgRepo, userRepo, inventoryRepo, fulfillmentRepo, auditLog)
 	availabilityProvider := availability.NewCapacityAvailabilityProvider(inventoryRepo, capacityRepo).WithReservations(reservationRepo)
 	availabilityUseCases := availability.NewAvailabilityUseCases(listingRepo, availabilityProvider, nil)
 	storeRepo := postgres.NewStoreRepository(db)
@@ -55,7 +59,7 @@ func main() {
 		postgres.NewAttributeDefinitionRepository(db), postgres.NewAttributeValueRepository(db),
 		mediaRepo, postgres.NewListingAvailabilityRepository(db),
 		postgres.NewLocationRepository(db), postgres.NewListingLocationRepository(db),
-		orgRepo, sellerRepo, storeRepo, userRepo, nil,
+		orgRepo, sellerRepo, storeRepo, userRepo, auditLog,
 	).WithVerticals(vertical.DefaultCatalog())
 	// Hotel Commerce Pack: room types, rooms, nightly capacity and stays on the
 	// Commerce Core (docs/architecture/HOTEL_COMMERCE_PACK.md).
@@ -67,14 +71,14 @@ func main() {
 	})
 	reservationUseCases := reservations.NewReservationUseCases(
 		reservationRepo, listingRepo, sellerRepo, userRepo, orgRepo,
-		availabilityProvider, capacityRepo, inventoryRepo, fulfillmentRepo, nil,
+		availabilityProvider, capacityRepo, inventoryRepo, fulfillmentRepo, auditLog,
 		reservations.ConfirmationPolicy{AutoConfirm: true},
 	).WithRules(hotels)
 
 	orders := api.NewOrderHandler(orderUseCases)
 	bookings := api.NewReservationHandler(reservationUseCases, availabilityUseCases)
-	inventory := api.NewInventoryHandler(application.NewInventoryUseCases(inventoryRepo, listingRepo, sellerRepo, orgRepo, userRepo, nil), nil)
-	fulfillment := api.NewFulfillmentHandler(application.NewFulfillmentUseCases(fulfillmentRepo, orderRepo, reservationRepo, userRepo, orgRepo, nil))
+	inventory := api.NewInventoryHandler(application.NewInventoryUseCases(inventoryRepo, listingRepo, sellerRepo, orgRepo, userRepo, auditLog), nil)
+	fulfillment := api.NewFulfillmentHandler(application.NewFulfillmentUseCases(fulfillmentRepo, orderRepo, reservationRepo, userRepo, orgRepo, auditLog))
 	staff := tenantStaffOnly(orgRepo, userRepo)
 
 	mux := http.NewServeMux()
@@ -111,10 +115,11 @@ func main() {
 	mux.HandleFunc("POST /api/v1/fulfillments/{fulfillment_id}/transition", staff(stripAPI(fulfillment.TransitionFulfillment)))
 	mux.HandleFunc("POST /api/v1/fulfillments/{fulfillment_id}/assign", staff(stripAPI(fulfillment.AssignFulfillment)))
 	mux.HandleFunc("POST /api/v1/fulfillments/{fulfillment_id}/tracking", staff(stripAPI(fulfillment.UpdateTracking)))
+	mux.Handle("GET /metrics", observability.MetricsHandler())
 	mux.HandleFunc("GET /healthz", common.HealthHandler)
 	mux.HandleFunc("GET /readyz", common.ReadyHandler(db))
 
-	srv := common.NewServer(":"+common.Getenv("HTTP_PORT", "8085"), common.AccessLog(logger, authn.Middleware(mux)))
+	srv := common.NewServer(":"+common.Getenv("HTTP_PORT", "8085"), common.Observe("order-service", logger, authn.Middleware(mux)))
 	if err := common.Run(srv, logger, "order-service"); err != nil {
 		log.Fatalf("order-service: %v", err)
 	}

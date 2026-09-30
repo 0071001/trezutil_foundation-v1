@@ -11,6 +11,8 @@ import (
 	"github.com/trezutil/trezutil/internal/application/provider"
 	"github.com/trezutil/trezutil/internal/domain"
 	"github.com/trezutil/trezutil/packages/auth"
+	"github.com/trezutil/trezutil/packages/common"
+	"github.com/trezutil/trezutil/packages/observability"
 )
 
 // ErrorResponse represents a standard API error response.
@@ -32,8 +34,39 @@ func readJSONBody(r *http.Request, v interface{}) error {
 }
 
 // writeJSON writes a JSON response with the given status code.
+// reservationFailureReason maps a reservation error to a short, bounded reason
+// for logs and metrics.
+func reservationFailureReason(err error) string {
+	switch {
+	case errors.Is(err, domain.ErrListingNotFound):
+		return "not_found"
+	case errors.Is(err, domain.ErrInsufficientPermissions):
+		return "forbidden"
+	case errors.Is(err, domain.ErrAvailabilityUnavailable):
+		return "unavailable"
+	case errors.Is(err, domain.ErrReservationConflict):
+		return "conflict"
+	case errors.Is(err, domain.ErrInsufficientCapacity):
+		return "capacity"
+	case errors.Is(err, domain.ErrListingUnavailable):
+		return "listing_unavailable"
+	case errors.Is(err, domain.ErrIdempotencyConflict):
+		return "idempotency_conflict"
+	case errors.Is(err, domain.ErrAvailabilityUnknown):
+		return "unknown_availability"
+	case errors.Is(err, domain.ErrInvalidParameter):
+		return "invalid"
+	default:
+		return "error"
+	}
+}
+
 func writeJSON(w http.ResponseWriter, v interface{}, statusCode ...int) {
 	w.Header().Set("Content-Type", "application/json")
+	if er, ok := v.(ErrorResponse); ok {
+		// Consumed (and removed) by the service middleware for logs and metrics.
+		w.Header().Set(common.ErrorCodeHeader, er.Error.Code)
+	}
 	if len(statusCode) > 0 {
 		w.WriteHeader(statusCode[0])
 	} else {
@@ -842,6 +875,7 @@ func (h *ReservationHandler) CreateReservationH(w http.ResponseWriter, r *http.R
 
 	reservation, err := h.reservationUseCases.CreateReservation(r.Context(), actorID, req.ListingID, req.StartAt, req.EndAt, req.Quantity, req.PartySize, idempotencyKey)
 	if err != nil {
+		observability.ReservationFailed(r.Context(), req.ListingID, reservationFailureReason(err), err)
 		switch {
 		case errors.Is(err, domain.ErrListingNotFound):
 			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_NOT_FOUND", Message: "Listing not found"}}, http.StatusNotFound)

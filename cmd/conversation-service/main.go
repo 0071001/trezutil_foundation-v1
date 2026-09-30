@@ -23,12 +23,14 @@ import (
 	whatsappapp "github.com/trezutil/trezutil/internal/application/whatsapp"
 	"github.com/trezutil/trezutil/internal/domain"
 	anthropicai "github.com/trezutil/trezutil/internal/infrastructure/ai/anthropic"
+	"github.com/trezutil/trezutil/internal/infrastructure/audit"
 	whatsappinfra "github.com/trezutil/trezutil/internal/infrastructure/whatsapp"
 	searchapp "github.com/trezutil/trezutil/internal/search/application"
 	"github.com/trezutil/trezutil/internal/search/infrastructure/opensearch"
 	"github.com/trezutil/trezutil/packages/auth"
 	"github.com/trezutil/trezutil/packages/common"
 	"github.com/trezutil/trezutil/packages/database"
+	"github.com/trezutil/trezutil/packages/observability"
 )
 
 func main() {
@@ -72,19 +74,20 @@ func main() {
 	// Commerce use cases executed by the runtime. They are the same
 	// application services the REST APIs use; the runtime adds identity
 	// enforcement, validation, confirmation, idempotency and usage.
+	auditLog := audit.NewLogger(logger)
 	listingUseCases := application.NewListingUseCases(
 		listingRepo, categoryRepo,
 		postgres.NewAttributeDefinitionRepository(db), postgres.NewAttributeValueRepository(db),
 		postgres.NewListingMediaRepository(db), postgres.NewListingAvailabilityRepository(db),
 		postgres.NewLocationRepository(db), postgres.NewListingLocationRepository(db),
-		orgRepo, sellerRepo, storeRepo, userRepo, nil,
+		orgRepo, sellerRepo, storeRepo, userRepo, auditLog,
 	).WithVerticals(vertical.DefaultCatalog())
-	orderUseCases := application.NewOrderUseCases(postgres.NewOrderRepository(db), listingRepo, sellerRepo, orgRepo, userRepo, inventoryRepo, fulfillmentRepo, nil)
+	orderUseCases := application.NewOrderUseCases(postgres.NewOrderRepository(db), listingRepo, sellerRepo, orgRepo, userRepo, inventoryRepo, fulfillmentRepo, auditLog)
 	availabilityProvider := availability.NewCapacityAvailabilityProvider(inventoryRepo, capacityRepo).WithReservations(reservationRepo)
 	availabilityUseCases := availability.NewAvailabilityUseCases(listingRepo, availabilityProvider, nil)
 	reservationUseCases := reservations.NewReservationUseCases(
 		reservationRepo, listingRepo, sellerRepo, userRepo, orgRepo,
-		availabilityProvider, capacityRepo, inventoryRepo, fulfillmentRepo, nil,
+		availabilityProvider, capacityRepo, inventoryRepo, fulfillmentRepo, auditLog,
 		reservations.ConfirmationPolicy{AutoConfirm: true},
 	).WithRules(hotel.NewService(hotel.Config{RoomTypes: postgres.NewHotelRoomTypeRepository(db)}))
 	searchUseCases := buildSearch(logger)
@@ -187,10 +190,11 @@ func main() {
 	mux.HandleFunc("/api/v1/packs/", packRoutes)
 	mux.HandleFunc("GET /api/v1/webhooks/whatsapp", api.VerifySubscriptionH(common.Getenv("WHATSAPP_VERIFY_TOKEN", "")))
 	mux.HandleFunc("POST /api/v1/webhooks/whatsapp", waHandler.WebhookH)
+	mux.Handle("GET /metrics", observability.MetricsHandler())
 	mux.HandleFunc("GET /healthz", common.HealthHandler)
 	mux.HandleFunc("GET /readyz", common.ReadyHandler(db))
 
-	srv := common.NewServer(":"+common.Getenv("HTTP_PORT", common.Getenv("PORT", "8091")), common.AccessLog(logger, authn.Middleware(mux)))
+	srv := common.NewServer(":"+common.Getenv("HTTP_PORT", common.Getenv("PORT", "8091")), common.Observe("conversation-service", logger, authn.Middleware(mux)))
 	if err := common.Run(srv, logger, "conversation-service"); err != nil {
 		log.Fatalf("conversation-service: %v", err)
 	}

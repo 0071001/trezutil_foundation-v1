@@ -8,6 +8,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/trezutil/trezutil/internal/domain"
+	"github.com/trezutil/trezutil/packages/observability"
 )
 
 type ProviderOrchestrator struct {
@@ -258,6 +259,7 @@ func (o *ProviderOrchestrator) record(
 ) {
 	event := o.logger.Info()
 	if err != nil || status != domain.ExecutionStatusSuccess {
+		observability.ProviderFailed(providerID, string(opts.Capability), string(code))
 		event = o.logger.Warn().Err(err).Str("error_code", string(code)).Str("retry_class", string(class))
 	}
 	event.Str("provider", providerID).

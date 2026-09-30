@@ -18,6 +18,7 @@ import (
 	"github.com/trezutil/trezutil/packages/auth"
 	"github.com/trezutil/trezutil/packages/common"
 	"github.com/trezutil/trezutil/packages/database"
+	"github.com/trezutil/trezutil/packages/observability"
 )
 
 func main() {
@@ -108,10 +109,11 @@ func main() {
 	mux.HandleFunc("GET /api/v1/payments/{payment_id}/refunds/{refund_id}", paymentHandler.GetRefundH)
 	// Webhooks authenticate by provider signature, not by user token.
 	mux.HandleFunc("POST /api/v1/webhooks/payments/{provider_code}", paymentHandler.WebhookPaymentH)
+	mux.Handle("GET /metrics", observability.MetricsHandler())
 	mux.HandleFunc("GET /healthz", common.HealthHandler)
 	mux.HandleFunc("GET /readyz", common.ReadyHandler(db))
 
-	srv := common.NewServer(":"+common.Getenv("HTTP_PORT", "8083"), common.AccessLog(logger, authn.Middleware(mux)))
+	srv := common.NewServer(":"+common.Getenv("HTTP_PORT", "8083"), common.Observe("payment-service", logger, authn.Middleware(mux)))
 	if err := common.Run(srv, logger, "payment-service"); err != nil {
 		log.Fatalf("payment-service: %v", err)
 	}

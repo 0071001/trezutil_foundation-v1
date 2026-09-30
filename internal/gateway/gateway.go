@@ -10,12 +10,14 @@ import (
 	"net/http/httputil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/trezutil/trezutil/internal/api"
+	"github.com/trezutil/trezutil/packages/observability"
 )
 
 const RequestIDHeader = "X-Request-ID"
@@ -57,6 +59,8 @@ func (g *Gateway) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", g.handleHealthz)
 	mux.HandleFunc("/readyz", g.handleReadyz)
+	// Internet-facing: served only with METRICS_TOKEN set and presented.
+	mux.Handle("/metrics", observability.PublicMetricsHandler())
 	mux.Handle("/api/v1/", http.HandlerFunc(g.apiRouter))
 	mux.Handle("/", http.HandlerFunc(g.staticHandler))
 	return g.requestID(g.logging(g.cors(mux)))
@@ -301,15 +305,46 @@ func (g *Gateway) logging(next http.Handler) http.Handler {
 		ww := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		start := time.Now()
 		next.ServeHTTP(ww, r)
-		g.logger.Info().
-			Str("method", r.Method).
+		elapsed := time.Since(start)
+		route := g.gatewayRoute(r.URL.Path)
+		observability.HTTPRequests.Inc("api-gateway", r.Method, route, strconv.Itoa(ww.status))
+		observability.HTTPDuration.Observe(elapsed.Seconds(), "api-gateway", route)
+		event := g.logger.Info()
+		if ww.status >= 400 {
+			class := "4xx"
+			event = g.logger.Warn()
+			if ww.status >= 500 {
+				class = "5xx"
+				event = g.logger.Error()
+			}
+			observability.HTTPErrors.Inc("api-gateway", route, class)
+		}
+		event.Str("method", r.Method).
 			Str("path", r.URL.Path).
 			Int("status", ww.status).
-			Dur("duration", time.Since(start)).
+			Dur("duration", elapsed).
 			Str("request_id", requestIDFromContext(r.Context())).
 			Str("remote", clientIP(r)).
 			Msg("gateway request")
 	})
+}
+
+// gatewayRoute is the bounded metric label of a gateway request: the API
+// resource (/api/v1/orders), a probe, or "static" for the web app.
+func (g *Gateway) gatewayRoute(path string) string {
+	switch {
+	case strings.HasPrefix(path, "/api/v1/"):
+		for _, rt := range g.routes() {
+			if path == rt.prefix || strings.HasPrefix(path, rt.prefix+"/") {
+				return rt.prefix
+			}
+		}
+		return "unmatched" // never label by an attacker-chosen path
+	case path == "/healthz" || path == "/readyz" || path == "/metrics":
+		return path
+	default:
+		return "static"
+	}
 }
 
 func (g *Gateway) cors(next http.Handler) http.Handler {

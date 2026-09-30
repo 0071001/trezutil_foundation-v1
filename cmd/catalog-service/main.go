@@ -12,9 +12,11 @@ import (
 	"github.com/trezutil/trezutil/internal/api"
 	"github.com/trezutil/trezutil/internal/application"
 	"github.com/trezutil/trezutil/internal/application/vertical"
+	"github.com/trezutil/trezutil/internal/infrastructure/audit"
 	"github.com/trezutil/trezutil/packages/auth"
 	"github.com/trezutil/trezutil/packages/common"
 	"github.com/trezutil/trezutil/packages/database"
+	"github.com/trezutil/trezutil/packages/observability"
 )
 
 func main() {
@@ -44,7 +46,7 @@ func main() {
 		postgres.NewSellerRepository(db),
 		postgres.NewStoreRepository(db),
 		postgres.NewUserRepository(db),
-		nil,
+		audit.NewLogger(logger),
 	).WithVerticals(vertical.DefaultCatalog())
 
 	listingHandler := api.NewListingHandler(listingUseCases)
@@ -55,11 +57,12 @@ func main() {
 	mux.HandleFunc("POST /v1/listings/publish", listingHandler.PublishListingH)
 	mux.HandleFunc("POST /v1/listings/pause", listingHandler.PauseListingH)
 	mux.HandleFunc("POST /v1/listings/resume", listingHandler.ResumeListingH)
+	mux.Handle("GET /metrics", observability.MetricsHandler())
 	mux.HandleFunc("GET /healthz", common.HealthHandler)
 	mux.HandleFunc("GET /health", common.HealthHandler)
 	mux.HandleFunc("GET /readyz", common.ReadyHandler(db))
 
-	srv := common.NewServer(":"+common.Getenv("HTTP_PORT", "8082"), common.AccessLog(logger, authn.Middleware(mux)))
+	srv := common.NewServer(":"+common.Getenv("HTTP_PORT", "8082"), common.Observe("catalog-service", logger, authn.Middleware(mux)))
 	if err := common.Run(srv, logger, "catalog-service"); err != nil {
 		log.Fatalf("catalog-service: %v", err)
 	}
