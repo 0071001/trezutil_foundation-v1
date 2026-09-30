@@ -123,3 +123,25 @@ func TestAnthropicClassifier_GuestsAreNotMetered(t *testing.T) {
 	require.NotNil(t, res.Intent)
 	assert.Equal(t, 0, usage.reservationCtr)
 }
+
+func TestAnthropicClassifier_StructuredHotelIntent(t *testing.T) {
+	classifier, srv, _ := anthropicClassifier(t, nil)
+
+	res, err := classifier.ClassifyIntent(context.Background(), classificationRequest("Find me a hotel in Gombe for two nights for two people"))
+	require.NoError(t, err)
+	require.NotNil(t, res.Intent)
+	assert.Equal(t, domain.ActionSearchListings, res.Intent.Intent)
+	assert.Equal(t, "HOTEL", res.Intent.Parameters["vertical"])
+	assert.Equal(t, "Gombe", res.Intent.Parameters["location"])
+	assert.EqualValues(t, 2, res.Intent.Parameters["nights"])
+	assert.EqualValues(t, 2, res.Intent.Parameters["party_size"])
+	assert.Nil(t, res.Intent.Parameters["text"], "no search words are left once vertical, place and stay are taken out")
+
+	// The model gets the vertical codes as a closed list and the new
+	// parameters; it never gets provider names.
+	body, _ := json.Marshal(srv.Requests()[0])
+	for _, want := range []string{`"HOTEL"`, `"RESTAURANT"`, "party_size", "nights", "location"} {
+		assert.Contains(t, string(body), want)
+	}
+	assert.NotContains(t, string(body), "stripe")
+}

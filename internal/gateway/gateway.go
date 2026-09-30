@@ -86,6 +86,7 @@ func (g *Gateway) routes() []apiRoute {
 		{"/api/v1/reservations", "commerce"},
 		{"/api/v1/availability", "commerce"},
 		{"/api/v1/inventory", "commerce"},
+		{"/api/v1/hotels", "commerce"},
 		{"/api/v1/fulfillments", "commerce"},
 	}
 }

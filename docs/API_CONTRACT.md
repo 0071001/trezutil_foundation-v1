@@ -75,7 +75,22 @@ The server must persist the result for the required replay window.
 - `POST /v1/listings/{listing_id}/unpublish`
 
 ### Search
-- `POST /v1/search/listings`
+- `POST /api/v1/search`:
+  - `text`, `category_id`, `vertical` (catalogue code; unknown → 400 `INVALID_VERTICAL`, never OTHER), `location` (place name; every word must match the listing's place or text), `price_min`/`price_max`, `sort_field`, `sort_direction`, `page_size`, `cursor`;
+  - results carry `Vertical`.
+- `GET /api/v1/verticals` — public vertical catalogue: code, name, flows (`BOOK`/`BUY`), capabilities, accepted listing types.
+
+### Hotels (Hotel Commerce Pack — docs/architecture/HOTEL_COMMERCE_PACK.md)
+- `GET /api/v1/hotels/property?store_id=` — public: a property and its published room types.
+- `GET /api/v1/hotels/availability?store_id=&check_in=&check_out=&guests=[&rooms=]` — public: rooms left per room type (tightest night), total price.
+- `POST /api/v1/hotels/room-types` — seller: create a room type (HOTEL listing + guests per room, beds, amenities + number of rooms).
+- `GET /api/v1/hotels/room-types?organization_id=` — members: room types.
+- `POST /api/v1/hotels/room-types/{listing_id}` — manager: occupancy, beds, amenities.
+- `POST /api/v1/hotels/room-types/{listing_id}/units` — manager: `{"units": n}`.
+- `POST /api/v1/hotels/room-types/{listing_id}/capacity` — manager: `{"from", "to", "rooms"}`, where `to` is excluded and 0 closes the nights.
+- `GET /api/v1/hotels/room-types/{listing_id}/capacity?from=&to=` — members: capacity, reserved and available per night.
+- `POST /api/v1/reservations/{reservation_id}/checkout` — the guest: the order that pays a stay (nights × rooms × nightly rate); pay it with `POST /api/v1/payments`.
+- A stay is booked with `POST /api/v1/reservations`: UTC-midnight `start_at`/`end_at`, `quantity` = rooms, `party_size` = guests. Errors are 400 `INVALID_PARAMETER` (stay rule), 409 `UNAVAILABLE` (rooms taken) and 503 `AVAILABILITY_UNKNOWN` (an external answer could not be established).
 
 Natural-language requests may arrive as text, but the resulting structured query is validated before execution.
 

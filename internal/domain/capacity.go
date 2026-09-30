@@ -117,3 +117,38 @@ type CapacityResult struct {
 	AvailableCapacity int64
 	Units             []*CapacityUnit
 }
+
+// IsTimeWindowed reports whether a resource is booked by time windows
+// (capacity units) rather than counted as stock.
+func (rt ResourceType) IsTimeWindowed() bool {
+	return rt != ResourceTypeCountable && IsValidResourceType(rt)
+}
+
+// CapacityCoverage checks that units (sorted by StartAt) cover the whole
+// period [startAt, endAt) without gaps and returns the tightest window: the
+// period's availability is the fewest free places left in any window it
+// spans (a two-night stay needs a room free on both nights).
+func CapacityCoverage(units []*CapacityUnit, startAt, endAt int64) (available, capacity int64, covered bool) {
+	cursor := startAt
+	first := true
+	for _, u := range units {
+		if u.EndAt <= cursor || u.StartAt >= endAt {
+			continue
+		}
+		if u.StartAt > cursor {
+			return 0, 0, false // a gap before this window
+		}
+		if first || u.Available() < available {
+			available = u.Available()
+		}
+		if first || u.Capacity < capacity {
+			capacity = u.Capacity
+		}
+		first = false
+		cursor = u.EndAt
+		if cursor >= endAt {
+			return available, capacity, true
+		}
+	}
+	return 0, 0, false
+}

@@ -44,14 +44,15 @@ func (r *ReservationRepository) Create(ctx context.Context, reservation *domain.
 	}
 
 	if reservation.ID == "" {
-		query := `INSERT INTO reservations (organization_id, customer_id, listing_id, status, start_at, end_at, quantity, party_size, pricing_snapshot, idempotency_key, version, created_at, updated_at)
-		          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13) RETURNING id`
+		query := `INSERT INTO reservations (organization_id, customer_id, listing_id, status, start_at, end_at, quantity, party_size, pricing_snapshot, idempotency_key, version, created_at, updated_at, capacity_managed)
+		          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) RETURNING id`
 		err = r.db.QueryRowContext(ctx, query,
 			reservation.OrganizationID, reservation.CustomerID, reservation.ListingID,
 			string(reservation.Status), toTime(reservation.StartAt), toTime(reservation.EndAt),
 			reservation.Quantity, reservation.PartySize, string(pricingJSON),
 			nullString(reservation.IdempotencyKey),
 			reservation.Version, toTime(reservation.CreatedAt), toTime(reservation.UpdatedAt),
+			reservation.CapacityManaged,
 		).Scan(&reservation.ID)
 		if err != nil {
 			return mapReservationInsertError(err)
@@ -59,8 +60,8 @@ func (r *ReservationRepository) Create(ctx context.Context, reservation *domain.
 		return nil
 	}
 
-	query := `INSERT INTO reservations (id, organization_id, customer_id, listing_id, status, start_at, end_at, quantity, party_size, pricing_snapshot, idempotency_key, version, created_at, updated_at)
-	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`
+	query := `INSERT INTO reservations (id, organization_id, customer_id, listing_id, status, start_at, end_at, quantity, party_size, pricing_snapshot, idempotency_key, version, created_at, updated_at, capacity_managed)
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`
 
 	_, err = r.db.ExecContext(ctx, query,
 		reservation.ID, reservation.OrganizationID, reservation.CustomerID, reservation.ListingID,
@@ -68,6 +69,7 @@ func (r *ReservationRepository) Create(ctx context.Context, reservation *domain.
 		reservation.Quantity, reservation.PartySize, string(pricingJSON),
 		nullString(reservation.IdempotencyKey),
 		reservation.Version, toTime(reservation.CreatedAt), toTime(reservation.UpdatedAt),
+		reservation.CapacityManaged,
 	)
 	if err != nil {
 		return mapReservationInsertError(err)

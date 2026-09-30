@@ -501,6 +501,7 @@ func TestRouteMappingFinalizationUpstreams(t *testing.T) {
 		"/api/v1/orders/o-1":                   "commerce",
 		"/api/v1/reservations":                 "commerce",
 		"/api/v1/availability":                 "commerce",
+		"/api/v1/hotels/property":              "commerce",
 		"/api/v1/webhooks/whatsapp":            "conversation",
 		"/api/v1/webhooks/payments/mobile-pay": "payment",
 	}

@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"context"
 	"fmt"
 )
 
@@ -27,9 +28,22 @@ type Reservation struct {
 	PartySize       int
 	PricingSnapshot *PricingSnapshot
 	IdempotencyKey  string
+	// CapacityManaged reservations draw from capacity units (rooms, seats,
+	// tables) and may overlap other reservations of the same listing; the
+	// locked capacity units prevent overbooking. Other reservations are
+	// exclusive: the database refuses any overlap for their listing.
+	CapacityManaged bool
 	CreatedAt       int64
 	UpdatedAt       int64
 	Version         int64
+}
+
+// ReservationRule is a vertical's booking rule over the core Reservation (a
+// hotel stay covers whole nights and fits the rooms' occupancy). It returns an
+// error wrapping ErrInvalidParameter when a booking breaks it, and ignores
+// listings of other verticals.
+type ReservationRule interface {
+	CheckReservation(ctx context.Context, listing *Listing, startAt, endAt int64, quantity, partySize int) error
 }
 
 // NewReservation creates a new Reservation in PENDING status.

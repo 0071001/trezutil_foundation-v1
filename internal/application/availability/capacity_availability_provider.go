@@ -82,18 +82,10 @@ func (p *CapacityAvailabilityProvider) CheckAvailability(ctx context.Context, qu
 			return domain.AvailabilityResult{}, fmt.Errorf("capacity lookup failed: %w", err)
 		}
 
-		var totalCapacity, availableCapacity int64
-		allOverlap := true
-		for _, unit := range units {
-			if !unit.Overlaps(query.StartAt, query.EndAt) {
-				allOverlap = false
-				continue
-			}
-			totalCapacity += unit.Capacity
-			availableCapacity += unit.Available()
-		}
-
-		if !allOverlap || len(units) == 0 {
+		// The period must be covered by capacity windows without gaps, and it
+		// is only as available as its tightest window.
+		availableCapacity, totalCapacity, covered := domain.CapacityCoverage(units, query.StartAt, query.EndAt)
+		if !covered {
 			return domain.AvailabilityResult{
 				Available: false,
 				Capacity:  0,

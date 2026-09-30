@@ -2,6 +2,7 @@ package commerce
 
 import (
 	"context"
+	"strings"
 
 	"github.com/trezutil/trezutil/internal/domain"
 )
@@ -32,6 +33,16 @@ func (h *SearchHandler) Handle(ctx context.Context, actor domain.CommerceActor, 
 		query.StoreID = storeID
 	}
 
+	// Vertical and location arrive validated and normalized by the runtime
+	// parameter validator. nights and party_size do not filter search: a party
+	// of four can take two double rooms; they are used when checking availability.
+	if v, ok := parameters["vertical"].(string); ok && v != "" {
+		query.Vertical = domain.NormalizeVertical(v)
+	}
+	if place, ok := parameters["location"].(string); ok {
+		query.Place = strings.TrimSpace(place)
+	}
+
 	if pageStr, ok := parameters["page"].(string); ok && pageStr != "" {
 		query.Pagination.Cursor = pageStr
 	}
@@ -50,12 +61,51 @@ func (h *SearchHandler) Handle(ctx context.Context, actor domain.CommerceActor, 
 		return nil, err
 	}
 
-	return map[string]interface{}{
+	// Place data is often incomplete (a store without a city). When the place
+	// filter finds nothing, search again with the place as ranking words and
+	// say so, rather than answering "nothing" or dropping it silently. The
+	// vertical is never relaxed.
+	relaxed := false
+	if result.Total == 0 && query.Place != "" {
+		wider := query
+		wider.Text = strings.TrimSpace(query.Text + " " + query.Place)
+		wider.Place = ""
+		if again, err := h.searchUseCases.ExecuteSearch(ctx, actor.ID, wider); err == nil && again.Total > 0 {
+			result, relaxed = again, true
+		}
+	}
+
+	out := map[string]interface{}{
 		"items":       result.Items,
 		"total":       result.Total,
 		"has_next":    result.HasNext,
 		"next_cursor": result.NextCursor,
-	}, nil
+	}
+	if criteria := searchCriteria(query, parameters); len(criteria) > 0 {
+		out["criteria"] = criteria
+	}
+	if relaxed {
+		out["relaxed"] = []string{"location"}
+	}
+	return out, nil
+}
+
+// searchCriteria echoes the structured criteria the search ran with, so the
+// reply can state them ("Hotels in Gombe · 2 nights · 2 guests").
+func searchCriteria(query domain.DiscoveryQuery, parameters map[string]interface{}) map[string]interface{} {
+	c := map[string]interface{}{}
+	if query.Vertical != "" {
+		c["vertical"] = string(query.Vertical)
+	}
+	if query.Place != "" {
+		c["location"] = query.Place
+	}
+	for _, k := range []string{"nights", "party_size"} {
+		if n, ok := intParam(parameters, k); ok && n > 0 {
+			c[k] = n
+		}
+	}
+	return c
 }
 
 // ActionType returns the action type this handler handles.

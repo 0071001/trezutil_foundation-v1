@@ -10,6 +10,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/trezutil/trezutil/internal/application/commerce"
+	"github.com/trezutil/trezutil/internal/application/vertical"
 	"github.com/trezutil/trezutil/internal/domain"
 )
 
@@ -435,6 +436,7 @@ func (p *ConversationProcessor) handleNewMessage(
 
 	// Build and execute the action
 	action := intent.ToAction(conv.ID, req.Actor, req.TenantID)
+	applySearchCriteria(cx, action)
 	if listingScopedActions[action.ActionType] {
 		if v, ok := action.Parameters["listing_id"]; !ok || v == "" {
 			if id := currentListingID(cx); id != "" {
@@ -717,7 +719,20 @@ func successText(actionType domain.CommerceActionType, data interface{}) string 
 			return "I couldn't find anything matching that yet. Try other words, a neighbourhood, or a category."
 		}
 		var b strings.Builder
-		fmt.Fprintf(&b, "Here is what I found (%d):", len(items))
+		heading := ""
+		if m, ok := data.(map[string]interface{}); ok {
+			if _, relaxed := m["relaxed"]; relaxed {
+				if c, ok := m["criteria"].(map[string]interface{}); ok && c["location"] != nil {
+					fmt.Fprintf(&b, "Nothing is listed in %v yet, so here are the closest matches.\n", c["location"])
+				}
+			}
+			heading = criteriaHeading(m["criteria"])
+		}
+		if heading != "" {
+			fmt.Fprintf(&b, "%s — %d found:", heading, len(items))
+		} else {
+			fmt.Fprintf(&b, "Here is what I found (%d):", len(items))
+		}
 		for i, it := range items {
 			if i == 5 {
 				b.WriteString("\n…and more.")
@@ -824,6 +839,10 @@ var friendlyParamPrompts = map[string]string{
 	"start_at":       "When should it start? (e.g. 2026-10-01 14:00)",
 	"end_at":         "And when should it end? (e.g. 2026-10-03 11:00)",
 	"quantity":       "How many would you like?",
+	"vertical":       "What kind of place are you looking for? (e.g. a hotel, a restaurant, an apartment)",
+	"location":       "Where? (e.g. Gombe)",
+	"nights":         "For how many nights?",
+	"party_size":     "For how many people?",
 	"order_id":       "Which order? Please share its reference.",
 	"reservation_id": "Which reservation? Please share its reference.",
 }
@@ -1062,6 +1081,100 @@ func (p *ConversationProcessor) loadOwnedPendingConfirmation(ctx context.Context
 
 // listingScopedActions act on one listing; "book it", "buy it" or "pause this
 // listing" refer to the listing the user is currently looking at.
+// criteriaHeading states the structured criteria of a search:
+// "Hotels & accommodation in Gombe · 2 nights · 2 guests".
+func criteriaHeading(raw interface{}) string {
+	c, ok := raw.(map[string]interface{})
+	if !ok || len(c) == 0 {
+		return ""
+	}
+	var parts []string
+	head := "Results"
+	if v, ok := c["vertical"].(string); ok {
+		if def, found := vertical.DefaultCatalog().Get(domain.Vertical(v)); found {
+			head = def.Name
+		}
+	}
+	if loc, ok := c["location"].(string); ok && loc != "" {
+		head += " in " + loc
+	}
+	parts = append(parts, head)
+	if n := toInt(c["nights"]); n > 0 {
+		parts = append(parts, pluralize(n, "night"))
+	}
+	if n := toInt(c["party_size"]); n > 0 {
+		parts = append(parts, pluralize(n, "guest"))
+	}
+	return strings.Join(parts, " · ")
+}
+
+func toInt(v interface{}) int {
+	switch n := v.(type) {
+	case int:
+		return n
+	case int64:
+		return int(n)
+	case float64:
+		return int(n)
+	}
+	return 0
+}
+
+func pluralize(n int, word string) string {
+	if n == 1 {
+		return "1 " + word
+	}
+	return fmt.Sprintf("%d %ss", n, word)
+}
+
+// applySearchCriteria remembers the structured criteria of a search and lends
+// them to a later availability check or booking that doesn't restate them
+// ("a hotel in Gombe for two nights for two people" … "book it").
+func applySearchCriteria(cx *domain.ConversationContext, action *domain.CommerceAction) {
+	if action.Parameters == nil {
+		action.Parameters = map[string]interface{}{}
+	}
+	str := func(k string) string {
+		if v, ok := action.Parameters[k]; ok && v != nil {
+			return strings.TrimSpace(fmt.Sprintf("%v", v))
+		}
+		return ""
+	}
+	num := func(k string) int {
+		n, _ := strconv.Atoi(str(k))
+		return n
+	}
+	switch action.ActionType {
+	case domain.ActionSearchListings:
+		c := domain.SearchCriteria{
+			Vertical:  domain.NormalizeVertical(str("vertical")),
+			Location:  str("location"),
+			Nights:    num("nights"),
+			PartySize: num("party_size"),
+			StartAt:   str("start_at"),
+		}
+		if c.IsZero() {
+			cx.SearchCriteria = nil
+		} else {
+			cx.SearchCriteria = &c
+		}
+	case domain.ActionCheckAvailability, domain.ActionCreateReservation:
+		c := cx.SearchCriteria
+		if c == nil {
+			return
+		}
+		if str("nights") == "" && c.Nights > 0 {
+			action.Parameters["nights"] = c.Nights
+		}
+		if str("party_size") == "" && c.PartySize > 0 {
+			action.Parameters["party_size"] = c.PartySize
+		}
+		if str("start_at") == "" && c.StartAt != "" {
+			action.Parameters["start_at"] = c.StartAt
+		}
+	}
+}
+
 var listingScopedActions = map[domain.CommerceActionType]bool{
 	domain.ActionGetListing:        true,
 	domain.ActionCheckAvailability: true,
@@ -1106,7 +1219,7 @@ func resolveActionTypeKeyword(text string) domain.CommerceActionType {
 		return domain.ActionPublishListing
 	}
 
-	if strings.Contains(lower, "search") || strings.Contains(lower, "find") ||
+	if strings.Contains(lower, "search") || strings.Contains(lower, "find") || strings.Contains(lower, "cherch") ||
 		strings.Contains(lower, "look") || strings.Contains(lower, "browse") ||
 		strings.Contains(lower, "catalog") || strings.Contains(lower, "list") ||
 		strings.Contains(lower, "suggest") || strings.Contains(lower, "recommend") ||

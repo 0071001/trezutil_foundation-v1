@@ -168,78 +168,91 @@ func (r *CapacityRepository) Release(ctx context.Context, id string, quantity in
 	return nil
 }
 
-// ReserveCapacity reserves capacity across all units in the given time range for a listing.
+// ReserveCapacity takes quantity places in every capacity window of the
+// listing's time-windowed resource (rooms, seats, time slots…) that overlaps
+// [startAt, endAt). The windows are locked in one transaction; the period must
+// be covered without gaps and every window must have room, otherwise nothing
+// changes (ErrInsufficientCapacity). Listings without a time-windowed resource
+// (stock, single bookable units) have no capacity to reserve.
 func (r *CapacityRepository) ReserveCapacity(ctx context.Context, tenantID, listingID string, startAt, endAt int64, quantity int64, reservationID string) error {
-	// First find the inventory for this listing
-	invRow := r.db.QueryRowContext(ctx, `
-		SELECT id FROM inventory_resources WHERE listing_id = $1
-	`, listingID)
-	var inventoryID string
-	if err := invRow.Scan(&inventoryID); err != nil {
-		if err == sql.ErrNoRows {
-			return nil // No inventory, no capacity to reserve
-		}
-		return fmt.Errorf("failed to find inventory: %w", err)
+	if quantity <= 0 {
+		return domain.ErrInvalidCapacityQuantity
 	}
-
-	units, err := r.FindByInventoryIDAndRangeForUpdate(ctx, tenantID, inventoryID, startAt, endAt)
-	if err != nil {
-		return err
-	}
-
-	for _, u := range units {
-		if u.Available() < quantity {
-			return domain.ErrInsufficientCapacity
-		}
-	}
-
-	now := time.Now().Unix()
-	for _, u := range units {
-		if err := r.Reserve(ctx, u.ID, quantity, u.Version); err != nil {
-			return err
-		}
-		// Note: audit logging is handled by the caller
-		_ = now
-		_ = reservationID
-	}
-	return nil
+	return r.adjustCapacity(ctx, listingID, startAt, endAt, quantity)
 }
 
-// ReleaseCapacity releases capacity across all units in the given time range for a listing.
+// ReleaseCapacity gives back quantity places in every window of the period,
+// in one transaction.
 func (r *CapacityRepository) ReleaseCapacity(ctx context.Context, tenantID, listingID string, startAt, endAt int64, quantity int64, reservationID string) error {
-	// First find the inventory for this listing
-	invRow := r.db.QueryRowContext(ctx, `
-		SELECT id FROM inventory_resources WHERE listing_id = $1
-	`, listingID)
+	if quantity <= 0 {
+		return domain.ErrInvalidCapacityQuantity
+	}
+	return r.adjustCapacity(ctx, listingID, startAt, endAt, -quantity)
+}
+
+func (r *CapacityRepository) adjustCapacity(ctx context.Context, listingID string, startAt, endAt, delta int64) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin capacity transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	var inventoryID string
-	if err := invRow.Scan(&inventoryID); err != nil {
-		if err == sql.ErrNoRows {
-			return nil // No inventory, no capacity to release
-		}
+	err = tx.QueryRowContext(ctx, `
+		SELECT id FROM inventory_resources
+		WHERE listing_id = $1 AND resource_type <> 'COUNTABLE'
+		ORDER BY created_at LIMIT 1
+	`, listingID).Scan(&inventoryID)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
 		return fmt.Errorf("failed to find inventory: %w", err)
 	}
 
-	units, err := r.FindByInventoryIDAndRangeForUpdate(ctx, tenantID, inventoryID, startAt, endAt)
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id, inventory_id, start_at, end_at, capacity, reserved, version, created_at, updated_at
+		FROM capacity_units WHERE inventory_id = $1 AND start_at < $3 AND end_at > $2
+		ORDER BY start_at ASC FOR UPDATE
+	`, inventoryID, toTime(startAt), toTime(endAt))
 	if err != nil {
+		return fmt.Errorf("failed to lock capacity units: %w", err)
+	}
+	var units []*domain.CapacityUnit
+	for rows.Next() {
+		u, err := scanCapacityUnitFromRow(rows)
+		if err != nil {
+			rows.Close()
+			return err
+		}
+		units = append(units, u)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
 		return err
 	}
 
-	for _, u := range units {
-		if u.Reserved < quantity {
-			return domain.ErrInvalidCapacityQuantity
+	if delta > 0 {
+		available, _, covered := domain.CapacityCoverage(units, startAt, endAt)
+		if !covered || available < delta {
+			return domain.ErrInsufficientCapacity
+		}
+	} else {
+		for _, u := range units {
+			if u.Reserved < -delta {
+				return domain.ErrInvalidCapacityQuantity
+			}
 		}
 	}
-
-	now := time.Now().Unix()
 	for _, u := range units {
-		if err := r.Release(ctx, u.ID, quantity, u.Version); err != nil {
-			return err
+		if _, err := tx.ExecContext(ctx, `
+			UPDATE capacity_units SET reserved = reserved + $1, version = version + 1, updated_at = NOW()
+			WHERE id = $2
+		`, delta, u.ID); err != nil {
+			return fmt.Errorf("failed to update capacity unit: %w", err)
 		}
-		// Note: audit logging is handled by the caller
-		_ = now
-		_ = reservationID
 	}
-	return nil
+	return tx.Commit()
 }
 
 func scanCapacityUnit(row *sql.Row) (*domain.CapacityUnit, error) {
@@ -277,4 +290,83 @@ func unmarshalCapacityUnit(r capacityUnitRow) *domain.CapacityUnit {
 		CreatedAt:   toUnix(r.CreatedAt),
 		UpdatedAt:   toUnix(r.UpdatedAt),
 	}
+}
+
+// SetWindowCapacities sets the capacity of exact windows of one resource in a
+// single transaction: an existing window is updated, a missing one created,
+// and capacity 0 removes it. Lowering a window below what is already reserved
+// in it, or overlapping a window with different boundaries, is refused with
+// ErrCapacityConflict and nothing changes.
+func (r *CapacityRepository) SetWindowCapacities(ctx context.Context, inventoryID string, windows []domain.CapacityWindow) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin capacity transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	now := time.Now()
+	for _, w := range windows {
+		rows, err := tx.QueryContext(ctx, `
+			SELECT id, start_at, end_at, reserved FROM capacity_units
+			WHERE inventory_id = $1 AND start_at < $3 AND end_at > $2 FOR UPDATE
+		`, inventoryID, toTime(w.StartAt), toTime(w.EndAt))
+		if err != nil {
+			return fmt.Errorf("failed to lock capacity window: %w", err)
+		}
+		type existing struct {
+			id         string
+			start, end time.Time
+			reserved   int64
+		}
+		var found []existing
+		for rows.Next() {
+			var e existing
+			if err := rows.Scan(&e.id, &e.start, &e.end, &e.reserved); err != nil {
+				rows.Close()
+				return err
+			}
+			found = append(found, e)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		date := time.Unix(w.StartAt, 0).UTC().Format("2006-01-02")
+		switch {
+		case len(found) > 1 || (len(found) == 1 && (found[0].start.Unix() != w.StartAt || found[0].end.Unix() != w.EndAt)):
+			return fmt.Errorf("%w: %s overlaps a capacity window with other boundaries", domain.ErrCapacityConflict, date)
+		case len(found) == 1 && w.Capacity < found[0].reserved:
+			return fmt.Errorf("%w: %s already has %d booked", domain.ErrCapacityConflict, date, found[0].reserved)
+		case len(found) == 1 && w.Capacity == 0:
+			if _, err := tx.ExecContext(ctx, `DELETE FROM capacity_units WHERE id = $1`, found[0].id); err != nil {
+				return fmt.Errorf("failed to close capacity window: %w", err)
+			}
+		case len(found) == 1:
+			if _, err := tx.ExecContext(ctx, `
+				UPDATE capacity_units SET capacity = $1, version = version + 1, updated_at = $2 WHERE id = $3
+			`, w.Capacity, now, found[0].id); err != nil {
+				return fmt.Errorf("failed to update capacity window: %w", err)
+			}
+		case w.Capacity > 0:
+			if _, err := tx.ExecContext(ctx, `
+				INSERT INTO capacity_units (id, inventory_id, start_at, end_at, capacity, reserved, version, created_at, updated_at)
+				VALUES ($1, $2, $3, $4, $5, 0, 1, $6, $6)
+			`, domain.NewID(), inventoryID, toTime(w.StartAt), toTime(w.EndAt), w.Capacity, now); err != nil {
+				return fmt.Errorf("failed to create capacity window: %w", err)
+			}
+		}
+	}
+	return tx.Commit()
+}
+
+// MaxWindowCapacityFrom returns the largest capacity of the resource's
+// windows ending after from (0 when none).
+func (r *CapacityRepository) MaxWindowCapacityFrom(ctx context.Context, inventoryID string, from int64) (int64, error) {
+	var max sql.NullInt64
+	if err := r.db.QueryRowContext(ctx, `
+		SELECT MAX(capacity) FROM capacity_units WHERE inventory_id = $1 AND end_at > $2
+	`, inventoryID, toTime(from)).Scan(&max); err != nil {
+		return 0, fmt.Errorf("failed to read capacity: %w", err)
+	}
+	return max.Int64, nil
 }

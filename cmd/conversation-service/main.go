@@ -17,6 +17,7 @@ import (
 	"github.com/trezutil/trezutil/internal/application/availability"
 	"github.com/trezutil/trezutil/internal/application/commerce"
 	"github.com/trezutil/trezutil/internal/application/conversation"
+	"github.com/trezutil/trezutil/internal/application/hotel"
 	"github.com/trezutil/trezutil/internal/application/reservations"
 	"github.com/trezutil/trezutil/internal/application/vertical"
 	whatsappapp "github.com/trezutil/trezutil/internal/application/whatsapp"
@@ -77,7 +78,7 @@ func main() {
 		postgres.NewListingMediaRepository(db), postgres.NewListingAvailabilityRepository(db),
 		postgres.NewLocationRepository(db), postgres.NewListingLocationRepository(db),
 		orgRepo, sellerRepo, storeRepo, userRepo, nil,
-	)
+	).WithVerticals(vertical.DefaultCatalog())
 	orderUseCases := application.NewOrderUseCases(postgres.NewOrderRepository(db), listingRepo, sellerRepo, orgRepo, userRepo, inventoryRepo, fulfillmentRepo, nil)
 	availabilityProvider := availability.NewCapacityAvailabilityProvider(inventoryRepo, capacityRepo).WithReservations(reservationRepo)
 	availabilityUseCases := availability.NewAvailabilityUseCases(listingRepo, availabilityProvider, nil)
@@ -85,7 +86,7 @@ func main() {
 		reservationRepo, listingRepo, sellerRepo, userRepo, orgRepo,
 		availabilityProvider, capacityRepo, inventoryRepo, fulfillmentRepo, nil,
 		reservations.ConfirmationPolicy{AutoConfirm: true},
-	)
+	).WithRules(hotel.NewService(hotel.Config{RoomTypes: postgres.NewHotelRoomTypeRepository(db)}))
 	searchUseCases := buildSearch(logger)
 
 	registry := commerce.NewHandlerRegistry()
@@ -115,11 +116,11 @@ func main() {
 	})
 
 	// Vertical packs
+	// One pack catalogue (application/vertical.PackDefinitions); the vertical
+	// catalogue composes these packs.
 	packRegistry := vertical.NewPackRegistry(vertical.PackRegistryConfig{Logger: logger})
-	for _, pack := range defaultVerticalPacks() {
-		if err := packRegistry.Register(pack); err != nil {
-			logger.Warn().Err(err).Msg("Failed to register pack")
-		}
+	if err := vertical.LoadAllPacks(packRegistry); err != nil {
+		logger.Warn().Err(err).Msg("Failed to register packs")
 	}
 	policyEngine := vertical.NewPolicyEngine(vertical.PolicyEngineConfig{Logger: logger})
 	packResolver := vertical.NewPackResolver(vertical.PackResolverConfig{
@@ -282,46 +283,6 @@ func requireOperatorForWrites(users domain.UserRepository, next http.HandlerFunc
 		}
 		next(w, r)
 	}
-}
-
-func defaultVerticalPacks() []*domain.VerticalPack {
-	eCommerce := domain.NewVerticalPack(
-		domain.PackECommerce,
-		"E-Commerce Pack",
-		[]domain.PackCapability{
-			domain.CapabilitySearch, domain.CapabilityOrdering,
-			domain.CapabilityInventory, domain.CapabilityFulfillment,
-			domain.CapabilityCustomerSupport, domain.CapabilityMerchantOps,
-		},
-		domain.AISpecialistCommerce,
-	)
-	eCommerce.SupportedActions = []domain.CommerceActionType{
-		domain.ActionSearchListings, domain.ActionGetListing,
-		domain.ActionCompareListings, domain.ActionSuggest,
-		domain.ActionCreateOrder, domain.ActionGetOrder,
-		domain.ActionCancelOrder, domain.ActionInitiatePayment,
-		domain.ActionGetPaymentStatus, domain.ActionGetDeliveryStatus,
-		domain.ActionGetFulfillmentStatus,
-	}
-
-	booking := domain.NewVerticalPack(
-		domain.PackBooking,
-		"Booking & Hospitality Pack",
-		[]domain.PackCapability{
-			domain.CapabilitySearch, domain.CapabilityAvailability,
-			domain.CapabilityReservation, domain.CapabilityCapacity,
-			domain.CapabilityScheduling, domain.CapabilityCustomerSupport,
-		},
-		domain.AISpecialistBooking,
-	)
-	booking.SupportedActions = []domain.CommerceActionType{
-		domain.ActionSearchListings, domain.ActionGetListing,
-		domain.ActionSuggest, domain.ActionCheckAvailability,
-		domain.ActionCreateReservation, domain.ActionGetReservation,
-		domain.ActionCancelReservation, domain.ActionModifyReservation,
-	}
-
-	return []*domain.VerticalPack{eCommerce, booking}
 }
 
 // allPacksEnabledRepo reports every pack as enabled for every organization.

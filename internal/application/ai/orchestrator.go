@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/trezutil/trezutil/internal/application/commerce"
 	"github.com/trezutil/trezutil/internal/application/conversation"
+	"github.com/trezutil/trezutil/internal/application/vertical"
 	"github.com/trezutil/trezutil/internal/domain"
 )
 
@@ -314,15 +315,34 @@ Intents:
 	b.WriteString(`- NONE: anything else, including placing orders, making or cancelling bookings, payments, and seller operations (these are handled elsewhere).
 
 Parameters (omit any you cannot read from the conversation; never invent identifiers):
-- text: search words for SEARCH_LISTINGS / SUGGEST, keeping product type, features and place, e.g. "2 bedroom apartment Kinshasa"
+- vertical: the kind of place or offer when the user names one, as one of these codes:
+` + verticalHelp() + `- location: a place name (neighbourhood, commune or city), e.g. "Gombe"
+- text: the search words left after taking out the vertical, the place, dates and party size, e.g. "2 bedroom" or "sea view"; omit it when nothing is left
+- nights: number of nights of a stay
+- party_size: number of people
 - listing_id, order_id, reservation_id: identifiers quoted by the user or shown earlier in the conversation
-- start_at, end_at: ISO 8601 dates for availability checks
+- start_at, end_at: ISO 8601 dates for availability checks (a stay starts on the check-in date)
 - quantity: number of units
 
 You never receive and must never output tenant, user, actor or organization IDs, roles, permissions or confirmation states; those are handled server-side.
 confidence is your probability (0 to 1) that the intent is right.`)
 	return b.String()
 }()
+
+// verticalHelp lists the catalogue's verticals with the words customers use
+// for them. The model only names a vertical; which sellers or providers serve
+// it is decided server-side.
+func verticalHelp() string {
+	var b strings.Builder
+	for _, def := range vertical.DefaultCatalog().All() {
+		b.WriteString("  " + string(def.Code) + " (" + def.Name)
+		if len(def.Keywords) > 0 {
+			b.WriteString(": " + strings.Join(def.Keywords, ", "))
+		}
+		b.WriteString(")\n")
+	}
+	return b.String()
+}
 
 var intentHelp = map[domain.CommerceActionType]string{
 	domain.ActionSearchListings:       "find listings matching a description",
@@ -445,6 +465,10 @@ func intentOutputSchema() *domain.JSONSchema {
 	str := func(d string) domain.JSONSchemaProperty {
 		return domain.JSONSchemaProperty{Type: "string", Description: d}
 	}
+	verticals := make([]string, 0, 10)
+	for _, def := range vertical.DefaultCatalog().All() {
+		verticals = append(verticals, string(def.Code))
+	}
 	return &domain.JSONSchema{
 		Type: "object",
 		Properties: map[string]domain.JSONSchemaProperty{
@@ -468,6 +492,10 @@ func intentOutputSchema() *domain.JSONSchema {
 					"start_at":       str("ISO 8601 start date"),
 					"end_at":         str("ISO 8601 end date"),
 					"quantity":       {Type: "integer", Description: "Number of units"},
+					"vertical":       {Type: "string", Description: "Commerce vertical named by the user", Enum: verticals},
+					"location":       str("Place name, e.g. a neighbourhood or city"),
+					"nights":         {Type: "integer", Description: "Number of nights of a stay"},
+					"party_size":     {Type: "integer", Description: "Number of people"},
 				},
 			},
 			"explanation": {

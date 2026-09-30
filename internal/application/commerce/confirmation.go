@@ -30,6 +30,10 @@ func (p *DefaultConfirmationPolicy) RequiresConfirmation(ctx context.Context, ac
 	case domain.ActionCreateListing, domain.ActionUpdateListing, domain.ActionPublishListing, domain.ActionPauseListing,
 		domain.ActionCreateOrder, domain.ActionCancelOrder, domain.ActionCreateCampaign:
 		return true, "This action requires confirmation before execution"
+	case domain.ActionCreateReservation, domain.ActionCancelReservation, domain.ActionModifyReservation:
+		// Bookings hold capacity and may become payable stays; like orders they
+		// run only after the customer confirms (domain.AIActionRequiresConfirmation).
+		return true, "Booking changes require confirmation before execution"
 	case domain.ActionInitiatePayment, domain.ActionCancelPayment, domain.ActionRefundPayment,
 		domain.ActionAuthorizePayment, domain.ActionCapturePayment:
 		return true, "Payment action requires confirmation before execution"

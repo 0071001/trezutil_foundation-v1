@@ -30,6 +30,14 @@ type ReservationUseCasesImpl struct {
 	fulfillmentRepo    domain.FulfillmentRepository
 	auditLogger        domain.AuditLogger
 	confirmationPolicy ConfirmationPolicy
+	rules              []domain.ReservationRule
+}
+
+// WithRules adds vertical booking rules (e.g. the Hotel pack's stay rule),
+// checked on every reservation whatever the channel.
+func (u *ReservationUseCasesImpl) WithRules(rules ...domain.ReservationRule) *ReservationUseCasesImpl {
+	u.rules = append(u.rules, rules...)
+	return u
 }
 
 // ConfirmationPolicy defines rules for reservation confirmation.
@@ -131,6 +139,21 @@ func (u *ReservationUseCasesImpl) CreateReservation(
 		}
 	}
 
+	for _, rule := range u.rules {
+		if err := rule.CheckReservation(ctx, listing, startAt, endAt, quantity, partySize); err != nil {
+			return nil, err
+		}
+	}
+
+	// A listing with a time-windowed resource (rooms, seats, time slots) is
+	// booked from its capacity windows: several bookings may share a period.
+	capacityManaged := false
+	if u.inventoryRepo != nil {
+		if inv, err := u.inventoryRepo.FindByListingID(ctx, tenantID, listingID); err == nil && inv != nil {
+			capacityManaged = inv.ResourceType.IsTimeWindowed()
+		}
+	}
+
 	availabilityQuery := domain.AvailabilityQuery{
 		TenantID:  tenantID,
 		ListingID: listingID,
@@ -150,6 +173,7 @@ func (u *ReservationUseCasesImpl) CreateReservation(
 	now := time.Now().Unix()
 	reservation := domain.NewReservation(tenantID, actorID, listingID, startAt, endAt, quantity, partySize, now)
 	reservation.IdempotencyKey = idempotencyKey
+	reservation.CapacityManaged = capacityManaged
 
 	// Holds taken below are released again if any later step fails, so a
 	// rejected booking never leaks capacity or stock.
@@ -175,8 +199,9 @@ func (u *ReservationUseCasesImpl) CreateReservation(
 		capacityHeld = true
 	}
 
-	// Reserve inventory if inventory repo is available
-	if u.inventoryRepo != nil {
+	// Reserve stock (COUNTABLE inventory) if any. Time-windowed resources are
+	// held by the capacity windows above, not by their lifetime total.
+	if u.inventoryRepo != nil && !capacityManaged {
 		inv, err := u.inventoryRepo.FindByListingIDForUpdate(ctx, tenantID, listingID)
 		if err != nil {
 			// If no inventory resource exists, skip (non-inventory-controlled)
@@ -315,7 +340,7 @@ func (u *ReservationUseCasesImpl) CancelReservation(ctx context.Context, actorID
 	// Release inventory if it was reserved
 	if u.inventoryRepo != nil {
 		inv, err := u.inventoryRepo.FindByListingIDForUpdate(ctx, reservation.OrganizationID, reservation.ListingID)
-		if err == nil {
+		if err == nil && !inv.ResourceType.IsTimeWindowed() {
 			if err := inv.Release(int64(reservation.Quantity), now); err != nil {
 				return fmt.Errorf("failed to release inventory: %w", err)
 			}
@@ -405,6 +430,10 @@ func (u *ReservationUseCasesImpl) findIdempotentReservation(ctx context.Context,
 }
 
 func (u *ReservationUseCasesImpl) inferFulfillmentType(listing *domain.Listing) domain.FulfillmentType {
+	if listing.Vertical == domain.VerticalHotel {
+		// A stay is attended from the check-in date (HOTEL fulfillment types).
+		return domain.FulfillmentTypeAppointment
+	}
 	switch listing.ListingType {
 	case domain.ListingTypeService:
 		return domain.FulfillmentTypeAppointment

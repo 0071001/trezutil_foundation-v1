@@ -8,6 +8,7 @@ type ConversationContext struct {
 	CurrentOrder           *OrderRef             `json:"current_order,omitempty"`
 	CurrentReservation     *ReservationRef       `json:"current_reservation,omitempty"`
 	CurrentSearchQuery     *DiscoveryQuery       `json:"current_search_query,omitempty"`
+	SearchCriteria         *SearchCriteria       `json:"search_criteria,omitempty"`
 	CurrentLocation        *SearchLocation       `json:"current_location,omitempty"`
 	CurrentListingLocation *GeoPoint             `json:"current_listing_location,omitempty"`
 	PendingAction          *CommerceAction       `json:"pending_action,omitempty"`
@@ -21,6 +22,22 @@ type ConversationContext struct {
 	PackCode               PackCode              `json:"pack_code,omitempty"`
 	Language               string                `json:"language,omitempty"`
 	LastActivityAt         int64                 `json:"last_activity_at"`
+}
+
+// SearchCriteria are the structured criteria of the latest search (vertical,
+// place, stay length, party size, start). Follow-ups such as "book it" or "is it
+// free?" reuse them instead of asking again.
+type SearchCriteria struct {
+	Vertical  Vertical `json:"vertical,omitempty"`
+	Location  string   `json:"location,omitempty"`
+	Nights    int      `json:"nights,omitempty"`
+	PartySize int      `json:"party_size,omitempty"`
+	StartAt   string   `json:"start_at,omitempty"`
+}
+
+// IsZero reports whether no criterion is set.
+func (c SearchCriteria) IsZero() bool {
+	return c == SearchCriteria{}
 }
 
 // PendingParameter represents a parameter the system is waiting for the user to provide.

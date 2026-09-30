@@ -12,7 +12,9 @@ import (
 	"github.com/trezutil/trezutil/internal/api"
 	"github.com/trezutil/trezutil/internal/application"
 	"github.com/trezutil/trezutil/internal/application/availability"
+	"github.com/trezutil/trezutil/internal/application/hotel"
 	"github.com/trezutil/trezutil/internal/application/reservations"
+	"github.com/trezutil/trezutil/internal/application/vertical"
 	"github.com/trezutil/trezutil/internal/domain"
 	"github.com/trezutil/trezutil/packages/auth"
 	"github.com/trezutil/trezutil/packages/common"
@@ -46,11 +48,28 @@ func main() {
 	orderUseCases := application.NewOrderUseCases(orderRepo, listingRepo, sellerRepo, orgRepo, userRepo, inventoryRepo, fulfillmentRepo, nil)
 	availabilityProvider := availability.NewCapacityAvailabilityProvider(inventoryRepo, capacityRepo).WithReservations(reservationRepo)
 	availabilityUseCases := availability.NewAvailabilityUseCases(listingRepo, availabilityProvider, nil)
+	storeRepo := postgres.NewStoreRepository(db)
+	mediaRepo := postgres.NewListingMediaRepository(db)
+	listingUseCases := application.NewListingUseCases(
+		listingRepo, postgres.NewCategoryRepository(db),
+		postgres.NewAttributeDefinitionRepository(db), postgres.NewAttributeValueRepository(db),
+		mediaRepo, postgres.NewListingAvailabilityRepository(db),
+		postgres.NewLocationRepository(db), postgres.NewListingLocationRepository(db),
+		orgRepo, sellerRepo, storeRepo, userRepo, nil,
+	).WithVerticals(vertical.DefaultCatalog())
+	// Hotel Commerce Pack: room types, rooms, nightly capacity and stays on the
+	// Commerce Core (docs/architecture/HOTEL_COMMERCE_PACK.md).
+	hotels := hotel.NewService(hotel.Config{
+		Listings: listingUseCases, ListingRepo: listingRepo, Media: mediaRepo,
+		RoomTypes: postgres.NewHotelRoomTypeRepository(db), Inventory: inventoryRepo, Capacity: capacityRepo,
+		Availability: availabilityProvider, Reservations: reservationRepo, Orders: orderUseCases,
+		Stores: storeRepo, Orgs: orgRepo, Users: userRepo,
+	})
 	reservationUseCases := reservations.NewReservationUseCases(
 		reservationRepo, listingRepo, sellerRepo, userRepo, orgRepo,
 		availabilityProvider, capacityRepo, inventoryRepo, fulfillmentRepo, nil,
 		reservations.ConfirmationPolicy{AutoConfirm: true},
-	)
+	).WithRules(hotels)
 
 	orders := api.NewOrderHandler(orderUseCases)
 	bookings := api.NewReservationHandler(reservationUseCases, availabilityUseCases)
@@ -73,6 +92,18 @@ func main() {
 	mux.HandleFunc("GET /api/v1/reservations/{reservation_id}", stripAPI(bookings.GetReservationH))
 	mux.HandleFunc("POST /api/v1/reservations/{reservation_id}/cancel", stripAPI(bookings.CancelReservationH))
 	mux.HandleFunc("GET /api/v1/availability", bookings.CheckAvailabilityH)
+	// Hotel Commerce Pack (authorization inside the use cases; property and
+	// availability are public like search)
+	hotelAPI := api.NewHotelHandler(hotels)
+	mux.HandleFunc("POST /api/v1/reservations/{reservation_id}/checkout", hotelAPI.CheckoutStayH)
+	mux.HandleFunc("GET /api/v1/hotels/property", hotelAPI.PropertyH)
+	mux.HandleFunc("GET /api/v1/hotels/availability", hotelAPI.AvailabilityH)
+	mux.HandleFunc("POST /api/v1/hotels/room-types", hotelAPI.CreateRoomTypeH)
+	mux.HandleFunc("GET /api/v1/hotels/room-types", hotelAPI.ListRoomTypesH)
+	mux.HandleFunc("POST /api/v1/hotels/room-types/{listing_id}", hotelAPI.UpdateRoomTypeH)
+	mux.HandleFunc("POST /api/v1/hotels/room-types/{listing_id}/units", hotelAPI.SetUnitsH)
+	mux.HandleFunc("POST /api/v1/hotels/room-types/{listing_id}/capacity", hotelAPI.SetCapacityH)
+	mux.HandleFunc("GET /api/v1/hotels/room-types/{listing_id}/capacity", hotelAPI.CapacityH)
 	// Seller operations (organization staff only)
 	mux.HandleFunc("GET /api/v1/inventory", staff(inventory.ListInventory))
 	mux.HandleFunc("GET /api/v1/inventory/{inventory_id}", staff(stripAPI(inventory.GetInventory)))

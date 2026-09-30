@@ -98,8 +98,11 @@ func (r *CommerceActionRuntime) Execute(
 		if err := r.parameterValidator.Validate(ctx, action.ActionType, action.Parameters); err != nil {
 			field := ""
 			var missing *MissingParameterError
+			var invalid *InvalidParameterError
 			if errors.As(err, &missing) {
 				field = missing.Param
+			} else if errors.As(err, &invalid) {
+				field = invalid.Param
 			}
 			result.Status = domain.ActionResultValidationFailed
 			result.MessageKey = "ACTION_VALIDATION_FAILED"

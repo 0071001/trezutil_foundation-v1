@@ -152,7 +152,24 @@ var (
 	searchWords = regexp.MustCompile(`(?i)\b(find|search|looking for|show me|apartment|house|room|bedroom|car|phone|hotel|studio)\b`)
 	fillers     = regexp.MustCompile(`(?i)\b(i am|i'm|please|can you|could you|find me|find|search for|search|looking for|show me|i want|i need|a|an|in)\b`)
 	orderRef    = regexp.MustCompile(`(?i)\border\s+([0-9a-f-]{8,})`)
+	hotelWords  = regexp.MustCompile(`(?i)\bh(?:o|ô)tels?\b`)
+	placeRe     = regexp.MustCompile(`(?:\bin|\bà)\s+([A-ZÀ-Ý][\p{L}-]+)`)
+	nightsRe    = regexp.MustCompile(`(?i)\b(\d+|one|two|three|four|five|deux|trois)\s+(?:nights?|nuits?)\b`)
+	peopleRe    = regexp.MustCompile(`(?i)\b(?:for|pour)\s+(\d+|one|two|three|four|five|six|deux|trois|quatre)\s+(?:people|persons|guests|adults|personnes)\b`)
 )
+
+// countWord reads "2", "two" or "deux".
+func countWord(s string) int {
+	words := map[string]int{"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "deux": 2, "trois": 3, "quatre": 4}
+	if n, ok := words[strings.ToLower(s)]; ok {
+		return n
+	}
+	n := 0
+	for _, r := range s {
+		n = n*10 + int(r-'0')
+	}
+	return n
+}
 
 // Classifier is a deterministic stand-in for the model: it recognises
 // listing searches and order lookups and answers NONE otherwise, in the
@@ -165,6 +182,22 @@ func Classifier(req map[string]interface{}) Reply {
 		out["intent"] = "GET_ORDER"
 		out["parameters"] = map[string]interface{}{"order_id": orderRef.FindStringSubmatch(text)[1]}
 		out["explanation"] = "order lookup"
+	case hotelWords.MatchString(text):
+		// A stay request is interpreted into structured parameters, as the
+		// production model does: vertical, place, nights and party size.
+		params := map[string]interface{}{"vertical": "HOTEL"}
+		if m := placeRe.FindStringSubmatch(text); m != nil {
+			params["location"] = m[1]
+		}
+		if m := nightsRe.FindStringSubmatch(text); m != nil {
+			params["nights"] = countWord(m[1])
+		}
+		if m := peopleRe.FindStringSubmatch(text); m != nil {
+			params["party_size"] = countWord(m[1])
+		}
+		out["intent"] = "SEARCH_LISTINGS"
+		out["parameters"] = params
+		out["explanation"] = "hotel stay search"
 	case searchWords.MatchString(text):
 		q := strings.Join(strings.Fields(fillers.ReplaceAllString(text, " ")), " ")
 		out["intent"] = "SEARCH_LISTINGS"
