@@ -8,6 +8,8 @@ interface SessionState {
   /** undefined while the stored session is being checked. */
   user: User | null | undefined
   signedIn: boolean
+  /** True after an explicit sign-out (protected pages then go home, not to sign-in). */
+  signedOut: boolean
   refreshUser: () => Promise<void>
   signOut: () => void
 }
@@ -16,11 +18,13 @@ const SessionContext = createContext<SessionState | null>(null)
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null | undefined>(() => (tokens.access() ? undefined : null))
+  const [signedOut, setSignedOut] = useState(false)
 
   const refreshUser = useCallback(async () => {
     if (!tokens.access()) { setUser(null); return }
     try {
       setUser(await authApi.me())
+      setSignedOut(false)
     } catch {
       // An expired session is renewed or cleared by the HTTP client.
       setUser(null)
@@ -45,10 +49,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     authApi.signOut()
     resetConversationChannel()
     try { sessionStorage.removeItem('trezutil_thread') } catch { /* ignore */ }
+    setSignedOut(true)
     setUser(null)
   }, [])
 
-  const value = useMemo(() => ({ user, signedIn: !!user, refreshUser, signOut }), [user, refreshUser, signOut])
+  const value = useMemo(() => ({ user, signedIn: !!user, signedOut, refreshUser, signOut }), [user, signedOut, refreshUser, signOut])
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>
 }
 

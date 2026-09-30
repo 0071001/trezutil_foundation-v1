@@ -3,8 +3,9 @@ import { ListingImage } from '@/components/cards'
 import { AppShell } from '@/components/shell'
 import { EmptyState } from '@/components/states'
 import { ActionLink, Button, Heading, Icon, PageIntro, Tabs } from '@/components/ui'
-import { detailPath, formatMoney, isBookable } from '@/lib/format'
-import { usePrefs } from '@/lib/prefs'
+import { detailPath, formatMoney } from '@/lib/format'
+import { usePrefs, type SavedListing } from '@/lib/prefs'
+import { flowsFor, useVerticals } from '@/lib/verticals'
 
 /* Figma CartPage and wishlist (ListingPage). Both live on this device: the
    platform has no server-side cart or wishlist API. Orders are placed one
@@ -29,7 +30,7 @@ export function CartPage() {
                   <ListingImage src={item.image} alt="" type={item.listing_type} />
                   <div className="cart-item-copy">
                     <span>{item.seller || 'Trezutil seller'}</span>
-                    <ActionLink href={detailPath(item.listing_id, item.listing_type)}><Heading level={3}>{item.title}</Heading></ActionLink>
+                    <ActionLink href={detailPath(item.listing_id, item.listing_type, item.vertical)}><Heading level={3}>{item.title}</Heading></ActionLink>
                     <small>{formatMoney(item.price_amount, item.price_currency)} each</small>
                     <div>
                       <Button onClick={() => { if (!isSaved(item.listing_id)) toggleSaved(item); removeFromBag(item.listing_id) }}>Save for later</Button>
@@ -67,9 +68,11 @@ type SavedTab = 'All' | 'Products' | 'Places & services'
 
 export function WishlistPage() {
   const { saved, toggleSaved } = usePrefs()
+  const { byCode } = useVerticals()
   const [tab, setTab] = useState<SavedTab>('All')
   useEffect(() => { document.title = 'Saved — Trezutil' }, [])
-  const items = saved.filter((s) => tab === 'All' || (tab === 'Products' ? !isBookable(s.listing_type) : isBookable(s.listing_type)))
+  const booked = (s: SavedListing) => flowsFor(s.vertical ? byCode[s.vertical] : undefined, s.listing_type)[0] === 'BOOK'
+  const items = saved.filter((s) => tab === 'All' || (tab === 'Products' ? !booked(s) : booked(s)))
   return (
     <AppShell>
       <section className="page-section">
@@ -81,12 +84,12 @@ export function WishlistPage() {
           <div className="results-grid wishlist-grid">
             {items.map((item) => (
               <article className="result-card result-grid" key={item.listing_id}>
-                <ActionLink className="result-image" href={detailPath(item.listing_id, item.listing_type)} ariaLabel={item.title}><ListingImage src={item.image} alt={item.title} type={item.listing_type} /></ActionLink>
+                <ActionLink className="result-image" href={detailPath(item.listing_id, item.listing_type, item.vertical)} ariaLabel={item.title}><ListingImage src={item.image} alt={item.title} type={item.listing_type} /></ActionLink>
                 <div className="result-body">
                   <div className="product-meta">{item.seller || 'Trezutil seller'}</div>
-                  <ActionLink href={detailPath(item.listing_id, item.listing_type)}><Heading level={3}>{item.title}</Heading></ActionLink>
+                  <ActionLink href={detailPath(item.listing_id, item.listing_type, item.vertical)}><Heading level={3}>{item.title}</Heading></ActionLink>
                   <strong className="price">{formatMoney(item.price_amount, item.price_currency)}</strong>
-                  <div className="result-actions"><ActionLink className="small-primary" href={detailPath(item.listing_id, item.listing_type)}>View details</ActionLink></div>
+                  <div className="result-actions"><ActionLink className="small-primary" href={detailPath(item.listing_id, item.listing_type, item.vertical)}>View details</ActionLink></div>
                 </div>
                 <Button className="save-button saved" ariaLabel={`Remove ${item.title} from saved`} pressed onClick={() => toggleSaved(item)}><Icon name="heart" size={18} /></Button>
               </article>

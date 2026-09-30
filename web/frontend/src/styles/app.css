@@ -9,6 +9,9 @@
 :root { --danger: #c45642; --warning-bg: #fff6da; --warning: #967114; --success: #167b57; }
 html[data-theme="dark"] body { background: #071725; }
 body { -webkit-font-smoothing: antialiased; }
+/* Figma swaps color tokens on .app.dark but never sets .app's text color, so
+   uncolored text kept the light-mode body color in dark mode. */
+.app { color: var(--text); }
 img { max-width: 100%; }
 
 /* ---------- Accessibility ---------- */
@@ -87,7 +90,8 @@ ol.steps-flow { list-style: none; margin: 0; padding: 0; }
 .empty-state .heading-2 { font-size: clamp(1.6rem, 2.4vw, 2.2rem); margin-bottom: 0.6rem; }
 .empty-state p { font-size: 0.92rem; }
 .slow-note, .rail-empty, .panel-empty { color: var(--muted); font-size: 0.88rem; }
-.field-hint { color: var(--muted); display: block; margin-top: 0.8rem; line-height: 1.5; }
+.field-hint, .field small.field-hint { color: var(--muted); display: block; margin-top: 0.8rem; line-height: 1.5; }
+.field small.field-hint { margin-top: 0.1rem; }
 
 /* ---------- Toasts ---------- */
 .toast-region { position: fixed; z-index: 120; bottom: calc(1.25rem + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); display: grid; gap: 0.5rem; width: min(26rem, calc(100% - 1.5rem)); pointer-events: none; }
@@ -200,6 +204,7 @@ ol.steps-flow { list-style: none; margin: 0; padding: 0; }
 .listing-row { grid-template-columns: 2fr 0.6fr 0.7fr 0.6fr auto; }
 .listing-row img, .listing-row .listing-fallback { width: 3rem; height: 3rem; min-height: 0; border-radius: 0.6rem; object-fit: cover; flex: 0 0 auto; }
 .listing-row a { color: var(--text); text-decoration: none; }
+.listing-row strong { line-height: 1.3; }
 .inventory-row, .inventory-head { grid-template-columns: 2fr repeat(4, 0.6fr); }
 .seller-panel .activity-row { text-decoration: none; color: var(--text); display: flex; align-items: center; gap: 0.7rem; }
 .seller-panel .activity-row > div { flex: 1; display: grid; }
@@ -227,7 +232,11 @@ ol.steps-flow { list-style: none; margin: 0; padding: 0; }
   .seller-mobile-tabs .action-link { flex: 0 0 auto; border: 1px solid var(--line); border-radius: 2rem; padding: 0.55rem 0.9rem; font-size: 0.82rem; font-weight: 600; color: var(--muted); }
   .seller-mobile-tabs .action-link.active { background: var(--navy-2); border-color: var(--navy-2); color: #fff; }
   .seller-listing-detail, .onboarding-steps { grid-template-columns: 1fr; }
-  .listing-row > span[role="cell"]:last-child { grid-column: span 2; }
+  /* Figma hides every non-badge cell on phones; keep status and actions usable. */
+  .listing-row > span[role="cell"]:nth-child(3) { display: block; }
+  .listing-row > span[role="cell"]:last-child { display: block; grid-column: span 2; }
+  .listing-row > span[role="cell"]:last-child .row-actions { justify-content: flex-start; }
+  .inventory-row > span[role="cell"] { display: none; }
   .inventory-row { grid-template-columns: 1fr auto; }
 }
 
@@ -251,4 +260,32 @@ ol.steps-flow { list-style: none; margin: 0; padding: 0; }
 @keyframes page-in { from { opacity: 0; transform: translateY(0.4rem); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+/* Search: location filter inside the Figma filter group */
+.filter-location input { width: 100%; min-height: 40px; padding: 0.55rem 0.8rem; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); font: inherit; font-size: 0.85rem; }
+.filter-location input::placeholder { color: var(--muted); }
+
+/* Create listing: legend above the vertical choice cards */
+.choice-legend { margin: 0 0 0.6rem; font-size: 0.8rem; font-weight: 700; color: var(--text); }
+
+/* Hotel Commerce Pack (Figma result cards, detail and seller table language) */
+.room-list { display: grid; gap: 1rem; }
+.room-card.selected { outline: 2px solid var(--blue); outline-offset: 2px; }
+.room-card .price small, .detail-price small { font-size: 0.75em; font-weight: 500; color: var(--muted); }
+.room-amenities { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0.5rem 0; }
+.room-card .distance.is-unavailable { color: var(--coral); }
+.stay-form { margin-top: 1rem; }
+.stay-form .form-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.hotel-form { margin-bottom: 1.5rem; }
+.room-panel { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 1.5rem; padding: 1rem 0 1.5rem; border-bottom: 1px solid var(--line); }
+.night-grid { display: grid; gap: 0; font-size: 0.85rem; }
+.night-grid > [role="row"] { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--line); }
+.night-grid > [role="row"].closed { color: var(--muted); }
+.night-grid > [role="row"].full b { color: var(--coral); }
+.room-controls { display: grid; gap: 1rem; align-content: start; }
+.room-controls .form-grid { align-items: end; }
+@media (max-width: 760px) {
+  .stay-form .form-grid { grid-template-columns: 1fr 1fr; }
+  .room-panel { grid-template-columns: 1fr; }
 }

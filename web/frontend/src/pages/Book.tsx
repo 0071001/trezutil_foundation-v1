@@ -9,6 +9,7 @@ import { ErrorState, Loading } from '@/components/states'
 import { ActionLink, Brand, Button, Field, Heading, Icon } from '@/components/ui'
 import { formatDateTime, formatMoney } from '@/lib/format'
 import { useAsync } from '@/lib/useAsync'
+import { HotelBooking } from '@/pages/HotelBooking'
 
 /* Booking flow in the Figma checkout visual language:
    dates → live availability → reserve → confirmation. */
@@ -75,6 +76,8 @@ export default function BookPage() {
   if (listing.loading) return <AppShell hideDock><Loading label="Loading…" /></AppShell>
   if (listing.error || !listing.data) return <AppShell hideDock><section className="page-section"><ErrorState error={listing.error ?? 'Listing not found'} onRetry={listing.reload} /></section></AppShell>
   const l = listing.data
+  // Hotel stays book whole nights and several rooms; payment follows the stay.
+  if (l.vertical === 'HOTEL') return <HotelBooking listing={l} />
   const step = booked ? 3 : availability?.available ? 2 : 1
 
   return (

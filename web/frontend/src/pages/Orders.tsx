@@ -17,9 +17,11 @@ const done = new Set(['fulfilled', 'completed'])
 type OrderTab = 'Active' | 'Completed' | 'Cancelled'
 
 function OperationCard({ order }: { order: OrderSummary }) {
+  // Identical listing lookups are de-duplicated by the HTTP client.
+  const listing = useAsync(() => listingsApi.get(order.listing_id), [order.listing_id], !!order.listing_id)
   return (
     <article className="operation-card">
-      <div className="operation-thumb"><ListingImage src={null} alt="" type="physical_product" /></div>
+      <div className="operation-thumb"><ListingImage src={listing.data?.media[0]?.url} alt="" type={listing.data?.listing_type ?? 'physical_product'} /></div>
       <div className="operation-copy">
         <div><span>#{order.id.slice(0, 8)} · {timeAgo(order.created_at)}</span><StatusBadge status={order.status} /></div>
         <Heading level={3}>{order.title || 'Order'}</Heading>

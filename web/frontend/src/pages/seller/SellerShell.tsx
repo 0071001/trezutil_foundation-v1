@@ -39,6 +39,7 @@ const links: [string, string, IconName, boolean?][] = [
   ['Listings', '/seller/listings', 'shop'],
   ['Orders', '/seller/orders', 'orders'],
   ['Reservations', '/seller/reservations', 'calendar'],
+  ['Hotel rooms', '/seller/hotel', 'building'],
   ['Inventory', '/seller/inventory', 'briefcase'],
   ['Business', '/seller/business', 'building'],
 ]

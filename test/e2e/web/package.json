@@ -1,0 +1,12 @@
+{
+  "name": "trezutil-web-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Browser journeys and visual captures against a running Trezutil stack (see test/e2e/README.md).",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
+  }
+}

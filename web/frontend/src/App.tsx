@@ -34,13 +34,15 @@ const SellerOrdersPage = lazy(() => import('@/pages/seller/SellerOperations').th
 const SellerReservationsPage = lazy(() => import('@/pages/seller/SellerOperations').then((m) => ({ default: m.SellerReservationsPage })))
 const SellerInventoryPage = lazy(() => import('@/pages/seller/SellerOperations').then((m) => ({ default: m.SellerInventoryPage })))
 const SellerBusinessPage = lazy(() => import('@/pages/seller/SellerOperations').then((m) => ({ default: m.SellerBusinessPage })))
+const SellerHotelPage = lazy(() => import('@/pages/seller/SellerHotel').then((m) => ({ default: m.SellerHotelPage })))
 const SellerOnboardingRoute = lazy(() => import('@/pages/seller/SellerOnboarding').then((m) => ({ default: m.SellerOnboardingRoute })))
 
 /** Protected routes send guests to sign-in and bring them back afterwards. */
 function RequireSession() {
-  const { user } = useSession()
+  const { user, signedOut } = useSession()
   const location = useLocation()
   if (user === undefined) return <Loading label="Checking your session…" />
+  if (!user && signedOut) return <Navigate to="/" replace />
   if (!user) {
     const returnTo = `${location.pathname}${location.search}`
     return <Navigate to={`/login?returnTo=${encodeURIComponent(returnTo)}`} replace />
@@ -117,6 +119,7 @@ export function AppRoutes() {
             <Route path="orders" element={<SellerOrdersPage />} />
             <Route path="reservations" element={<SellerReservationsPage />} />
             <Route path="inventory" element={<SellerInventoryPage />} />
+            <Route path="hotel" element={<SellerHotelPage />} />
             <Route path="business" element={<SellerBusinessPage />} />
           </Route>
         </Route>

@@ -57,13 +57,17 @@ export function sentence(value: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
-/** Listing detail route for a listing type (the Figma detail variants). */
-export function detailPath(id: string, type?: string): string {
-  const base: Record<string, string> = { service: 'services', real_estate: 'properties', food: 'restaurants' }
-  return `/${base[type ?? ''] ?? 'products'}/${encodeURIComponent(id)}`
+/** Listing detail route (the Figma detail variants), by vertical, else by listing type. */
+export function detailPath(id: string, type?: string, vertical?: string): string {
+  const byVertical: Record<string, string> = { HOTEL: 'hotels', RESTAURANT: 'restaurants', SERVICES: 'services', REAL_ESTATE: 'properties' }
+  const byType: Record<string, string> = { service: 'services', real_estate: 'properties', food: 'restaurants' }
+  return `/${byVertical[vertical ?? ''] ?? byType[type ?? ''] ?? 'products'}/${encodeURIComponent(id)}`
 }
 
-/** Things that are booked by date rather than bought. */
+/**
+ * Legacy guess from the listing type, used only when the vertical catalogue
+ * cannot be loaded (see lib/verticals.ts).
+ */
 export function isBookable(type: ListingType | string | undefined): boolean {
   return type === 'real_estate' || type === 'service' || type === 'food'
 }

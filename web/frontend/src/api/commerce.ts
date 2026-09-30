@@ -97,7 +97,10 @@ export function mapReservation(value: unknown): ReservationSummary {
 export const ordersApi = {
   /** The idempotency key makes a retried checkout return the same order. */
   async create(listingId: string, quantity: number, idempotencyKey: string): Promise<OrderSummary> {
-    return mapOrder(await http.post<unknown>('/orders', { listing_id: listingId, quantity }, { idempotencyKey }))
+    // The create response is a short DTO (order_id, status, total); the
+    // canonical order (organization, items) is read back for payment.
+    const created = mapOrder(await http.post<unknown>('/orders', { listing_id: listingId, quantity }, { idempotencyKey }))
+    return ordersApi.get(created.id)
   },
   async get(orderId: string): Promise<OrderSummary> {
     return mapOrder(await http.get<unknown>(`/orders/${encodeURIComponent(orderId)}`))
@@ -113,9 +116,10 @@ export const ordersApi = {
 
 export const reservationsApi = {
   async create(listingId: string, startAt: number, endAt: number, partySize: number, idempotencyKey: string): Promise<ReservationSummary> {
-    return mapReservation(await http.post<unknown>('/reservations',
+    const created = mapReservation(await http.post<unknown>('/reservations',
       { listing_id: listingId, start_at: startAt, end_at: endAt, quantity: 1, party_size: partySize },
       { idempotencyKey }))
+    return reservationsApi.get(created.id)
   },
   async get(id: string): Promise<ReservationSummary> {
     return mapReservation(await http.get<unknown>(`/reservations/${encodeURIComponent(id)}`))

@@ -262,7 +262,7 @@ export default function ConversationPage() {
                 <ActionLink className="tool-button" href="/search" ariaLabel="Search with filters instead"><Icon name="filter" /></ActionLink>
                 {voice.supported && <Button className={`tool-button ${voice.listening ? 'listening' : ''}`} ariaLabel={voice.listening ? 'Stop listening' : 'Speak your message'} onClick={voice.toggle}><Icon name="mic" /></Button>}
               </span>
-              <Button className="send-button" type="submit" ariaLabel="Send message" disabled={!draft.trim() || pending}><Icon name="arrow" /></Button>
+              <Button className="send-button" type="submit" ariaLabel="Send message" disabled={pending}><Icon name="arrow" /></Button>
             </div>
           </form>
         </section>

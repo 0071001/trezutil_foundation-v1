@@ -8,24 +8,8 @@ import { AppShell } from '@/components/shell'
 import { EmptyState, ErrorState, SkeletonGrid } from '@/components/states'
 import { ActionLink, Button, Icon, PageIntro } from '@/components/ui'
 import { useAsync } from '@/lib/useAsync'
-import type { Category, SearchResponse, SearchResult, SortField } from '@/types'
-
-/**
- * Listing-type shortcuts. The search contract filters by category and text,
- * not by listing type, so a shortcut resolves to a matching operator category
- * when one exists and to search words otherwise.
- */
-const typePresets: Record<string, { label: string; words: string[]; text: string }> = {
-  products: { label: 'Products', words: ['product', 'electronic', 'phone', 'shop'], text: '' },
-  services: { label: 'Services', words: ['service', 'repair', 'plumb', 'electric'], text: 'service' },
-  property: { label: 'Real estate', words: ['real estate', 'apartment', 'house', 'propert', 'home'], text: 'apartment' },
-  food: { label: 'Food', words: ['food', 'restaurant', 'dining'], text: 'restaurant' },
-  vehicles: { label: 'Transport', words: ['vehicle', 'car', 'transport'], text: 'car' },
-}
-
-function matchCategory(categories: Category[], words: string[]): Category | undefined {
-  return categories.find((c) => words.some((w) => `${c.name} ${c.slug}`.toLowerCase().includes(w)))
-}
+import { legacyTypeVertical, useVerticals } from '@/lib/verticals'
+import type { SearchResponse, SearchResult, SortField } from '@/types'
 
 const sorts: { value: SortField; label: string; direction?: 'asc' | 'desc' }[] = [
   { value: 'relevance', label: 'Recommended' },
@@ -37,7 +21,9 @@ const sorts: { value: SortField; label: string; direction?: 'asc' | 'desc' }[] =
 export default function SearchPage() {
   const [params, setParams] = useSearchParams()
   const q = params.get('q') ?? ''
-  const type = params.get('type') ?? ''
+  // Vertical filter (backend catalogue); old ?type= links map onto verticals.
+  const verticalParam = (params.get('vertical') || legacyTypeVertical[params.get('type') ?? ''] || '').toUpperCase()
+  const where = params.get('where') ?? ''
   const categoryParam = params.get('category') ?? ''
   const sort = (params.get('sort') as SortField) || 'relevance'
   const [hideUnavailable, setHideUnavailable] = useState(false)
@@ -50,22 +36,20 @@ export default function SearchPage() {
   const [nonce, setNonce] = useState(0)
 
   const categories = useAsync(() => searchApi.categories(), [])
-  const preset = typePresets[type]
-  const presetCategory = preset && categories.data ? matchCategory(categories.data, preset.words) : undefined
-  const categoryId = categoryParam || presetCategory?.id || ''
-  const text = q || (preset && !presetCategory ? preset.text : '')
-  const ready = !preset || categories.data !== undefined || categories.error !== null
+  const { verticals, byCode } = useVerticals()
+  const [whereDraft, setWhereDraft] = useState(where)
+  useEffect(() => { setWhereDraft(where) }, [where])
 
   const request = useMemo(() => ({
-    text, category_id: categoryId || undefined, page_size: 12,
+    text: q, category_id: categoryParam || undefined, page_size: 12,
+    vertical: verticalParam || undefined, location: where || undefined,
     sort_field: sort === 'relevance' ? undefined : sort,
     sort_direction: sorts.find((s) => s.value === sort)?.direction ?? 'desc',
-  }), [text, categoryId, sort])
+  }), [q, categoryParam, verticalParam, where, sort])
 
   useEffect(() => { document.title = q ? `${q} — Trezutil search` : 'Search — Trezutil' }, [q])
 
   useEffect(() => {
-    if (!ready) return
     const controller = new AbortController()
     setLoading(true); setError(null); setSlow(false)
     const slowTimer = setTimeout(() => setSlow(true), 3000)
@@ -74,7 +58,7 @@ export default function SearchPage() {
       .catch((err: unknown) => { const e = toApiError(err); if (e.code !== 'ABORTED') { setResults(null); setError(e) } })
       .finally(() => { clearTimeout(slowTimer); if (!controller.signal.aborted) setLoading(false) })
     return () => { clearTimeout(slowTimer); controller.abort() }
-  }, [request, ready, nonce])
+  }, [request, nonce])
 
   const loadMore = async () => {
     if (!results?.next_cursor) return
@@ -96,7 +80,8 @@ export default function SearchPage() {
   }
 
   const items: SearchResult[] = (results?.items ?? []).filter((i) => !hideUnavailable || !['out_of_stock', 'unavailable'].includes(i.availability_status))
-  const label = q ? `“${q}”` : preset?.label ?? 'everything'
+  const verticalName = byCode[verticalParam]?.name
+  const label = `${q ? `“${q}”` : verticalName ?? 'everything'}${q && verticalName ? ` in ${verticalName}` : ''}${where ? ` around ${where}` : ''}`
   const refine = `/conversation?q=${encodeURIComponent(q ? `Help me choose: ${q}` : 'Help me find something')}`
 
   return (
@@ -115,10 +100,16 @@ export default function SearchPage() {
           <aside className={`filter-panel ${filtersOpen ? 'open' : ''}`} aria-label="Filters">
             <div className="filter-head"><strong>Filters</strong><Button onClick={() => { setHideUnavailable(false); setParams(q ? { q } : {}) }}>Reset</Button></div>
             <fieldset className="filter-group"><legend>Type</legend>
-              <label className="check-row"><input type="radio" name="type" checked={!type} onChange={() => update({ type: '', category: '' })} /><span>All</span></label>
-              {Object.entries(typePresets).map(([key, p]) => (
-                <label className="check-row" key={key}><input type="radio" name="type" checked={type === key} onChange={() => update({ type: key, category: '' })} /><span>{p.label}</span></label>
+              <label className="check-row"><input type="radio" name="vertical" checked={!verticalParam} onChange={() => update({ vertical: '', type: '' })} /><span>All</span></label>
+              {verticals.map((v) => (
+                <label className="check-row" key={v.code}><input type="radio" name="vertical" checked={verticalParam === v.code} onChange={() => update({ vertical: v.code, type: '' })} /><span>{v.name}</span></label>
               ))}
+            </fieldset>
+            <fieldset className="filter-group"><legend>Location</legend>
+              <form className="filter-location" onSubmit={(e) => { e.preventDefault(); update({ where: whereDraft.trim() }) }}>
+                <label className="sr-only" htmlFor="filter-where">Neighbourhood or city</label>
+                <input id="filter-where" type="search" value={whereDraft} maxLength={100} placeholder="e.g. Gombe" onChange={(e) => setWhereDraft(e.target.value)} onBlur={() => { if (whereDraft.trim() !== where) update({ where: whereDraft.trim() }) }} />
+              </form>
             </fieldset>
             {(categories.data?.length ?? 0) > 0 && (
               <fieldset className="filter-group"><legend>Category</legend>

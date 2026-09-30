@@ -29,7 +29,7 @@ const img = {
   merchant: 'https://images.unsplash.com/photo-1687422808384-c896d0efd4ab?auto=format&fit=crop&w=1200&q=80',
 }
 
-const suggestions = ['A phone under $300', 'A plumber today', 'Hotel for Saturday', 'A 2 bedroom apartment in Gombe']
+const suggestions = ['A phone under $300', 'A plumber today', 'Hotel for Saturday', 'An apartment in Gombe']
 
 function HomeNavbar() {
   const { theme, toggleTheme } = usePrefs()
@@ -40,7 +40,7 @@ function HomeNavbar() {
       <div className="nav-inner">
         <Brand href="/" />
         <nav className="desktop-nav" aria-label="Primary">
-          {([['Discover', '/discover'], ['Products', '/search?type=products'], ['Services', '/search?type=services'], ['Real Estate', '/search?type=property'], ['Reservations', '/reservations'], ['Nearby', '/discover']] as const)
+          {([['Discover', '/discover'], ['Products', '/search?vertical=RETAIL'], ['Services', '/search?vertical=SERVICES'], ['Real Estate', '/search?vertical=REAL_ESTATE'], ['Reservations', '/reservations'], ['Nearby', '/discover']] as const)
             .map(([label, href]) => <ActionLink href={href} key={label}>{label}</ActionLink>)}
         </nav>
         <ActionLink className="nav-search" href="/search"><Icon name="search" size={17} /><span>What are you looking for?</span></ActionLink>
@@ -82,7 +82,7 @@ function ConversationComposer() {
         <div className="composer-tools">
           {voice.supported && <Button className={`tool-button ${voice.listening ? 'listening' : ''}`} ariaLabel={voice.listening ? 'Stop listening' : 'Speak your request'} onClick={voice.toggle}><Icon name="mic" /></Button>}
           <Button className="tool-button filter-button" ariaLabel="Search with filters" onClick={() => navigate(`/search${value.trim() ? `?q=${encodeURIComponent(value.trim())}` : ''}`)}><Icon name="filter" /></Button>
-          <Button className="send-button" type="submit" ariaLabel="Send request" disabled={!value.trim()}><Icon name="arrow" /></Button>
+          <Button className="send-button" type="submit" ariaLabel="Send request"><Icon name="arrow" /></Button>
         </div>
       </form>
       <div className="suggestions">
@@ -167,12 +167,12 @@ function NearbySection() {
 }
 
 const categories: { label: string; icon: IconName; className: string; image?: string; href: string }[] = [
-  { label: 'Products', icon: 'shop', className: 'category-large', image: img.sneaker, href: '/search?type=products' },
-  { label: 'Services', icon: 'service', className: 'category-navy', href: '/search?type=services' },
-  { label: 'Food', icon: 'food', className: 'category-mint', href: '/search?type=food' },
-  { label: 'Real Estate', icon: 'building', className: 'category-wide', image: img.apartment, href: '/search?type=property' },
-  { label: 'Hotels', icon: 'calendar', className: 'category-photo', image: img.hotel, href: '/search?q=hotel' },
-  { label: 'Transport', icon: 'car', className: 'category-blue', href: '/search?type=vehicles' },
+  { label: 'Products', icon: 'shop', className: 'category-large', image: img.sneaker, href: '/search?vertical=RETAIL' },
+  { label: 'Services', icon: 'service', className: 'category-navy', href: '/search?vertical=SERVICES' },
+  { label: 'Food', icon: 'food', className: 'category-mint', href: '/search?vertical=RESTAURANT' },
+  { label: 'Real Estate', icon: 'building', className: 'category-wide', image: img.apartment, href: '/search?vertical=REAL_ESTATE' },
+  { label: 'Hotels', icon: 'calendar', className: 'category-photo', image: img.hotel, href: '/search?vertical=HOTEL' },
+  { label: 'Transport', icon: 'car', className: 'category-blue', href: '/search?vertical=TRANSPORT' },
   { label: 'Local Shops', icon: 'shop', className: 'category-soft', href: '/discover' },
   { label: 'Reservations', icon: 'calendar', className: 'category-line', href: '/reservations' },
 ]
@@ -202,7 +202,7 @@ function Services() {
   const navigate = useNavigate()
   return (
     <section className="services-section" id="services" aria-labelledby="services-title"><div className="section">
-      <div className="section-head"><div><div className="section-eyebrow">Trusted local help</div><Heading id="services-title">Need someone to get it done?</Heading><p>Find trusted local services when you need them.</p></div><ActionLink className="text-action" href="/search?type=services"><span>Explore services</span><Icon name="arrow" size={18} /></ActionLink></div>
+      <div className="section-head"><div><div className="section-eyebrow">Trusted local help</div><Heading id="services-title">Need someone to get it done?</Heading><p>Find trusted local services when you need them.</p></div><ActionLink className="text-action" href="/search?vertical=SERVICES"><span>Explore services</span><Icon name="arrow" size={18} /></ActionLink></div>
       <div className="service-grid">
         {services.map((service, index) => (
           <article className={`service-card service-${index + 1}`} key={service.title}>
@@ -221,7 +221,7 @@ function Properties() {
   const items = homes.data?.items ?? []
   return (
     <section className="section properties-section" id="real-estate" aria-labelledby="properties-title">
-      <SectionHead eyebrow="Homes & spaces" title="Looking for a place?" copy="Find homes, apartments, land and commercial spaces that fit your life." action="Explore properties" href="/search?type=property" />
+      <SectionHead eyebrow="Homes & spaces" title="Looking for a place?" copy="Find homes, apartments, land and commercial spaces that fit your life." action="Explore properties" href="/search?vertical=REAL_ESTATE" />
       {homes.loading && <SkeletonGrid count={3} />}
       {items.length > 0 && (
         <div className="property-grid">
@@ -240,7 +240,7 @@ function Properties() {
 
 function Reservations() {
   const navigate = useNavigate()
-  const stays = useAsync(() => searchApi.search({ text: 'hotel', page_size: 1 }), [])
+  const stays = useAsync(() => searchApi.search({ text: '', vertical: 'HOTEL', page_size: 1 }), [])
   const stay = stays.data?.items[0]
   const prompt = 'Book a hotel in Kinshasa for Saturday.'
   return (
@@ -326,7 +326,7 @@ function SellerSection() {
 function Footer() {
   const wa = whatsappHref()
   const columns: [string, [string, string][]][] = [
-    ['Discover', [['Products', '/search?type=products'], ['Services', '/search?type=services'], ['Nearby', '/discover'], ['Real Estate', '/search?type=property'], ['Reservations', '/reservations']]],
+    ['Discover', [['Products', '/search?vertical=RETAIL'], ['Services', '/search?vertical=SERVICES'], ['Nearby', '/discover'], ['Real Estate', '/search?vertical=REAL_ESTATE'], ['Reservations', '/reservations']]],
     ['For businesses', [['Sell on Trezutil', '/seller/onboarding'], ['Manage listings', '/seller/listings'], ['Orders', '/seller/orders'], ['Seller workspace', '/seller']]],
     ['Your account', [['Sign in', '/login'], ['Orders', '/orders'], ['Saved', '/wishlist'], ['Ask Trezutil', '/conversation']]],
   ]

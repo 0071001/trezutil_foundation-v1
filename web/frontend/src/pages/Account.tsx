@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Navigate, useNavigate } from 'react-router'
+import { Navigate } from 'react-router'
 import { ordersApi, reservationsApi } from '@/api/commerce'
 import { AppShell, initials } from '@/components/shell'
 import { EmptyState, ErrorState, Loading } from '@/components/states'
@@ -17,7 +17,6 @@ function greeting(): string {
 export function AccountPage() {
   const { user, signOut } = useSession()
   const { theme, toggleTheme } = usePrefs()
-  const navigate = useNavigate()
   useEffect(() => { document.title = 'Your account — Trezutil' }, [])
   if (user === undefined) return <AppShell><Loading label="Loading your account…" /></AppShell>
   if (!user) return <Navigate to="/login?returnTo=%2Faccount" replace />
@@ -44,7 +43,7 @@ export function AccountPage() {
         </div>
         <div className="account-footer-actions">
           <Button onClick={toggleTheme}><Icon name={theme === 'dark' ? 'sun' : 'moon'} />{theme === 'dark' ? 'Light mode' : 'Dark mode'}</Button>
-          <Button onClick={() => { signOut(); navigate('/', { replace: true }) }}>Sign out</Button>
+          <Button onClick={signOut}>Sign out</Button>
         </div>
       </section>
     </AppShell>

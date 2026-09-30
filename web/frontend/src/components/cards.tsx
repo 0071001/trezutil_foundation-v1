@@ -22,6 +22,7 @@ export function toSaved(r: SearchResult, listingType?: string): SavedListing {
   return {
     listing_id: r.listing_id, title: r.title, price_amount: r.price_amount, price_currency: r.price_currency,
     image: r.primary_media_url, seller: r.store?.name || r.seller?.display_name || '', listing_type: listingType,
+    vertical: r.vertical || undefined,
   }
 }
 
@@ -43,7 +44,7 @@ function availabilityText(status: string): string {
 
 /** Figma ResultCard bound to a search result. */
 export function ResultCard({ item, layout = 'grid', askHref }: { item: SearchResult; layout?: 'grid' | 'list'; askHref?: string }) {
-  const href = detailPath(item.listing_id)
+  const href = detailPath(item.listing_id, undefined, item.vertical)
   const seller = item.store?.name || item.seller?.display_name || 'Local seller'
   const where = [formatDistance(item.distance_meters) && `${formatDistance(item.distance_meters)} away`, place(item)].filter(Boolean).join(' · ')
   const unavailable = item.availability_status === 'out_of_stock' || item.availability_status === 'unavailable'

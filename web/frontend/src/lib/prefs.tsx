@@ -14,6 +14,7 @@ export interface SavedListing {
   image: string | null
   seller: string
   listing_type?: string
+  vertical?: string
 }
 
 export interface BagItem extends SavedListing {

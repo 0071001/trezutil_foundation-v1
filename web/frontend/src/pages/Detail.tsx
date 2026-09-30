@@ -6,21 +6,39 @@ import { ListingImage, ResultCard } from '@/components/cards'
 import { AppShell } from '@/components/shell'
 import { ErrorState, Loading } from '@/components/states'
 import { ActionLink, Button, Heading, Icon, Tabs, type IconName } from '@/components/ui'
-import { formatDateTime, formatMoney, isBookable, sentence } from '@/lib/format'
+import { formatDateTime, formatMoney, sentence } from '@/lib/format'
 import { usePrefs } from '@/lib/prefs'
 import { useToast } from '@/lib/toast'
 import { useAsync } from '@/lib/useAsync'
+import { flowsFor, useVerticals } from '@/lib/verticals'
+import { HotelDetail } from '@/pages/HotelDetail'
 import type { ListingDetail } from '@/types'
 
-/* Figma DetailPage — one layout, adapted to the listing type returned by the API. */
+/*
+ * Figma DetailPage — one layout. Whether the listing is booked or bought comes
+ * from its vertical's customer flows (GET /verticals); the tables below only
+ * hold presentation copy.
+ */
+
+const verticalCopy: Record<string, { icon: IconName; book?: string; by?: string }> = {
+  HOTEL: { icon: 'building', book: 'Choose a room', by: 'Hosted by' },
+  RESTAURANT: { icon: 'food', book: 'Reserve a table', by: 'Served by' },
+  SERVICES: { icon: 'service', book: 'Book an appointment', by: 'Provided by' },
+  REAL_ESTATE: { icon: 'home', book: 'Reserve dates', by: 'Listed by' },
+  VEHICLE_RENTAL: { icon: 'car', book: 'Reserve dates', by: 'Rented by' },
+  TRANSPORT: { icon: 'car', book: 'Book a seat', by: 'Operated by' },
+  EVENTS: { icon: 'calendar', by: 'Organised by' },
+  TRAVEL: { icon: 'calendar', book: 'Reserve dates', by: 'Organised by' },
+  RETAIL: { icon: 'shop', by: 'Sold by' },
+}
 
 const typeCopy: Record<string, { crumb: string; crumbHref: string; icon: IconName; primary: string; by: string }> = {
-  physical_product: { crumb: 'Products', crumbHref: '/search?type=products', icon: 'shop', primary: 'Add to bag', by: 'Sold by' },
-  vehicle: { crumb: 'Transport', crumbHref: '/search?type=vehicles', icon: 'car', primary: 'Add to bag', by: 'Sold by' },
+  physical_product: { crumb: 'Products', crumbHref: '/search?vertical=RETAIL', icon: 'shop', primary: 'Add to bag', by: 'Sold by' },
+  vehicle: { crumb: 'Transport', crumbHref: '/search?vertical=TRANSPORT', icon: 'car', primary: 'Add to bag', by: 'Sold by' },
   other: { crumb: 'Listings', crumbHref: '/search', icon: 'spark', primary: 'Add to bag', by: 'Listed by' },
-  service: { crumb: 'Services', crumbHref: '/search?type=services', icon: 'service', primary: 'Book this service', by: 'Provided by' },
-  real_estate: { crumb: 'Real Estate', crumbHref: '/search?type=property', icon: 'home', primary: 'Reserve dates', by: 'Listed by' },
-  food: { crumb: 'Food', crumbHref: '/search?type=food', icon: 'food', primary: 'Reserve a table', by: 'Served by' },
+  service: { crumb: 'Services', crumbHref: '/search?vertical=SERVICES', icon: 'service', primary: 'Book this service', by: 'Provided by' },
+  real_estate: { crumb: 'Real Estate', crumbHref: '/search?vertical=REAL_ESTATE', icon: 'home', primary: 'Reserve dates', by: 'Listed by' },
+  food: { crumb: 'Food', crumbHref: '/search?vertical=RESTAURANT', icon: 'food', primary: 'Reserve a table', by: 'Served by' },
 }
 
 function Facts({ listing, icon }: { listing: ListingDetail; icon: IconName }) {
@@ -43,6 +61,7 @@ export default function DetailPage() {
   const notify = useToast()
   const { addToBag, isSaved, toggleSaved } = usePrefs()
   const listing = useAsync(() => listingsApi.get(id), [id])
+  const { byCode } = useVerticals()
   const l = listing.data
   const store = useAsync(() => listingsApi.store(l!.store_id), [l?.store_id], !!l?.store_id)
   const related = useAsync(() => searchApi.search({ text: l!.title.split(/\s+/).slice(0, 2).join(' '), page_size: 5 }), [l?.id], !!l)
@@ -55,13 +74,27 @@ export default function DetailPage() {
 
   if (listing.loading) return <AppShell><Loading label="Loading listing…" /></AppShell>
   if (listing.error || !l) return <AppShell><section className="page-section"><ErrorState error={listing.error ?? 'Listing not found'} onRetry={listing.reload} /></section></AppShell>
+  // Hotel room types open the hotel page (property, rooms, dates, availability).
+  if (l.vertical === 'HOTEL') return <HotelDetail listing={l} />
 
-  const copy = typeCopy[l.listing_type] ?? typeCopy.other
-  const bookable = isBookable(l.listing_type)
+  const vertical = byCode[l.vertical]
+  const flows = flowsFor(vertical, l.listing_type)
+  const bookable = flows[0] === 'BOOK'
+  const canBuy = flows.includes('BUY')
+  const canBook = flows.includes('BOOK')
+  const vc = verticalCopy[l.vertical]
+  const legacy = typeCopy[l.listing_type] ?? typeCopy.other
+  const copy = {
+    crumb: vertical?.name ?? legacy.crumb,
+    crumbHref: vertical ? `/search?vertical=${encodeURIComponent(vertical.code)}` : legacy.crumbHref,
+    icon: vc?.icon ?? legacy.icon,
+    primary: bookable ? (vc?.book ?? 'Reserve dates') : 'Add to bag',
+    by: vc?.by ?? legacy.by,
+  }
   const live = l.status === 'published'
   const images = l.media.length ? l.media.map((m) => m.url) : [null]
   const saved = isSaved(l.id)
-  const snapshot = { listing_id: l.id, title: l.title, price_amount: l.price_amount, price_currency: l.price_currency, image: l.media[0]?.url ?? null, seller: store.data?.name ?? '', listing_type: l.listing_type }
+  const snapshot = { listing_id: l.id, title: l.title, price_amount: l.price_amount, price_currency: l.price_currency, image: l.media[0]?.url ?? null, seller: store.data?.name ?? '', listing_type: l.listing_type, vertical: l.vertical }
   const sellerName = store.data?.name || 'Trezutil seller'
   const ask = `Tell me more about ${l.title}`
 
@@ -83,7 +116,7 @@ export default function DetailPage() {
             )}
           </div>
           <div className="detail-summary">
-            <div className="detail-eyebrow">{sentence(l.listing_type)}{l.pricing_model === 'negotiable' ? ' · Price negotiable' : ''}</div>
+            <div className="detail-eyebrow">{vertical?.name ?? sentence(l.listing_type)}{l.pricing_model === 'negotiable' ? ' · Price negotiable' : ''}</div>
             <Heading level={1}>{l.title}</Heading>
             {store.data?.city && <div className="detail-location"><Icon name="location" size={17} />{store.data.city}</div>}
             <strong className="detail-price">{formatMoney(l.price_amount, l.price_currency)}</strong>
@@ -99,9 +132,10 @@ export default function DetailPage() {
               <Button className="primary-button" onClick={primary} disabled={!live}>{copy.primary}<Icon name={bookable ? 'calendar' : 'orders'} size={18} /></Button>
               <Button className={saved ? 'outline-button saved' : 'outline-button'} pressed={saved} onClick={() => toggleSaved(snapshot)}><Icon name="heart" size={18} />{saved ? 'Saved' : 'Save'}</Button>
             </div>
-            {live && (
+            {live && (bookable ? canBuy : true) && (
               <div className="detail-secondary-actions">
                 <ActionLink className="outline-button" href={`/checkout?listing_id=${encodeURIComponent(l.id)}&quantity=${quantity}`}>{bookable ? 'Order instead' : 'Buy now'}</ActionLink>
+                {!bookable && canBook && <ActionLink className="outline-button" href={`/book/${encodeURIComponent(l.id)}`}>Reserve dates</ActionLink>}
                 {!bookable && <ActionLink className="text-action" href="/cart">View bag</ActionLink>}
               </div>
             )}
@@ -119,6 +153,7 @@ export default function DetailPage() {
             </> : <>
               <Heading level={2}>Details</Heading>
               <div className="info-rows">
+                {vertical && <div><span>Category</span><strong>{vertical.name}</strong></div>}
                 <div><span>Type</span><strong>{sentence(l.listing_type)}</strong></div>
                 <div><span>Pricing</span><strong>{sentence(l.pricing_model || 'fixed')}</strong></div>
                 <div><span>Currency</span><strong>{l.price_currency}</strong></div>

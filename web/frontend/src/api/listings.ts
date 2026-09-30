@@ -21,6 +21,7 @@ export function mapListing(value: unknown): ListingDetail {
     title: str(read(raw, 'title', 'Title')),
     description: typeof description === 'string' ? description : null,
     listing_type: (str(read(raw, 'listing_type', 'ListingType')) || 'other') as ListingType,
+    vertical: str(read(raw, 'vertical', 'Vertical')),
     pricing_model: str(read(raw, 'pricing_model', 'PricingModel')),
     price_amount: num(read(raw, 'price_amount', 'PriceAmount')),
     price_currency: str(read(raw, 'price_currency', 'PriceCurrency')),

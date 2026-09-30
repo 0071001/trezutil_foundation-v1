@@ -22,6 +22,8 @@ export interface ListingDetail {
   title: string
   description: string | null
   listing_type: ListingType
+  /** Commerce vertical (HOTEL, RESTAURANT, RETAIL…); decides booking vs purchase. */
+  vertical: string
   pricing_model: string
   price_amount: number
   price_currency: string
@@ -37,6 +39,7 @@ export interface ListingDetail {
 export interface SearchResult {
   listing_id: string
   title: string
+  vertical: string
   price_amount: number
   price_currency: string
   availability_status: string
@@ -60,10 +63,28 @@ export type SortField = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'a
 export interface SearchRequest {
   text: string
   category_id?: string
+  /** Vertical code; the API answers 400 for an unknown one. */
+  vertical?: string
+  /** Place name, e.g. "Gombe". */
+  location?: string
+  price_min?: number
+  price_max?: number
   page_size?: number
   cursor?: string
   sort_field?: SortField
   sort_direction?: 'asc' | 'desc'
+}
+
+/** A commerce vertical from GET /verticals. */
+export type CustomerFlow = 'BOOK' | 'BUY'
+
+export interface VerticalInfo {
+  code: string
+  name: string
+  description: string
+  flows: CustomerFlow[]
+  capabilities: string[]
+  listing_types: ListingType[]
 }
 
 export interface Suggestion {

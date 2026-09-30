@@ -15,12 +15,12 @@ const images = {
 }
 
 const categoryItems: { label: string; icon: IconName; color: string; href: string }[] = [
-  { label: 'Products', icon: 'shop', color: 'blue', href: '/search?type=products' },
-  { label: 'Services', icon: 'service', color: 'navy', href: '/search?type=services' },
-  { label: 'Food', icon: 'food', color: 'coral', href: '/search?type=food' },
-  { label: 'Hotels', icon: 'building', color: 'mint', href: '/search?q=hotel' },
-  { label: 'Real Estate', icon: 'home', color: 'soft', href: '/search?type=property' },
-  { label: 'Transport', icon: 'car', color: 'line', href: '/search?type=vehicles' },
+  { label: 'Products', icon: 'shop', color: 'blue', href: '/search?vertical=RETAIL' },
+  { label: 'Services', icon: 'service', color: 'navy', href: '/search?vertical=SERVICES' },
+  { label: 'Food', icon: 'food', color: 'coral', href: '/search?vertical=RESTAURANT' },
+  { label: 'Hotels', icon: 'building', color: 'mint', href: '/search?vertical=HOTEL' },
+  { label: 'Real Estate', icon: 'home', color: 'soft', href: '/search?vertical=REAL_ESTATE' },
+  { label: 'Transport', icon: 'car', color: 'line', href: '/search?vertical=TRANSPORT' },
 ]
 
 /** Figma Rail bound to a live search. */
@@ -50,10 +50,10 @@ export default function DiscoverPage() {
         <nav className="category-strip" aria-label="Categories">{categoryItems.map((item) => <ActionLink href={item.href} className={`discover-category ${item.color}`} key={item.label}><Icon name={item.icon} /><strong>{item.label}</strong><Icon name="arrow" size={16} /></ActionLink>)}</nav>
         <Rail title="New around you" copy="The latest listings from sellers nearby" request={{ text: '', page_size: 4, sort_field: 'newest', sort_direction: 'desc' }} href="/search?sort=newest" />
         <div className="editorial-row">
-          <ActionLink className="editorial-card food-feature" href="/search?type=food"><img src={images.food} alt="" loading="lazy" /><div><span>Eat nearby</span><Heading level={2}>Good food,<br />closer than you think.</Heading><small>Restaurants and delivery</small></div></ActionLink>
-          <ActionLink className="editorial-card service-feature" href="/search?type=services"><img src={images.service} alt="" loading="lazy" /><div><span>Services</span><Heading level={2}>Get it done.</Heading><small>Local professionals you can book</small></div></ActionLink>
+          <ActionLink className="editorial-card food-feature" href="/search?vertical=RESTAURANT"><img src={images.food} alt="" loading="lazy" /><div><span>Eat nearby</span><Heading level={2}>Good food,<br />closer than you think.</Heading><small>Restaurants and delivery</small></div></ActionLink>
+          <ActionLink className="editorial-card service-feature" href="/search?vertical=SERVICES"><img src={images.service} alt="" loading="lazy" /><div><span>Services</span><Heading level={2}>Get it done.</Heading><small>Local professionals you can book</small></div></ActionLink>
         </div>
-        <Rail title="Homes & stays" copy="Apartments, houses and places to stay" request={{ text: 'apartment', page_size: 4 }} href="/search?type=property" />
+        <Rail title="Homes & stays" copy="Apartments, houses and places to stay" request={{ text: 'apartment', page_size: 4 }} href="/search?vertical=REAL_ESTATE" />
         {total.data?.total === 0 && <EmptyState icon="shop" title="The marketplace is just opening" copy="Sellers are adding their first listings. Tell Trezutil what you need and we’ll look as soon as it’s listed." action="Ask Trezutil" href="/conversation" />}
       </section>
     </AppShell>

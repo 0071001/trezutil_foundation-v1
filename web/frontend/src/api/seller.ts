@@ -44,12 +44,12 @@ export interface NewListing {
   title: string
   description: string
   listing_type: string
+  /** Optional: when absent the API derives the vertical from the listing type. */
+  vertical?: string
   pricing_model: string
   price_amount: number
   price_currency: string
   image_urls: string[]
-  /** Units in stock; omitted for unlimited or on-request listings. */
-  quantity?: number
   availability: 'available' | 'on_request'
 }
 
@@ -97,7 +97,7 @@ export const sellerApi = {
     const media = input.image_urls.map((url, i) => ({ Type: 'image', URL: url, Primary: i === 0 }))
     const availability = input.availability === 'on_request'
       ? { status: 'pre_order' }
-      : { status: 'in_stock', ...(input.quantity ? { quantity: input.quantity } : {}) }
+      : { status: 'in_stock' }
     return mapListing(await http.post<unknown>('/listings', {
       listing: {
         StoreID: input.store_id,
@@ -106,6 +106,7 @@ export const sellerApi = {
         Title: input.title,
         Description: input.description || null,
         ListingType: input.listing_type,
+        ...(input.vertical ? { Vertical: input.vertical } : {}),
         PricingModel: input.pricing_model,
         PriceAmount: input.price_amount,
         PriceCurrency: input.price_currency,

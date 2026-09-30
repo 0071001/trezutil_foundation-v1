@@ -7,9 +7,9 @@ import { useSession } from '@/lib/session'
 
 const primaryNav: [string, string][] = [
   ['Discover', '/discover'],
-  ['Products', '/search?type=products'],
-  ['Services', '/search?type=services'],
-  ['Real Estate', '/search?type=property'],
+  ['Products', '/search?vertical=RETAIL'],
+  ['Services', '/search?vertical=SERVICES'],
+  ['Real Estate', '/search?vertical=REAL_ESTATE'],
   ['Reservations', '/reservations'],
 ]
 
@@ -44,7 +44,7 @@ function MobileMenu({ open, onClose }: { open: boolean; onClose: () => void }) {
           <ActionLink href="/wishlist">Saved</ActionLink>
           <ActionLink href="/cart">Bag</ActionLink>
           <ActionLink href="/seller">Seller workspace</ActionLink>
-          {signedIn ? <><ActionLink href="/account">Account</ActionLink><Button className="drawer-signout" onClick={() => { signOut(); onClose() }}>Sign out</Button></>
+          {signedIn ? <><ActionLink href="/account">Account</ActionLink><Button className="drawer-signout" onClick={() => { onClose(); signOut() }}>Sign out</Button></>
             : <ActionLink href="/login">Sign in</ActionLink>}
         </nav>
       </div>

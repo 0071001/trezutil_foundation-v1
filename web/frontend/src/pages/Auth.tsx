@@ -22,7 +22,7 @@ function contextCopy(returnTo: string): { icon: IconName; title: string; copy: s
     return { icon: 'spark', title: 'Let’s continue the conversation.', copy: 'Sign in so Trezutil can order and book for you, and keep this request connected to your account.', preview: 'Conversation ready' }
   if (returnTo.startsWith('/seller'))
     return { icon: 'shop', title: 'Welcome back to your business.', copy: 'Sign in to manage listings, orders and bookings.', preview: 'Seller workspace' }
-  return { icon: 'spark', title: 'One account. Everything connected.', copy: 'Keep your conversations, orders, bookings and saved discoveries in one place.', preview: 'Continue exactly where you left off' }
+  return { icon: 'spark', title: 'One account. Everything connected.', copy: 'Keep your conversations, orders, bookings and saved discoveries in one place.', preview: 'Orders, bookings and conversations' }
 }
 
 /** Normalizes local DRC numbers (0812…) to E.164; the server validates the result. */

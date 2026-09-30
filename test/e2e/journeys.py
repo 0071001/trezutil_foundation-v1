@@ -2,8 +2,11 @@
 
 PostgreSQL (trezutil_e2e) and OpenSearch 2.17.1 are real. OTP codes are read
 from the identity-service development log (APP_ENV=development); WhatsApp
-webhooks are signed locally with the test app secret. No payment provider is
-registered, so payment creation is expected to return 503.
+webhooks are signed locally with the test app secret. Journey D runs before
+any payment provider exists (payment creation -> 503); journey S then adds a
+Stripe provider row pointing at the Stripe emulator (test/e2e/fakeproviders)
+and exercises real payment flows with signed webhooks. The conversation service
+runs with AI_PROVIDER=anthropic against the Anthropic emulator.
 """
 import hashlib, hmac, json, os, re, subprocess, sys, time, uuid, urllib.request, urllib.error
 
@@ -133,6 +136,23 @@ lid = created.get("ID") if isinstance(created, dict) else None
 check("E: seller creates listing (201)", st == 201 and lid, (st, created))
 check("E: server assigns ID and forces draft status", lid != "attacker-chosen" and created.get("Status") == "draft", created)
 check("E: listing metadata persisted", sql(f"SELECT metadata->>'bedrooms' FROM listings WHERE id='{lid}'") == "2")
+
+# ---------- Verticals: a listing belongs to one commerce vertical (migration 000019) ----------
+check("V: listing without a vertical gets its listing type's default (REAL_ESTATE)",
+      created.get("Vertical") == "REAL_ESTATE" and sql(f"SELECT vertical FROM listings WHERE id='{lid}'") == "REAL_ESTATE", created.get("Vertical"))
+room = {"listing": dict(listing["listing"], Title="Gombe Stays deluxe room", Vertical="hotel", ID=None)}
+st, room_body = call("POST", "/listings", room, token=seller_token)
+room_id = room_body.get("ID") if isinstance(room_body, dict) else None
+check("V: the same seller lists a room in the HOTEL vertical (stays a draft)",
+      st == 201 and room_body.get("Vertical") == "HOTEL" and sql(f"SELECT vertical||'|'||status FROM listings WHERE id='{room_id}'") == "HOTEL|draft", (st, room_body))
+st, det = call("GET", f"/listings?listing_id={room_id}", token=seller_token)
+check("V: listing detail returns the vertical", st == 200 and det.get("Vertical") == "HOTEL", (st, det.get("Vertical") if isinstance(det, dict) else det))
+st, bad = call("POST", "/listings", {"listing": dict(listing["listing"], Vertical="SPACESHIPS", ID=None)}, token=seller_token)
+check("V: unknown vertical is refused (400)", st == 400 and bad.get("error", {}).get("code") == "INVALID_PARAMETER", (st, bad))
+st, bad = call("POST", "/listings", {"listing": dict(listing["listing"], Vertical="RETAIL", ID=None)}, token=seller_token)
+check("V: vertical that does not accept the listing type is refused (400)", st == 400, (st, bad))
+check("V: refused listings were not written",
+      sql(f"SELECT count(*) FROM listings WHERE organization_id='{org}'") == "2")
 st, res = call("POST", "/search", {"text": "Riverside apartment"})
 check("E: draft listing not discoverable", st == 200 and all(i.get("ListingID") != lid for i in res.get("items", [])), res)
 st, _ = call("POST", f"/listings/publish?listing_id={lid}", token=customer_token)
@@ -255,6 +275,274 @@ check("G: sender provisioned as verified customer", sql("SELECT status FROM user
 st, wa2 = call("POST", "/webhooks/whatsapp", raw=raw, headers={"X-Hub-Signature-256": sig})
 n = sql(f"SELECT COUNT(*) FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE c.channel='whatsapp' AND c.external_id LIKE '{waba}:%'")
 check("G: redelivered webhook does not re-process (2 messages total)", st == 200 and n == "2", (st, n))
+
+# ---------- Seller console (server-side isolation) ----------
+st, ctx = call("GET", "/sellers/me", token=seller_token)
+check("SELLER: /sellers/me lists the caller's organization and role", st == 200 and any(o["organization_id"] == org and o["role"] == "owner" for o in ctx.get("organizations", [])), (st, ctx))
+st, ctx2 = call("GET", "/sellers/me", token=other_token)
+check("SELLER: non-member sees no organizations", st == 200 and ctx2.get("organizations") == [], (st, ctx2))
+st, man = call("GET", f"/listings/manage?organization_id={org}", token=seller_token)
+check("SELLER: owner lists all organization listings", st == 200 and any(i.get("ID") == lid for i in man.get("items", [])), (st, man))
+st, _ = call("GET", f"/listings/manage?organization_id={org}", token=other_token)
+check("SELLER: another account cannot list the organization's listings (403)", st == 403, st)
+st, _ = call("GET", f"/orders/incoming?tenant_id={org}", token=other_token)
+check("SELLER: another account cannot read incoming orders (403)", st == 403, st)
+st, inc = call("GET", f"/orders/incoming?tenant_id={org}", token=seller_token)
+check("SELLER: owner reads incoming orders", st == 200 and any(i.get("ID") == o["order_id"] for i in inc.get("items", [])), (st, inc))
+st, _ = call("GET", f"/reservations/incoming?tenant_id={org}", token=seller_token)
+check("SELLER: owner reads incoming reservations", st == 200, st)
+st, up = call("POST", f"/listings/update?listing_id={lid}", {"title": "Hijacked"}, token=other_token)
+check("SELLER: another account cannot edit the listing", st in (403, 404), (st, up))
+st, up = call("POST", f"/listings/update?listing_id={lid}", {"price_amount": 99}, token=seller_token)
+check("SELLER: a live listing must be paused before editing (409)", st == 409, (st, up))
+call("POST", f"/listings/pause?listing_id={lid}", token=seller_token)
+st, up = call("POST", f"/listings/update?listing_id={lid}", {"description": "Two bedrooms, river view"}, token=seller_token)
+check("SELLER: paused listing edited; price and ownership untouched", st == 200 and up.get("PriceAmount") == 85.5 and up.get("OrganizationID") == org, (st, up))
+st, _ = call("POST", f"/listings/resume?listing_id={lid}", token=seller_token)
+check("SELLER: listing resumed", st == 200, st)
+st, det = call("GET", f"/listings?listing_id={lid}")
+check("SELLER: listing detail exposes its media list", st == 200 and isinstance(det.get("Media"), list), (st, det))
+
+# ---------- Journey S: Stripe payments (provider emulator, signed webhooks) ----------
+config = json.dumps({"settings": {"base_url": "http://127.0.0.1:12111", "capture_method": "automatic",
+                                   "publishable_key": "pk_test_e2e", "webhook_secret_ref": "env:STRIPE_E2E_WEBHOOK"}})
+sql(f"INSERT INTO providers (organization_id, code, name, type, status, capabilities, configuration, secret_ref, health_status) "
+    f"VALUES ('{org}','stripe','Stripe','PAYMENT','ACTIVE','{{PAYMENT}}','{config}','env:STRIPE_E2E_SECRET','HEALTHY')")
+
+def new_order(tag):
+    st, od = call("POST", "/orders", {"listing_id": lid, "quantity": 1}, token=customer_token, headers={"Idempotency-Key": f"ord-{tag}-{RUN}"})
+    assert st == 201, (st, od)
+    return od["order_id"]
+
+def pay(order_id, method_id, key, token=None):
+    return call("POST", f"/payments?organization_id={org}", {"order_id": order_id, "amount_minor": 8550, "currency": "USD",
+                "payment_method_type": "CARD", "payment_method_id": method_id, "idempotency_key": key}, token=token or customer_token)
+
+def order_status(order_id):
+    return call("GET", f"/orders/{order_id}", token=customer_token)[1].get("Status")
+
+o_card = new_order("card")
+for _ in range(20):  # the provider row is picked up by the payment service within seconds
+    st, p1 = pay(o_card, "pm_card_visa", "pay-card-" + RUN)
+    if st != 503:
+        break
+    time.sleep(1)
+check("S: provider configured -> card payment captured by Stripe", st == 201 and p1.get("status") == "captured", (st, p1))
+check("S: paid order moves to 'paid'", order_status(o_card) == "paid", order_status(o_card))
+st, p1b = pay(o_card, "pm_card_visa", "pay-card-" + RUN)
+check("S: replayed payment request returns the same payment (no double charge)", p1b.get("payment_id") == p1.get("payment_id"), p1b)
+
+o_dec = new_order("declined")
+st, pd = pay(o_dec, "pm_card_chargeDeclined", "pay-dec-" + RUN)
+check("S: declined card -> payment failed, order still awaiting payment", pd.get("status") == "failed" and order_status(o_dec) in ("pending_payment", "draft"), (st, pd))
+
+o_web = new_order("web")
+st, pw = pay(o_web, "card", "pay-web-" + RUN)
+ca = pw.get("client_action") or {}
+check("S: browser payment returns Stripe.js client action (secret + publishable key)", st == 201 and ca.get("client_secret") and ca.get("publishable_key") == "pk_test_e2e", (st, pw))
+pi = pw.get("provider_payment_id")
+urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:12111/_test/confirm/{pi}", data=b"", method="POST"), timeout=10).read()
+event = json.dumps({"id": "evt_" + RUN, "object": "event", "type": "payment_intent.succeeded", "created": int(time.time()),
+                    "data": {"object": {"id": pi, "object": "payment_intent", "status": "succeeded", "amount": 8550, "amount_received": 8550, "currency": "usd"}}}).encode()
+def stripe_sig(secret, body, ts=None):
+    ts = ts or int(time.time())
+    return f"t={ts},v1=" + hmac.new(secret, f"{ts}.".encode() + body, hashlib.sha256).hexdigest()
+hook = f"/webhooks/payments/stripe?organization_id={org}"
+st, _ = call("POST", hook, raw=event, headers={"Stripe-Signature": stripe_sig(b"whsec_wrong", event)})
+check("S: webhook with a bad signature rejected", st in (400, 401), st)
+st, _ = call("POST", hook, raw=event, headers={"Stripe-Signature": stripe_sig(b"whsec_e2e", event, int(time.time()) - 900)})
+check("S: replayed (stale) webhook signature rejected", st in (400, 401), st)
+st, wh = call("POST", hook, raw=event, headers={"Stripe-Signature": stripe_sig(b"whsec_e2e", event)})
+check("S: signed payment_intent.succeeded webhook accepted", st == 200, (st, wh))
+check("S: webhook settles the browser-confirmed order to 'paid'", order_status(o_web) == "paid", order_status(o_web))
+st, _ = call("POST", hook, raw=event, headers={"Stripe-Signature": stripe_sig(b"whsec_e2e", event)})
+n = sql(f"SELECT COUNT(*) FROM payment_webhook_events WHERE provider_msg_id='evt_{RUN}'")
+check("S: redelivered webhook acknowledged once (idempotent)", st == 200 and n == "1", (st, n))
+
+st, _ = call("POST", f"/orders/{o_card}/confirm", token=customer_token)
+check("S: customer cannot confirm their own order as seller", st in (403, 404), st)
+st, cf = call("POST", f"/orders/{o_card}/confirm", token=seller_token)
+check("S: seller confirms the paid order", st == 200 and order_status(o_card) == "confirmed", (st, cf))
+pid = p1["payment_id"]
+st, _ = call("POST", f"/payments/{pid}/refund?organization_id={org}", {"amount_minor": 1000, "currency": "USD"}, token=customer_token, headers={"Idempotency-Key": "rf-c-" + RUN})
+check("S: customer cannot refund", st == 403, st)
+st, rf = call("POST", f"/payments/{pid}/refund?organization_id={org}", {"amount_minor": 1000, "currency": "USD"}, token=seller_token, headers={"Idempotency-Key": "rf-1-" + RUN})
+check("S: seller issues a partial refund", st in (200, 201), (st, rf))
+st, rf2 = call("POST", f"/payments/{pid}/refund?organization_id={org}", {"amount_minor": 1000, "currency": "USD"}, token=seller_token, headers={"Idempotency-Key": "rf-1-" + RUN})
+refunds = sql(f"SELECT COUNT(*) FROM refunds WHERE payment_id='{pid}'")
+check("S: replayed refund creates no second refund", refunds == "1", (st, refunds))
+st, rf3 = call("POST", f"/payments/{pid}/refund?organization_id={org}", {"amount_minor": 100000, "currency": "USD"}, token=seller_token, headers={"Idempotency-Key": "rf-2-" + RUN})
+check("S: over-refund rejected", st >= 400, (st, rf3))
+
+# ---------- Journey AI: model-interpreted conversation -> action ----------
+conv_log = LOG.replace("identity.log", "conversation.log")
+before = open(conv_log, encoding="utf-8", errors="ignore").read().count("AI provider call completed")
+ai_sender = str(uuid.uuid4())
+def say(text, key):
+    return call("POST", "/conversations/message", {"channel": "web", "message_text": text, "sender_external_id": ai_sender, "message_idempotency_key": key}, token=customer_token)
+st, r = say("I'm looking for a 2 bedroom apartment in Kinshasa", "ai-1")
+after = open(conv_log, encoding="utf-8", errors="ignore").read().count("AI provider call completed")
+check("AI: natural-language request interpreted by the model (AI gateway call recorded)", after > before, (before, after))
+check("AI: interpreted as a listing search with results", st == 200 and r["response"].get("metadata", {}).get("action_type") == "SEARCH_LISTINGS" and len(r["response"].get("cards", [])) >= 1, (st, r))
+ai_cid = r.get("conversation_id")
+st, r = say("1", "ai-2")
+check("AI: contextual reference opens the first result", st == 200 and r["response"].get("metadata", {}).get("action_type") == "GET_LISTING", (st, r))
+st, r = say("buy it", "ai-3")
+check("AI: 'buy it' on the listing in focus asks for the missing quantity", st == 200 and r.get("is_clarification") is True and any(p.get("name") == "quantity" for p in r.get("missing_params", [])), (st, r))
+st, r = say("1", "ai-3b")
+conf = (r.get("response") or {}).get("confirmation") or {}
+token_c = (conf.get("details") or {}).get("confirmation_token")
+check("AI: with the quantity, the order waits for explicit confirmation (nothing executed yet)", st == 200 and r.get("is_confirmation") is True and token_c, (st, r))
+st, r = call("POST", f"/conversations/{ai_cid}/confirm", {"token": token_c}, token=other_token)
+check("AI: another account cannot confirm this action (403)", st == 403, (st, r))
+st, r = call("POST", f"/conversations/{ai_cid}/confirm", {"token": token_c}, token=customer_token)
+oid = ((r.get("response") or {}).get("metadata") or {}).get("result_data", {}).get("order_id")
+check("AI: confirmed -> order created through the commerce runtime", st == 200 and oid, (st, r))
+st, r = call("POST", f"/conversations/{ai_cid}/confirm", {"token": token_c}, token=customer_token)
+check("AI: confirmation token is single-use", st == 400, (st, r))
+
+# ---------- Hotel Commerce Pack (H1-H5; H6 runs on real PostgreSQL in Go) ----------
+import datetime as _dt
+
+def night(i):
+    return (_dt.datetime.now(_dt.timezone.utc).date() + _dt.timedelta(days=20 + i)).isoformat()
+
+def night_ts(i):
+    d = _dt.datetime.now(_dt.timezone.utc).date() + _dt.timedelta(days=20 + i)
+    return int(_dt.datetime(d.year, d.month, d.day, tzinfo=_dt.timezone.utc).timestamp())
+
+# H4 - Seller: HOTEL -> room type -> rooms -> nightly capacity -> publish -> calendar
+room_title = "Deluxe room " + RUN
+st, rt = call("POST", "/hotels/room-types", {"store_id": store, "seller_id": seller, "category_id": cat, "title": room_title,
+              "description": "River view, breakfast included", "price_amount": 90, "price_currency": "USD", "max_occupancy": 2,
+              "bed_configuration": "1 king bed", "amenities": ["Wi-Fi", "Breakfast"], "units": 3}, token=seller_token)
+room = rt.get("listing_id") if isinstance(rt, dict) else None
+check("H4: hotel seller creates a room type (HOTEL listing + room facts + 3 rooms)",
+      st == 201 and room and rt.get("units") == 3 and rt.get("max_occupancy") == 2, (st, rt))
+check("H4: the room type is a HOTEL listing with ROOM inventory in the Commerce Core",
+      sql(f"SELECT l.vertical||'|'||i.resource_type||'|'||i.total FROM listings l JOIN inventory_resources i ON i.listing_id=l.id WHERE l.id='{room}'") == "HOTEL|ROOM|3")
+st, cap = call("POST", f"/hotels/room-types/{room}/capacity", {"from": night(0), "to": night(5), "rooms": 3}, token=seller_token)
+check("H4: seller opens 3 rooms on 5 nights", st == 200 and len(cap.get("nights", [])) == 5, (st, cap))
+st, cap = call("POST", f"/hotels/room-types/{room}/capacity", {"from": night(1), "to": night(2), "rooms": 2}, token=seller_token)
+check("H4: one night drops to 2 rooms (a room under repair)", st == 200 and cap["nights"][0]["capacity"] == 2, (st, cap))
+st, _ = call("POST", f"/hotels/room-types/{room}/capacity", {"from": night(0), "to": night(1), "rooms": 4}, token=seller_token)
+check("H4: a night cannot offer more rooms than the room type has (400)", st == 400, st)
+st, pub = call("POST", f"/listings/publish?listing_id={room}", token=seller_token)
+check("H4: seller publishes the room type", st == 200, (st, pub))
+
+# H1 - Hotel discovery: HOTEL vertical -> search -> results
+found = None
+for _ in range(15):
+    st, res = call("POST", "/search", {"vertical": "hotel", "location": "Gombe"})
+    if st == 200 and any(i.get("ListingID") == room for i in res.get("items", [])):
+        found = res; break
+    time.sleep(1)
+check("H1: search by vertical HOTEL + location Gombe finds the room type", found is not None, res)
+check("H1: every result is in the HOTEL vertical", found is not None and all(i.get("Vertical") == "HOTEL" for i in found["items"]), found)
+st, res = call("POST", "/search", {"vertical": "RETAIL", "text": room_title})
+check("H1: the room type is not a RETAIL result", st == 200 and all(i.get("ListingID") != room for i in res.get("items", [])), res)
+st, bad = call("POST", "/search", {"vertical": "SPACESHIPS"})
+check("H1: unknown vertical -> 400, never OTHER", st == 400 and bad.get("error", {}).get("code") == "INVALID_VERTICAL", (st, bad))
+hotel_sender = "hotel-" + RUN
+st, conv = call("POST", "/conversations/message", {"channel": "web", "message_text": "Find me a hotel in Gombe for two nights for two people",
+                "sender_external_id": hotel_sender, "message_idempotency_key": "h1-" + RUN}, token=customer_token)
+text = (conv.get("response") or {}).get("text", "") if isinstance(conv, dict) else ""
+check("H1: 'a hotel in Gombe for two nights for two people' -> vertical HOTEL, location, nights, party size",
+      st == 200 and "Hotels & accommodation in Gombe · 2 nights · 2 guests" in text and room_title in text, (st, text))
+
+# H2 - Hotel availability: property -> dates -> guests -> availability per room type
+st, prop = call("GET", f"/hotels/property?store_id={store}")
+check("H2: guests see the property and its published room types",
+      st == 200 and any(r["listing_id"] == room for r in prop.get("room_types", [])), (st, prop))
+st, quote = call("GET", f"/hotels/availability?store_id={store}&check_in={night(0)}&check_out={night(2)}&guests=2")
+offer = next((o for o in quote.get("offers", []) if o["listing_id"] == room), {}) if st == 200 else {}
+check("H2: two nights, two guests -> available, the tightest night decides (2 rooms left)",
+      offer.get("available") is True and offer.get("available_rooms") == 2 and offer.get("nights") == 2 and offer.get("total_price") == 180, (st, offer))
+st, quote = call("GET", f"/hotels/availability?store_id={store}&check_in={night(0)}&check_out={night(2)}&guests=5")
+offer5 = next((o for o in quote.get("offers", []) if o["listing_id"] == room), {}) if st == 200 else {}
+check("H2: five guests need three double rooms -> not available on the 2-room night", offer5.get("rooms") == 3 and offer5.get("available") is False, offer5)
+st, _ = call("GET", f"/hotels/availability?store_id={store}&check_in={night(2)}&check_out={night(0)}&guests=2")
+check("H2: check-out before check-in -> 400", st == 400, st)
+
+# H3 - Hotel reservation: room -> reservation -> payment -> confirmation
+def book_stay(token, first, last, rooms, guests, key, start_shift=0):
+    return call("POST", "/reservations", {"listing_id": room, "start_at": night_ts(first) + start_shift, "end_at": night_ts(last),
+                "quantity": rooms, "party_size": guests}, token=token, headers={"Idempotency-Key": key + RUN})
+st, r1 = book_stay(customer_token, 0, 2, 1, 2, "stay-a-")
+stay1 = r1.get("reservation_id") if isinstance(r1, dict) else None
+check("H3: customer books a double room for 2 nights (confirmed)", st == 201 and r1.get("status") == "confirmed", (st, r1))
+check("H3: the stay draws from nightly capacity (capacity-managed reservation)", sql(f"SELECT capacity_managed FROM reservations WHERE id='{stay1}'") == "t")
+st, r2 = book_stay(seller_token, 0, 2, 1, 1, "stay-b-")
+check("H3: a second guest books the same nights (rooms are shared, not exclusive)", st == 201, (st, r2))
+st, r3 = book_stay(other_token, 1, 2, 1, 1, "stay-c-")
+check("H3: the 2-room night is now full -> 409", st == 409, (st, r3))
+st, r4 = book_stay(other_token, 3, 4, 1, 3, "stay-d-")
+check("H3: three guests in one double room -> 400", st == 400 and r4.get("error", {}).get("code") == "INVALID_PARAMETER", (st, r4))
+st, r5 = book_stay(other_token, 3, 4, 1, 1, "stay-e-", start_shift=14 * 3600)
+check("H3: a stay is whole nights (check-in at 14:00 as a timestamp) -> 400", st == 400, (st, r5))
+st, stay_order = call("POST", f"/reservations/{stay1}/checkout", token=customer_token)
+check("H3: the stay's order = 2 nights x 1 room x $90", st == 201 and stay_order.get("total", {}).get("AmountMinor") == 18000, (st, stay_order))
+st, again = call("POST", f"/reservations/{stay1}/checkout", token=customer_token)
+check("H3: checkout is idempotent (same order)", st == 201 and again.get("order_id") == stay_order.get("order_id"), (st, again))
+st, _ = call("POST", f"/reservations/{stay1}/checkout", token=other_token)
+check("H3: another customer cannot pay (or read) my stay (403)", st == 403, st)
+st, sp = call("POST", f"/payments?organization_id={org}", {"order_id": stay_order.get("order_id"), "amount_minor": 18000, "currency": "USD",
+              "payment_method_type": "CARD", "payment_method_id": "pm_card_visa", "idempotency_key": "stay-pay-" + RUN}, token=customer_token)
+check("H3: the stay is paid through Payment Core (Stripe emulator) -> captured", st == 201 and sp.get("status") == "captured", (st, sp))
+check("H3: provider attempts are recorded with request id and attempt number",
+      sql(f"SELECT count(*) FROM provider_executions WHERE organization_id='{org}' AND request_id IS NOT NULL AND attempt >= 1 AND status='SUCCESS'") not in ("", "0"))
+st, cal = call("GET", f"/hotels/room-types/{room}/capacity?from={night(0)}&to={night(3)}", token=seller_token)
+nights = cal.get("nights", []) if st == 200 else []
+check("H3: the seller calendar shows the bookings night by night",
+      [n["reserved"] for n in nights] == [2, 2, 0] and nights[1]["available"] == 0, (st, nights))
+st, _ = call("POST", f"/reservations/{r2.get('reservation_id')}/cancel", token=seller_token)
+st2, cal = call("GET", f"/hotels/room-types/{room}/capacity?from={night(0)}&to={night(2)}", token=seller_token)
+check("H3: cancelling a stay gives its rooms back", st == 200 and [n["reserved"] for n in cal.get("nights", [])] == [1, 1], (st, cal))
+
+# H4 (continued) - the seller cannot oversell what is booked
+st, _ = call("POST", f"/hotels/room-types/{room}/capacity", {"from": night(0), "to": night(1), "rooms": 0}, token=seller_token)
+check("H4: a booked night cannot be closed (409)", st == 409, st)
+st, _ = call("POST", f"/hotels/room-types/{room}/units", {"units": 2}, token=seller_token)
+check("H4: rooms cannot drop below an open night (409)", st == 409, st)
+
+# H5 - Isolation: another hotel, customers and non-hotel IDs
+lodge_phone = "+24381" + str(int(RUN, 16) % 10**7).zfill(7)
+lodge_token, lodge_id, _ = login(lodge_phone)
+st, lodge_org = call("POST", "/organizations", {"Type": "business", "LegalName": "Kin Lodge SARL", "DisplayName": "Kin Lodge",
+                     "Phone": lodge_phone, "Country": "CD", "Status": "active"}, token=operator_token)
+org_b = lodge_org.get("ID")
+call("POST", f"/organizations/members?organization_id={org_b}", {"user_id": lodge_id, "membership_role": "owner"}, token=operator_token)
+grant_role(lodge_phone, "seller")
+st, sp_b = call("POST", "/sellers", {"OrganizationID": org_b, "SellerType": "organization", "DisplayName": "Kin Lodge", "Phone": lodge_phone}, token=lodge_token)
+st, st_b = call("POST", "/stores", {"OrganizationID": org_b, "Name": "Kin Lodge", "Slug": "kin-lodge-" + RUN, "Country": "CD", "Phone": lodge_phone, "Status": "active"}, token=lodge_token)
+st, rt_b = call("POST", "/hotels/room-types", {"store_id": st_b.get("ID"), "seller_id": sp_b.get("ID"), "category_id": cat, "title": "Lodge room " + RUN,
+                "price_amount": 40, "max_occupancy": 2, "units": 2}, token=lodge_token)
+room_b = rt_b.get("listing_id")
+check("H5: a second hotel sets up its own room type", st == 201 and room_b, (st, rt_b))
+st, _ = call("POST", f"/hotels/room-types/{room_b}/capacity", {"from": night(0), "to": night(2), "rooms": 1}, token=seller_token)
+check("H5: seller A cannot change seller B's nights (403)", st == 403, st)
+st, _ = call("POST", f"/hotels/room-types/{room}/units", {"units": 10}, token=lodge_token)
+check("H5: seller B cannot change seller A's rooms (403)", st == 403, st)
+st, _ = call("POST", f"/hotels/room-types/{room}", {"max_occupancy": 8}, token=customer_token)
+check("H5: a customer cannot change a room type (403)", st == 403, st)
+st, _ = call("GET", f"/hotels/room-types/{room}/capacity?from={night(0)}&to={night(1)}", token=lodge_token)
+check("H5: seller B cannot read seller A's calendar (403)", st == 403, st)
+st, _ = call("GET", f"/hotels/room-types?organization_id={org}", token=lodge_token)
+check("H5: seller B cannot list seller A's room types (403)", st == 403, st)
+st, _ = call("POST", "/hotels/room-types", {"store_id": store, "seller_id": sp_b.get("ID"), "category_id": cat, "title": "Hijack",
+             "price_amount": 1, "max_occupancy": 1, "units": 1}, token=lodge_token)
+check("H5: seller B cannot create a room type in seller A's hotel (403)", st == 403, st)
+st, nr = call("GET", f"/hotels/room-types/{lid}/capacity?from={night(0)}&to={night(1)}", token=seller_token)
+check("H5: a non-hotel listing ID is not a room type (404)", st == 404 and nr.get("error", {}).get("code") == "ROOM_TYPE_NOT_FOUND", (st, nr))
+st, _ = call("GET", "/providers?organization_id=" + org, token=customer_token)
+st2, _ = call("GET", "/provider-executions?organization_id=" + org, token=seller_token)
+check("H5: provider and execution records are not exposed over the API", st == 404 and st2 == 404, (st, st2))
+
+# A retail product for the browser checkout journey (retail is bought, not booked).
+st, prod = call("POST", "/listings", {"listing": {"StoreID": store, "SellerID": seller, "CategoryID": cat, "Title": "Bluetooth speaker " + RUN,
+                "ListingType": "physical_product", "Vertical": "RETAIL", "PricingModel": "fixed", "PriceAmount": 25, "PriceCurrency": "USD"}}, token=seller_token)
+st2, _ = call("POST", f"/listings/publish?listing_id={prod.get('ID')}", token=seller_token)
+check("V: seller publishes a RETAIL product", st == 201 and st2 == 200 and prod.get("Vertical") == "RETAIL", (st, st2, prod))
 
 # ---------- Security spot checks ----------
 st, _ = call("POST", "/orders?user_id=" + customer_id, {"listing_id": lid, "quantity": 1})

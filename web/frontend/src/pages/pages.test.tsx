@@ -129,7 +129,9 @@ describe('order and checkout', () => {
     const { calls } = mockApi({
       'GET /auth/users/me': () => ({ body: me }),
       'GET /listings': () => ({ body: listing }),
-      'POST /orders': () => ({ status: 201, body: { ID: 'o1', OrganizationID: 'org1', Status: 'pending_payment', TotalAmount: { AmountMinor: 17000, Currency: 'USD' }, Items: [{ ListingID: 'l1', Title: 'Riverside apartment', Quantity: 2 }] } }),
+      // The real create response is a short DTO; the page reads the order back.
+      'POST /orders': () => ({ status: 201, body: { order_id: 'o1', status: 'pending_payment', total: { AmountMinor: 17000, Currency: 'USD' }, currency: 'USD', customer_id: 'u1' } }),
+      'GET /orders/o1': () => ({ body: { ID: 'o1', OrganizationID: 'org1', Status: 'pending_payment', TotalAmount: { AmountMinor: 17000, Currency: 'USD' }, Items: [{ ListingID: 'l1', Title: 'Riverside apartment', Quantity: 2 }] } }),
       'POST /payments': () => ({ status: 503, body: { error: { code: 'PAYMENT_PROVIDER_UNAVAILABLE', message: 'x' } } }),
     })
     renderAt('/checkout?listing_id=l1&quantity=2')

@@ -6,11 +6,12 @@ import { sellerApi } from '@/api/seller'
 import { ListingImage } from '@/components/cards'
 import { EmptyState, ErrorState, Loading } from '@/components/states'
 import { ActionLink, Button, Field, Heading, Icon, type IconName } from '@/components/ui'
-import { formatMoney, safeImage, sentence } from '@/lib/format'
+import { detailPath, formatMoney, safeImage, sentence } from '@/lib/format'
 import { useToast } from '@/lib/toast'
 import { useAsync } from '@/lib/useAsync'
+import { listingTypeLabel, useVerticals, verticalIcon } from '@/lib/verticals'
 import { useSeller } from '@/pages/seller/SellerShell'
-import type { ListingDetail, ListingType } from '@/types'
+import type { ListingDetail, ListingType, VerticalInfo } from '@/types'
 
 const listingTypes: { value: ListingType; label: string; icon: IconName }[] = [
   { value: 'physical_product', label: 'Product', icon: 'shop' },
@@ -27,18 +28,21 @@ interface Draft {
   title: string
   description: string
   listing_type: ListingType
+  /** Business vertical from the catalogue; the API validates it against the listing type. */
+  vertical: string
   category_id: string
   price: string
   currency: string
   pricing_model: string
   images: string
   availability: 'available' | 'on_request'
-  quantity: string
   store_id: string
 }
 
-function validate(step: number, d: Draft): string | null {
+function validate(step: number, d: Draft, needsVertical: boolean): string | null {
   if (step === 1 && (!d.title.trim() || d.title.length > 255)) return 'Give your listing a name (up to 255 characters).'
+  if (step === 2 && needsVertical && !d.vertical) return 'Choose the business vertical this listing belongs to.'
+  if (step === 2 && d.vertical === 'HOTEL') return 'Hotel rooms are set up in Hotel rooms, with guests per room, number of rooms and bookable nights.'
   if (step === 2 && !d.category_id) return 'Choose a category.'
   if (step === 3 && !(Number(d.price) > 0)) return 'Enter a price greater than zero.'
   if (step === 4) {
@@ -46,7 +50,6 @@ function validate(step: number, d: Draft): string | null {
     if (urls.some((u) => !/^https:\/\//i.test(u) || !safeImage(u))) return 'Image links must be public https:// addresses.'
     if (urls.length > 8) return 'Use up to 8 images.'
   }
-  if (step === 5 && d.availability === 'available' && d.quantity && !(Number.isInteger(Number(d.quantity)) && Number(d.quantity) > 0)) return 'Stock must be a whole number.'
   return null
 }
 
@@ -55,9 +58,10 @@ export function CreateListingPage() {
   const { org, canManage } = useSeller()
   const notify = useToast()
   const categories = useAsync(() => searchApi.categories(), [])
+  const { verticals } = useVerticals()
   const mine = org.seller_profiles.find((p) => p.mine) ?? org.seller_profiles[0]
   const [step, setStep] = useState(1)
-  const [draft, setDraft] = useState<Draft>({ title: '', description: '', listing_type: 'physical_product', category_id: '', price: '', currency: 'USD', pricing_model: 'fixed', images: '', availability: 'available', quantity: '', store_id: org.stores[0]?.id ?? '' })
+  const [draft, setDraft] = useState<Draft>({ title: '', description: '', listing_type: 'physical_product', vertical: '', category_id: '', price: '', currency: 'USD', pricing_model: 'fixed', images: '', availability: 'available', store_id: org.stores[0]?.id ?? '' })
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState<'draft' | 'publish' | null>(null)
   const [created, setCreated] = useState<ListingDetail | null>(null)
@@ -68,23 +72,29 @@ export function CreateListingPage() {
   if (!mine || org.stores.length === 0) return <EmptyState icon="building" title="Setup not finished" copy="A seller profile and a store are needed before creating listings. The Trezutil team completes this during onboarding." action="See business details" href="/seller/business" />
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => { setDraft((d) => ({ ...d, [key]: value })); setError(null) }
+  const needsVertical = verticals.length > 0
+  const chosen: VerticalInfo | undefined = verticals.find((v) => v.code === draft.vertical)
+  const chooseVertical = (v: VerticalInfo) => {
+    // Keep the listing kind when the vertical accepts it, otherwise take its first kind.
+    setDraft((d) => ({ ...d, vertical: v.code, listing_type: v.listing_types.includes(d.listing_type) ? d.listing_type : (v.listing_types[0] ?? 'other') }))
+    setError(null)
+  }
   const next = () => {
-    const problem = validate(step, draft)
+    const problem = validate(step, draft, needsVertical)
     if (problem) { setError(problem); return }
     setStep((s) => Math.min(steps.length, s + 1))
   }
 
   const save = async (publish: boolean) => {
-    for (let s = 1; s <= 5; s++) { const problem = validate(s, draft); if (problem) { setStep(s); setError(problem); return } }
+    for (let s = 1; s <= 5; s++) { const problem = validate(s, draft, needsVertical); if (problem) { setStep(s); setError(problem); return } }
     setSaving(publish ? 'publish' : 'draft')
     setError(null)
     try {
       const listing = await sellerApi.createListing({
         store_id: draft.store_id, seller_id: mine.id, category_id: draft.category_id,
-        title: draft.title.trim(), description: draft.description.trim(), listing_type: draft.listing_type,
+        title: draft.title.trim(), description: draft.description.trim(), listing_type: draft.listing_type, vertical: draft.vertical || undefined,
         pricing_model: draft.pricing_model, price_amount: Number(draft.price), price_currency: draft.currency,
         image_urls: draft.images.split(/\s+/).filter(Boolean), availability: draft.availability,
-        quantity: draft.quantity ? Number(draft.quantity) : undefined,
       }, idempotencyKey)
       if (publish) await sellerApi.setListingState(listing.id, 'publish')
       setCreated({ ...listing, status: publish ? 'published' : listing.status })
@@ -99,7 +109,7 @@ export function CreateListingPage() {
   if (created) {
     return (
       <div className="create-success">
-        <EmptyState icon="check" title={created.status === 'published' ? 'Your listing is live' : 'Draft saved'} copy={created.status === 'published' ? `${created.title} can now be discovered in search, on the web and in conversations.` : `${created.title} is saved as a draft. Publish it when you’re ready.`} action={created.status === 'published' ? 'View listing' : 'Open listing'} href={created.status === 'published' ? `/products/${encodeURIComponent(created.id)}` : `/seller/listings/${encodeURIComponent(created.id)}`} />
+        <EmptyState icon="check" title={created.status === 'published' ? 'Your listing is live' : 'Draft saved'} copy={created.status === 'published' ? `${created.title} can now be discovered in search, on the web and in conversations.` : `${created.title} is saved as a draft. Publish it when you’re ready.`} action={created.status === 'published' ? 'View listing' : 'Open listing'} href={created.status === 'published' ? detailPath(created.id, created.listing_type, created.vertical) : `/seller/listings/${encodeURIComponent(created.id)}`} />
         <ActionLink href="/seller/listings">Back to listings</ActionLink>
       </div>
     )
@@ -116,16 +126,29 @@ export function CreateListingPage() {
       </div>
       <div className="create-layout">
         <form className="create-form" noValidate onSubmit={(e: FormEvent) => { e.preventDefault(); if (step < steps.length) next() }}>
-          <Heading level={2}>{['Basic information', 'Choose a category', 'Set your price', 'Add clear images', 'Set availability', 'Ready to publish'][step - 1]}</Heading>
+          <Heading level={2}>{['Basic information', 'Vertical and category', 'Set your price', 'Add clear images', 'Set availability', 'Ready to publish'][step - 1]}</Heading>
           {step === 1 && <div className="form-stack">
             <Field label="Listing name"><input value={draft.title} onChange={(e) => set('title', e.target.value)} maxLength={255} placeholder="Samsung Galaxy A55" autoFocus /></Field>
             <Field label="Description" hint="What makes it useful, its condition and what’s included."><textarea value={draft.description} onChange={(e) => set('description', e.target.value)} maxLength={4000} /></Field>
             {org.stores.length > 1 && <Field label="Store"><select value={draft.store_id} onChange={(e) => set('store_id', e.target.value)}>{org.stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>}
           </div>}
           {step === 2 && <>
-            <fieldset className="category-choice" aria-label="Listing type">
-              {listingTypes.map((t) => <label key={t.value}><input type="radio" name="type" checked={draft.listing_type === t.value} onChange={() => set('listing_type', t.value)} /><span><Icon name={t.icon} /><strong>{t.label}</strong></span></label>)}
-            </fieldset>
+            {needsVertical ? <>
+              <p className="choice-legend" id="vertical-legend">Choose business vertical</p>
+              <fieldset className="category-choice" aria-labelledby="vertical-legend">
+                {verticals.map((v) => <label key={v.code}><input type="radio" name="vertical" checked={draft.vertical === v.code} onChange={() => chooseVertical(v)} /><span><Icon name={verticalIcon(v.code)} /><strong>{v.name}</strong></span></label>)}
+              </fieldset>
+              {draft.vertical === 'HOTEL' && (
+                <p className="inline-notice info" role="note"><Icon name="building" size={16} /><span>Hotel rooms have their own setup: guests per room, number of rooms and the nights guests can book. <ActionLink href="/seller/hotel">Set up hotel rooms</ActionLink></span></p>
+              )}
+              {chosen && draft.vertical !== 'HOTEL' && chosen.listing_types.length > 1 && (
+                <Field label="Kind of listing"><select value={draft.listing_type} onChange={(e) => set('listing_type', e.target.value as ListingType)}>{chosen.listing_types.map((t) => <option key={t} value={t}>{listingTypeLabel[t] ?? sentence(t)}</option>)}</select></Field>
+              )}
+            </> : (
+              <fieldset className="category-choice" aria-label="Listing type">
+                {listingTypes.map((t) => <label key={t.value}><input type="radio" name="type" checked={draft.listing_type === t.value} onChange={() => set('listing_type', t.value)} /><span><Icon name={t.icon} /><strong>{t.label}</strong></span></label>)}
+              </fieldset>
+            )}
             <Field label="Category">
               {categories.loading ? <select disabled><option>Loading…</option></select> : (
                 <select value={draft.category_id} onChange={(e) => set('category_id', e.target.value)}>
@@ -149,13 +172,13 @@ export function CreateListingPage() {
           {step === 5 && <div className="form-stack">
             <label className="choice-card"><input type="radio" name="availability" checked={draft.availability === 'available'} onChange={() => set('availability', 'available')} /><span><strong>Available now</strong><small>Customers can order or book immediately</small></span></label>
             <label className="choice-card"><input type="radio" name="availability" checked={draft.availability === 'on_request'} onChange={() => set('availability', 'on_request')} /><span><strong>Available on request</strong><small>Confirm availability before the customer acts</small></span></label>
-            {draft.availability === 'available' && <Field label="Stock quantity" hint="Leave empty if you don’t track stock."><input type="number" min="1" step="1" value={draft.quantity} onChange={(e) => set('quantity', e.target.value)} placeholder="12" /></Field>}
+            <p className="field-hint">Stock limits for multi-unit listings are set up with the Trezutil team; bookings of a single place or service are protected from double booking automatically.</p>
           </div>}
           {step === 6 && <div className="publish-review">
             <span className="empty-mark"><Icon name="spark" /></span>
             <strong>Everything looks ready.</strong>
             <p>Publish now to be visible in search, discovery and relevant conversations — or save a draft and publish later.</p>
-            <div className="info-rows"><div><span>Name</span><strong>{draft.title}</strong></div><div><span>Type</span><strong>{sentence(draft.listing_type)}{categoryName ? ` · ${categoryName}` : ''}</strong></div><div><span>Price</span><strong>{formatMoney(Number(draft.price), draft.currency)}{draft.pricing_model === 'negotiable' ? ' (negotiable)' : ''}</strong></div><div><span>Images</span><strong>{images.length}</strong></div></div>
+            <div className="info-rows"><div><span>Name</span><strong>{draft.title}</strong></div>{chosen && <div><span>Vertical</span><strong>{chosen.name}</strong></div>}<div><span>Type</span><strong>{listingTypeLabel[draft.listing_type] ?? sentence(draft.listing_type)}{categoryName ? ` · ${categoryName}` : ''}</strong></div><div><span>Price</span><strong>{formatMoney(Number(draft.price), draft.currency)}{draft.pricing_model === 'negotiable' ? ' (negotiable)' : ''}</strong></div><div><span>Images</span><strong>{images.length}</strong></div></div>
           </div>}
           {error && <p className="auth-error" role="alert">{error}</p>}
           <div className="checkout-buttons">

@@ -1,6 +1,6 @@
 import { http, query, type RequestOptions } from '@/api/client'
 import { arr, num, obj, read, str, strOrNull } from '@/api/json'
-import type { Category, SearchRequest, SearchResponse, SearchResult, Suggestion } from '@/types'
+import type { Category, CustomerFlow, ListingType, SearchRequest, SearchResponse, SearchResult, Suggestion, VerticalInfo } from '@/types'
 
 export function mapSearchResult(value: unknown): SearchResult {
   const item = obj(value)
@@ -11,6 +11,7 @@ export function mapSearchResult(value: unknown): SearchResult {
   return {
     listing_id: str(read(item, 'listing_id', 'ListingID')),
     title: str(read(item, 'title', 'Title')),
+    vertical: str(read(item, 'vertical', 'Vertical')),
     price_amount: num(read(item, 'price_amount', 'PriceAmount')),
     price_currency: str(read(item, 'price_currency', 'PriceCurrency')),
     availability_status: str(read(item, 'availability_status', 'AvailabilityStatus')),
@@ -55,6 +56,20 @@ export const searchApi = {
       const raw = obj(s)
       return { text: str(read(raw, 'text', 'Text')), type: str(read(raw, 'type', 'Type')) }
     }).filter((s) => s.text)
+  },
+
+  /** The vertical catalogue: flows and capabilities per vertical (public). */
+  async verticals(): Promise<VerticalInfo[]> {
+    const data = obj(await http.get<unknown>('/verticals'))
+    return arr(data.items).map((v) => {
+      const raw = obj(v)
+      return {
+        code: str(raw.code), name: str(raw.name), description: str(raw.description),
+        flows: arr(raw.flows).map(String).filter((f): f is CustomerFlow => f === 'BOOK' || f === 'BUY'),
+        capabilities: arr(raw.capabilities).map(String),
+        listing_types: arr(raw.listing_types).map(String) as ListingType[],
+      }
+    }).filter((v) => v.code)
   },
 
   async categories(): Promise<Category[]> {
