@@ -1,0 +1,857 @@
+[
+  {
+    "id": "815aa4d1-9ea6-52dc-9e7d-44fff9f3ae54",
+    "demo": true,
+    "status": "published",
+    "vertical": "hotel",
+    "title": "Rivière Suites",
+    "slug": "rivière-suites",
+    "description": "Boutique hôtel calme avec chambres climatisées, petit-déjeuner et Wi‑Fi.",
+    "seller": {
+      "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+      "name": "Kin Habitat",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "hotel",
+      "room"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/hotel,room?lock=401",
+        "alt": "Rivière Suites"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 85,
+      "currency": "USD",
+      "unit": "night"
+    },
+    "stars": 4,
+    "amenities": [
+      "Wi‑Fi",
+      "Climatisation",
+      "Petit-déjeuner"
+    ],
+    "reservation": {
+      "supported": true,
+      "checkin": "14:00",
+      "checkout": "12:00"
+    },
+    "rooms": [
+      "Standard",
+      "Deluxe",
+      "Suite"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "da52ddbe-3fa3-5c55-8bd0-98b41b943878",
+    "demo": true,
+    "status": "published",
+    "vertical": "hotel",
+    "title": "Maison Gombe Hotel",
+    "slug": "maison-gombe-hotel",
+    "description": "Hôtel urbain proche des bureaux et restaurants, avec chambres business.",
+    "seller": {
+      "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+      "name": "Rivière Suites",
+      "type": "hotel"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "hotel",
+      "bedroom"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/hotel,bedroom?lock=402",
+        "alt": "Maison Gombe Hotel"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 110,
+      "currency": "USD",
+      "unit": "night"
+    },
+    "stars": 4,
+    "amenities": [
+      "Wi‑Fi",
+      "Climatisation",
+      "Petit-déjeuner"
+    ],
+    "reservation": {
+      "supported": true,
+      "checkin": "14:00",
+      "checkout": "12:00"
+    },
+    "rooms": [
+      "Standard",
+      "Deluxe",
+      "Suite"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "1b7b7d35-952d-53d0-b2d8-2d0ed8c3837e",
+    "demo": true,
+    "status": "published",
+    "vertical": "hotel",
+    "title": "Palm Residence",
+    "slug": "palm-residence",
+    "description": "Résidence hôtelière avec studios et appartements pour courts séjours.",
+    "seller": {
+      "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+      "name": "Congo Horizon Homes",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "hotel",
+      "apartment"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/hotel,apartment?lock=403",
+        "alt": "Palm Residence"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 75,
+      "currency": "USD",
+      "unit": "night"
+    },
+    "stars": 3,
+    "amenities": [
+      "Wi‑Fi",
+      "Climatisation",
+      "Petit-déjeuner"
+    ],
+    "reservation": {
+      "supported": true,
+      "checkin": "14:00",
+      "checkout": "12:00"
+    },
+    "rooms": [
+      "Standard",
+      "Deluxe",
+      "Suite"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "70f6ef0c-4ad1-5e9f-8bad-7b4fd052799f",
+    "demo": true,
+    "status": "published",
+    "vertical": "hotel",
+    "title": "Congo Horizon Lodge",
+    "slug": "congo-horizon-lodge",
+    "description": "Séjour confortable avec jardin, espace détente et service de petit-déjeuner.",
+    "seller": {
+      "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+      "name": "Kin Habitat",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "hotel",
+      "lodge"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/hotel,lodge?lock=404",
+        "alt": "Congo Horizon Lodge"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 95,
+      "currency": "USD",
+      "unit": "night"
+    },
+    "stars": 3,
+    "amenities": [
+      "Wi‑Fi",
+      "Climatisation",
+      "Petit-déjeuner"
+    ],
+    "reservation": {
+      "supported": true,
+      "checkin": "14:00",
+      "checkout": "12:00"
+    },
+    "rooms": [
+      "Standard",
+      "Deluxe",
+      "Suite"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "e1d4249a-32ce-5001-8216-9f721b4463bd",
+    "demo": true,
+    "status": "published",
+    "vertical": "hotel",
+    "title": "Kin Plaza Stay",
+    "slug": "kin-plaza-stay",
+    "description": "Chambres modernes pour voyageurs d’affaires et visiteurs de passage.",
+    "seller": {
+      "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+      "name": "Rivière Suites",
+      "type": "hotel"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Limete",
+      "country": "CD"
+    },
+    "tags": [
+      "hotel",
+      "room"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/hotel,room?lock=405",
+        "alt": "Kin Plaza Stay"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 100,
+      "currency": "USD",
+      "unit": "night"
+    },
+    "stars": 4,
+    "amenities": [
+      "Wi‑Fi",
+      "Climatisation",
+      "Petit-déjeuner"
+    ],
+    "reservation": {
+      "supported": true,
+      "checkin": "14:00",
+      "checkout": "12:00"
+    },
+    "rooms": [
+      "Standard",
+      "Deluxe",
+      "Suite"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "120e6db4-eec2-57d4-b934-d19676eeec20",
+    "demo": true,
+    "status": "published",
+    "vertical": "hotel",
+    "title": "Le Jardin des Suites",
+    "slug": "le-jardin-des-suites",
+    "description": "Petite adresse résidentielle avec terrasse et chambres spacieuses.",
+    "seller": {
+      "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+      "name": "Congo Horizon Homes",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Kintambo",
+      "country": "CD"
+    },
+    "tags": [
+      "hotel",
+      "garden"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/hotel,garden?lock=406",
+        "alt": "Le Jardin des Suites"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 90,
+      "currency": "USD",
+      "unit": "night"
+    },
+    "stars": 3,
+    "amenities": [
+      "Wi‑Fi",
+      "Climatisation",
+      "Petit-déjeuner"
+    ],
+    "reservation": {
+      "supported": true,
+      "checkin": "14:00",
+      "checkout": "12:00"
+    },
+    "rooms": [
+      "Standard",
+      "Deluxe",
+      "Suite"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "1f5730b8-1f67-5b65-bec9-1f8a6a6ece6b",
+    "demo": true,
+    "status": "published",
+    "vertical": "hotel",
+    "title": "Fleuve View Residence",
+    "slug": "fleuve-view-residence",
+    "description": "Suites avec espace salon et vue urbaine, adaptées aux séjours de plusieurs nuits.",
+    "seller": {
+      "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+      "name": "Kin Habitat",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "hotel",
+      "suite"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/hotel,suite?lock=407",
+        "alt": "Fleuve View Residence"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 125,
+      "currency": "USD",
+      "unit": "night"
+    },
+    "stars": 4,
+    "amenities": [
+      "Wi‑Fi",
+      "Climatisation",
+      "Petit-déjeuner"
+    ],
+    "reservation": {
+      "supported": true,
+      "checkin": "14:00",
+      "checkout": "12:00"
+    },
+    "rooms": [
+      "Standard",
+      "Deluxe",
+      "Suite"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "be5dd453-42d9-50aa-bac9-2a2cece7050c",
+    "demo": true,
+    "status": "published",
+    "vertical": "hotel",
+    "title": "Makala City Hotel",
+    "slug": "makala-city-hotel",
+    "description": "Hôtel pratique avec chambres standard et premium, réception 24/7.",
+    "seller": {
+      "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+      "name": "Rivière Suites",
+      "type": "hotel"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Kasa‑Vubu",
+      "country": "CD"
+    },
+    "tags": [
+      "hotel",
+      "lobby"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/hotel,lobby?lock=408",
+        "alt": "Makala City Hotel"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 65,
+      "currency": "USD",
+      "unit": "night"
+    },
+    "stars": 3,
+    "amenities": [
+      "Wi‑Fi",
+      "Climatisation",
+      "Petit-déjeuner"
+    ],
+    "reservation": {
+      "supported": true,
+      "checkin": "14:00",
+      "checkout": "12:00"
+    },
+    "rooms": [
+      "Standard",
+      "Deluxe",
+      "Suite"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "1374f8a7-378b-5004-bcbb-c55fb98f15af",
+    "demo": true,
+    "status": "published",
+    "vertical": "hotel",
+    "title": "Ubuntu Grand Stay",
+    "slug": "ubuntu-grand-stay",
+    "description": "Hébergement premium avec restaurant et salle de réunion.",
+    "seller": {
+      "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+      "name": "Congo Horizon Homes",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "hotel",
+      "luxury"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/hotel,luxury?lock=409",
+        "alt": "Ubuntu Grand Stay"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 145,
+      "currency": "USD",
+      "unit": "night"
+    },
+    "stars": 4,
+    "amenities": [
+      "Wi‑Fi",
+      "Climatisation",
+      "Petit-déjeuner"
+    ],
+    "reservation": {
+      "supported": true,
+      "checkin": "14:00",
+      "checkout": "12:00"
+    },
+    "rooms": [
+      "Standard",
+      "Deluxe",
+      "Suite"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "6515d1f9-b87d-57eb-919d-63380166fb95",
+    "demo": true,
+    "status": "published",
+    "vertical": "hotel",
+    "title": "Belle Vue Garden Hotel",
+    "slug": "belle-vue-garden-hotel",
+    "description": "Hôtel à taille humaine avec jardin et petite piscine.",
+    "seller": {
+      "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+      "name": "Kin Habitat",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "hotel",
+      "pool"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/hotel,pool?lock=410",
+        "alt": "Belle Vue Garden Hotel"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 105,
+      "currency": "USD",
+      "unit": "night"
+    },
+    "stars": 4,
+    "amenities": [
+      "Wi‑Fi",
+      "Climatisation",
+      "Petit-déjeuner"
+    ],
+    "reservation": {
+      "supported": true,
+      "checkin": "14:00",
+      "checkout": "12:00"
+    },
+    "rooms": [
+      "Standard",
+      "Deluxe",
+      "Suite"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "07df601f-c550-57a2-92ad-03de3d3a722e",
+    "demo": true,
+    "status": "published",
+    "vertical": "hotel",
+    "title": "Kasaï Comfort Inn",
+    "slug": "kasaï-comfort-inn",
+    "description": "Chambres simples, Wi‑Fi et petit-déjeuner pour séjours professionnels.",
+    "seller": {
+      "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+      "name": "Rivière Suites",
+      "type": "hotel"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Limete",
+      "country": "CD"
+    },
+    "tags": [
+      "hotel",
+      "room"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/hotel,room?lock=411",
+        "alt": "Kasaï Comfort Inn"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 60,
+      "currency": "USD",
+      "unit": "night"
+    },
+    "stars": 3,
+    "amenities": [
+      "Wi‑Fi",
+      "Climatisation",
+      "Petit-déjeuner"
+    ],
+    "reservation": {
+      "supported": true,
+      "checkin": "14:00",
+      "checkout": "12:00"
+    },
+    "rooms": [
+      "Standard",
+      "Deluxe",
+      "Suite"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "108f8511-0a46-530f-8371-abf6d1c42907",
+    "demo": true,
+    "status": "published",
+    "vertical": "hotel",
+    "title": "Acacia Business Hotel",
+    "slug": "acacia-business-hotel",
+    "description": "Chambres business, salle de réunion et check-in flexible.",
+    "seller": {
+      "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+      "name": "Congo Horizon Homes",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "hotel",
+      "business"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/hotel,business?lock=412",
+        "alt": "Acacia Business Hotel"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 130,
+      "currency": "USD",
+      "unit": "night"
+    },
+    "stars": 4,
+    "amenities": [
+      "Wi‑Fi",
+      "Climatisation",
+      "Petit-déjeuner"
+    ],
+    "reservation": {
+      "supported": true,
+      "checkin": "14:00",
+      "checkout": "12:00"
+    },
+    "rooms": [
+      "Standard",
+      "Deluxe",
+      "Suite"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "a7f3ab91-f67e-5fb7-951c-9e9c2b133e09",
+    "demo": true,
+    "status": "published",
+    "vertical": "hotel",
+    "title": "Maison Congo Retreat",
+    "slug": "maison-congo-retreat",
+    "description": "Adresse calme pour week-end, avec espace extérieur et restauration sur place.",
+    "seller": {
+      "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+      "name": "Kin Habitat",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Mont-Ngafula",
+      "country": "CD"
+    },
+    "tags": [
+      "hotel",
+      "resort"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/hotel,resort?lock=413",
+        "alt": "Maison Congo Retreat"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 120,
+      "currency": "USD",
+      "unit": "night"
+    },
+    "stars": 4,
+    "amenities": [
+      "Wi‑Fi",
+      "Climatisation",
+      "Petit-déjeuner"
+    ],
+    "reservation": {
+      "supported": true,
+      "checkin": "14:00",
+      "checkout": "12:00"
+    },
+    "rooms": [
+      "Standard",
+      "Deluxe",
+      "Suite"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "da7d5b2f-8f08-564c-b33d-942e81e1dc50",
+    "demo": true,
+    "status": "published",
+    "vertical": "hotel",
+    "title": "Cité Verte Suites",
+    "slug": "cité-verte-suites",
+    "description": "Studios équipés pour longs séjours, avec coin cuisine et service ménage.",
+    "seller": {
+      "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+      "name": "Rivière Suites",
+      "type": "hotel"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "hotel",
+      "studio"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/hotel,studio?lock=414",
+        "alt": "Cité Verte Suites"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 70,
+      "currency": "USD",
+      "unit": "night"
+    },
+    "stars": 3,
+    "amenities": [
+      "Wi‑Fi",
+      "Climatisation",
+      "Petit-déjeuner"
+    ],
+    "reservation": {
+      "supported": true,
+      "checkin": "14:00",
+      "checkout": "12:00"
+    },
+    "rooms": [
+      "Standard",
+      "Deluxe",
+      "Suite"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "9622547a-2f63-5fdb-9636-5d4d835f102e",
+    "demo": true,
+    "status": "published",
+    "vertical": "hotel",
+    "title": "Les Palmiers Residence",
+    "slug": "les-palmiers-residence",
+    "description": "Résidence avec chambres familiales et suites, idéale pour groupes.",
+    "seller": {
+      "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+      "name": "Congo Horizon Homes",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Kintambo",
+      "country": "CD"
+    },
+    "tags": [
+      "hotel",
+      "residence"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/hotel,residence?lock=415",
+        "alt": "Les Palmiers Residence"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 115,
+      "currency": "USD",
+      "unit": "night"
+    },
+    "stars": 3,
+    "amenities": [
+      "Wi‑Fi",
+      "Climatisation",
+      "Petit-déjeuner"
+    ],
+    "reservation": {
+      "supported": true,
+      "checkin": "14:00",
+      "checkout": "12:00"
+    },
+    "rooms": [
+      "Standard",
+      "Deluxe",
+      "Suite"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  }
+]

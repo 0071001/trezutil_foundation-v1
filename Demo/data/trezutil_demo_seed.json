@@ -1,0 +1,4167 @@
+{
+  "dataset_name": "Trezutil Demo Commerce Catalog",
+  "version": "1.0.0",
+  "generated_for": "Kilo Code frontend demo integration",
+  "generated_at": "2026-09-27",
+  "locale": "fr-CD",
+  "currency_defaults": [
+    "USD",
+    "CDF"
+  ],
+  "city_focus": "Kinshasa, RDC",
+  "counts": {
+    "products": 15,
+    "services": 15,
+    "restaurants": 15,
+    "hotels": 15,
+    "real_estate": 15,
+    "total": 75
+  },
+  "photo_policy": "Demo images are real stock/Flickr photographs referenced through LoremFlickr URLs. Replace with owned/CDN assets before production.",
+  "merchant_policy": "Seller/business names and listing records in this package are fictional demo entities intended for UI testing; they are not verified commercial listings.",
+  "categories": [
+    {
+      "id": "products",
+      "label": "Products"
+    },
+    {
+      "id": "services",
+      "label": "Services"
+    },
+    {
+      "id": "restaurants",
+      "label": "Restaurants"
+    },
+    {
+      "id": "hotels",
+      "label": "Hotels"
+    },
+    {
+      "id": "real_estate",
+      "label": "Immobilier"
+    }
+  ],
+  "items": [
+    {
+      "id": "0a2e938d-34f3-5174-8bc5-4316482444b5",
+      "demo": true,
+      "status": "published",
+      "vertical": "product",
+      "title": "iPhone 15 128 Go",
+      "slug": "iphone-15-128-go",
+      "description": "Smartphone Apple récent, écran lumineux, USB‑C et excellent état. Garantie démo 6 mois.",
+      "seller": {
+        "id": "21582a51-0989-59f4-b50d-ce7618a20633",
+        "name": "Kivu Digital Store",
+        "type": "retail"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "smartphone",
+        "apple",
+        "iphone"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/iphone,smartphone?lock=101",
+          "alt": "iPhone 15 128 Go"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 699,
+        "currency": "USD",
+        "unit": null
+      },
+      "availability": {
+        "status": "in_stock",
+        "quantity": 6
+      },
+      "delivery": {
+        "available": true,
+        "estimated": "Today / tomorrow"
+      },
+      "attributes": {
+        "condition": "new",
+        "warranty": "Demo 6 months"
+      },
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "9f543323-180e-5264-acd0-f766e11f99da",
+      "demo": true,
+      "status": "published",
+      "vertical": "product",
+      "title": "Samsung Galaxy S24 256 Go",
+      "slug": "samsung-galaxy-s24-256-go",
+      "description": "Flagship Android compact avec écran AMOLED, excellente photo et batterie longue durée.",
+      "seller": {
+        "id": "ed9b7d45-6e15-5065-97ca-118c9bcbf20e",
+        "name": "Mosaïque Tech",
+        "type": "retail"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Limete",
+        "country": "CD"
+      },
+      "tags": [
+        "smartphone",
+        "samsung",
+        "android"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/samsung,smartphone?lock=102",
+          "alt": "Samsung Galaxy S24 256 Go"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 749,
+        "currency": "USD",
+        "unit": null
+      },
+      "availability": {
+        "status": "in_stock",
+        "quantity": 6
+      },
+      "delivery": {
+        "available": true,
+        "estimated": "Today / tomorrow"
+      },
+      "attributes": {
+        "condition": "new",
+        "warranty": "Demo 6 months"
+      },
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "5b1efcf0-6a11-53fb-a47f-915e12c462af",
+      "demo": true,
+      "status": "published",
+      "vertical": "product",
+      "title": "Google Pixel 8 128 Go",
+      "slug": "google-pixel-8-128-go",
+      "description": "Smartphone photo avec traitement d’image avancé et expérience Android fluide.",
+      "seller": {
+        "id": "19d48984-14d5-5d43-b808-6ed4786e2131",
+        "name": "Nova Home",
+        "type": "retail"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "smartphone",
+        "pixel",
+        "android"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/google,pixel,smartphone?lock=103",
+          "alt": "Google Pixel 8 128 Go"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 529,
+        "currency": "USD",
+        "unit": null
+      },
+      "availability": {
+        "status": "in_stock",
+        "quantity": 5
+      },
+      "delivery": {
+        "available": true,
+        "estimated": "Today / tomorrow"
+      },
+      "attributes": {
+        "condition": "new",
+        "warranty": "Demo 6 months"
+      },
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "f5e21683-09ff-5422-9806-f38e688c44f5",
+      "demo": true,
+      "status": "published",
+      "vertical": "product",
+      "title": "MacBook Air M2 13 pouces",
+      "slug": "macbook-air-m2-13-pouces",
+      "description": "Ordinateur fin et silencieux pour études, bureautique, création légère et mobilité.",
+      "seller": {
+        "id": "21582a51-0989-59f4-b50d-ce7618a20633",
+        "name": "Kivu Digital Store",
+        "type": "retail"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "laptop",
+        "apple",
+        "macbook"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/macbook,laptop?lock=104",
+          "alt": "MacBook Air M2 13 pouces"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 999,
+        "currency": "USD",
+        "unit": null
+      },
+      "availability": {
+        "status": "in_stock",
+        "quantity": 5
+      },
+      "delivery": {
+        "available": true,
+        "estimated": "Today / tomorrow"
+      },
+      "attributes": {
+        "condition": "new",
+        "warranty": "Demo 6 months"
+      },
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "c1970651-59b4-5a6f-b3ae-3982a61ddf1a",
+      "demo": true,
+      "status": "published",
+      "vertical": "product",
+      "title": "Dell Latitude 5440",
+      "slug": "dell-latitude-5440",
+      "description": "Laptop professionnel, 16 Go RAM et SSD 512 Go, adapté au travail quotidien.",
+      "seller": {
+        "id": "ed9b7d45-6e15-5065-97ca-118c9bcbf20e",
+        "name": "Mosaïque Tech",
+        "type": "retail"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Limete",
+        "country": "CD"
+      },
+      "tags": [
+        "laptop",
+        "dell",
+        "business"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/dell,laptop?lock=105",
+          "alt": "Dell Latitude 5440"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 679,
+        "currency": "USD",
+        "unit": null
+      },
+      "availability": {
+        "status": "in_stock",
+        "quantity": 5
+      },
+      "delivery": {
+        "available": true,
+        "estimated": "Today / tomorrow"
+      },
+      "attributes": {
+        "condition": "new",
+        "warranty": "Demo 6 months"
+      },
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "1da9c5ce-b059-5056-be80-463d61e32ad0",
+      "demo": true,
+      "status": "published",
+      "vertical": "product",
+      "title": "Sony WH‑1000XM5",
+      "slug": "sony-wh‑1000xm5",
+      "description": "Casque sans fil premium avec réduction de bruit active et autonomie longue durée.",
+      "seller": {
+        "id": "19d48984-14d5-5d43-b808-6ed4786e2131",
+        "name": "Nova Home",
+        "type": "retail"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "audio",
+        "headphones",
+        "sony"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/headphones,sony?lock=106",
+          "alt": "Sony WH‑1000XM5"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 329,
+        "currency": "USD",
+        "unit": null
+      },
+      "availability": {
+        "status": "in_stock",
+        "quantity": 4
+      },
+      "delivery": {
+        "available": true,
+        "estimated": "Today / tomorrow"
+      },
+      "attributes": {
+        "condition": "new",
+        "warranty": "Demo 6 months"
+      },
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "1cfe01db-9717-5c80-b3c2-3f81d521f314",
+      "demo": true,
+      "status": "published",
+      "vertical": "product",
+      "title": "JBL Charge 5",
+      "slug": "jbl-charge-5",
+      "description": "Enceinte Bluetooth portable, résistante aux éclaboussures, idéale maison et extérieur.",
+      "seller": {
+        "id": "21582a51-0989-59f4-b50d-ce7618a20633",
+        "name": "Kivu Digital Store",
+        "type": "retail"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "audio",
+        "speaker",
+        "jbl"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/bluetooth,speaker?lock=107",
+          "alt": "JBL Charge 5"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 149,
+        "currency": "USD",
+        "unit": null
+      },
+      "availability": {
+        "status": "in_stock",
+        "quantity": 4
+      },
+      "delivery": {
+        "available": true,
+        "estimated": "Today / tomorrow"
+      },
+      "attributes": {
+        "condition": "new",
+        "warranty": "Demo 6 months"
+      },
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "9c2b9e34-60e5-5c1d-b40a-1187cfa3b7ac",
+      "demo": true,
+      "status": "published",
+      "vertical": "product",
+      "title": "Apple Watch Series 9",
+      "slug": "apple-watch-series-9",
+      "description": "Montre connectée avec suivi d’activité, notifications et intégration iPhone.",
+      "seller": {
+        "id": "ed9b7d45-6e15-5065-97ca-118c9bcbf20e",
+        "name": "Mosaïque Tech",
+        "type": "retail"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Limete",
+        "country": "CD"
+      },
+      "tags": [
+        "wearable",
+        "apple",
+        "watch"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/smartwatch,apple?lock=108",
+          "alt": "Apple Watch Series 9"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 399,
+        "currency": "USD",
+        "unit": null
+      },
+      "availability": {
+        "status": "in_stock",
+        "quantity": 4
+      },
+      "delivery": {
+        "available": true,
+        "estimated": "Today / tomorrow"
+      },
+      "attributes": {
+        "condition": "new",
+        "warranty": "Demo 6 months"
+      },
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "391c5536-424f-56e2-b6d7-4ec9d59e529b",
+      "demo": true,
+      "status": "published",
+      "vertical": "product",
+      "title": "PlayStation 5 Slim",
+      "slug": "playstation-5-slim",
+      "description": "Console de salon nouvelle génération, version Slim avec stockage SSD.",
+      "seller": {
+        "id": "19d48984-14d5-5d43-b808-6ed4786e2131",
+        "name": "Nova Home",
+        "type": "retail"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "gaming",
+        "playstation",
+        "console"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/playstation,console?lock=109",
+          "alt": "PlayStation 5 Slim"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 549,
+        "currency": "USD",
+        "unit": null
+      },
+      "availability": {
+        "status": "in_stock",
+        "quantity": 3
+      },
+      "delivery": {
+        "available": true,
+        "estimated": "Today / tomorrow"
+      },
+      "attributes": {
+        "condition": "new",
+        "warranty": "Demo 6 months"
+      },
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "85a358fd-a796-5c12-a308-ff1f29dca12c",
+      "demo": true,
+      "status": "published",
+      "vertical": "product",
+      "title": "Nintendo Switch OLED",
+      "slug": "nintendo-switch-oled",
+      "description": "Console hybride avec écran OLED, dock TV et mode portable.",
+      "seller": {
+        "id": "21582a51-0989-59f4-b50d-ce7618a20633",
+        "name": "Kivu Digital Store",
+        "type": "retail"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "gaming",
+        "nintendo",
+        "console"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/nintendo,switch?lock=110",
+          "alt": "Nintendo Switch OLED"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 349,
+        "currency": "USD",
+        "unit": null
+      },
+      "availability": {
+        "status": "in_stock",
+        "quantity": 3
+      },
+      "delivery": {
+        "available": true,
+        "estimated": "Today / tomorrow"
+      },
+      "attributes": {
+        "condition": "new",
+        "warranty": "Demo 6 months"
+      },
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "17c6d809-e97a-5934-b870-a79da2ba2010",
+      "demo": true,
+      "status": "published",
+      "vertical": "product",
+      "title": "TV Samsung 55 pouces 4K",
+      "slug": "tv-samsung-55-pouces-4k",
+      "description": "Téléviseur 4K avec interface Smart TV et belle restitution HDR.",
+      "seller": {
+        "id": "ed9b7d45-6e15-5065-97ca-118c9bcbf20e",
+        "name": "Mosaïque Tech",
+        "type": "retail"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Limete",
+        "country": "CD"
+      },
+      "tags": [
+        "tv",
+        "samsung",
+        "4k"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/samsung,tv,television?lock=111",
+          "alt": "TV Samsung 55 pouces 4K"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 699,
+        "currency": "USD",
+        "unit": null
+      },
+      "availability": {
+        "status": "in_stock",
+        "quantity": 3
+      },
+      "delivery": {
+        "available": true,
+        "estimated": "Today / tomorrow"
+      },
+      "attributes": {
+        "condition": "new",
+        "warranty": "Demo 6 months"
+      },
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "5e9623f5-a7d1-5a9a-a449-48377ee1d119",
+      "demo": true,
+      "status": "published",
+      "vertical": "product",
+      "title": "Réfrigérateur Hisense 320 L",
+      "slug": "réfrigérateur-hisense-320-l",
+      "description": "Réfrigérateur grande capacité pour appartement ou petite famille, finition inox.",
+      "seller": {
+        "id": "19d48984-14d5-5d43-b808-6ed4786e2131",
+        "name": "Nova Home",
+        "type": "retail"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "appliance",
+        "refrigerator",
+        "hisense"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/refrigerator,kitchen?lock=112",
+          "alt": "Réfrigérateur Hisense 320 L"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 599,
+        "currency": "USD",
+        "unit": null
+      },
+      "availability": {
+        "status": "in_stock",
+        "quantity": 2
+      },
+      "delivery": {
+        "available": true,
+        "estimated": "Today / tomorrow"
+      },
+      "attributes": {
+        "condition": "new",
+        "warranty": "Demo 6 months"
+      },
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "73299216-d8e2-57b1-bc9e-a1a16234bfab",
+      "demo": true,
+      "status": "published",
+      "vertical": "product",
+      "title": "Climatiseur LG Dual Inverter 12k BTU",
+      "slug": "climatiseur-lg-dual-inverter-12k-btu",
+      "description": "Climatiseur inverter pour chambre ou petit salon, économique en énergie.",
+      "seller": {
+        "id": "21582a51-0989-59f4-b50d-ce7618a20633",
+        "name": "Kivu Digital Store",
+        "type": "retail"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "appliance",
+        "air-conditioner",
+        "lg"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/airconditioner,home?lock=113",
+          "alt": "Climatiseur LG Dual Inverter 12k BTU"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 649,
+        "currency": "USD",
+        "unit": null
+      },
+      "availability": {
+        "status": "in_stock",
+        "quantity": 2
+      },
+      "delivery": {
+        "available": true,
+        "estimated": "Today / tomorrow"
+      },
+      "attributes": {
+        "condition": "new",
+        "warranty": "Demo 6 months"
+      },
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "b5593ac6-1bf0-595d-9544-c20e2071efb6",
+      "demo": true,
+      "status": "published",
+      "vertical": "product",
+      "title": "Appareil photo Canon EOS R50",
+      "slug": "appareil-photo-canon-eos-r50",
+      "description": "Boîtier mirrorless compact pour contenu, événementiel et photographie.",
+      "seller": {
+        "id": "ed9b7d45-6e15-5065-97ca-118c9bcbf20e",
+        "name": "Mosaïque Tech",
+        "type": "retail"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Limete",
+        "country": "CD"
+      },
+      "tags": [
+        "camera",
+        "canon",
+        "photography"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/canon,camera?lock=114",
+          "alt": "Appareil photo Canon EOS R50"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 779,
+        "currency": "USD",
+        "unit": null
+      },
+      "availability": {
+        "status": "in_stock",
+        "quantity": 2
+      },
+      "delivery": {
+        "available": true,
+        "estimated": "Today / tomorrow"
+      },
+      "attributes": {
+        "condition": "new",
+        "warranty": "Demo 6 months"
+      },
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "5cab96a8-2058-54a9-8a99-ba9fa71df51c",
+      "demo": true,
+      "status": "published",
+      "vertical": "product",
+      "title": "Imprimante Epson EcoTank L3250",
+      "slug": "imprimante-epson-ecotank-l3250",
+      "description": "Imprimante multifonction économique avec réservoirs rechargeables.",
+      "seller": {
+        "id": "19d48984-14d5-5d43-b808-6ed4786e2131",
+        "name": "Nova Home",
+        "type": "retail"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "printer",
+        "epson",
+        "office"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/epson,printer?lock=115",
+          "alt": "Imprimante Epson EcoTank L3250"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 229,
+        "currency": "USD",
+        "unit": null
+      },
+      "availability": {
+        "status": "in_stock",
+        "quantity": 2
+      },
+      "delivery": {
+        "available": true,
+        "estimated": "Today / tomorrow"
+      },
+      "attributes": {
+        "condition": "new",
+        "warranty": "Demo 6 months"
+      },
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "9815f584-431f-5f97-b519-396842eee602",
+      "demo": true,
+      "status": "published",
+      "vertical": "service",
+      "title": "Plomberie express",
+      "slug": "plomberie-express",
+      "description": "Réparation de fuite, débouchage, robinetterie et petites installations sanitaires. Intervention à domicile.",
+      "seller": {
+        "id": "55c916d2-ed66-5610-bc72-fe0ebdac5e6d",
+        "name": "Atelier Mambo",
+        "type": "services"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Kintambo",
+        "country": "CD"
+      },
+      "tags": [
+        "plumbing",
+        "home-repair"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/plumber,plumbing?lock=201",
+          "alt": "Plomberie express"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 35,
+        "currency": "USD",
+        "unit": "from"
+      },
+      "availability": {
+        "status": "available",
+        "booking_required": true,
+        "lead_time": "Same day when slot is available"
+      },
+      "service_area": [
+        "Kinshasa"
+      ],
+      "rating": 4.6,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "26e0cbe2-d1bc-5549-9409-9431f92d320c",
+      "demo": true,
+      "status": "published",
+      "vertical": "service",
+      "title": "Électricité bâtiment",
+      "slug": "électricité-bâtiment",
+      "description": "Diagnostic, prises, luminaires, disjoncteurs et petites installations électriques résidentielles.",
+      "seller": {
+        "id": "a17b43cd-d879-507f-af35-568ff81c6681",
+        "name": "Kin Express",
+        "type": "services"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "electrician",
+        "electrical"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/electrician,electrical?lock=202",
+          "alt": "Électricité bâtiment"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 40,
+        "currency": "USD",
+        "unit": "from"
+      },
+      "availability": {
+        "status": "available",
+        "booking_required": true,
+        "lead_time": "Same day when slot is available"
+      },
+      "service_area": [
+        "Kinshasa"
+      ],
+      "rating": 4.7,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "d8a2acb2-cb2e-5caf-adeb-6cc42de4e586",
+      "demo": true,
+      "status": "published",
+      "vertical": "service",
+      "title": "Climatisation & maintenance",
+      "slug": "climatisation-&-maintenance",
+      "description": "Nettoyage, entretien et dépannage de climatiseurs split et unités domestiques.",
+      "seller": {
+        "id": "6bdbb74a-625f-58ce-a471-172d9c2ec74a",
+        "name": "Maison Saphir",
+        "type": "hospitality"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "air-conditioner",
+        "maintenance"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/airconditioner,technician?lock=203",
+          "alt": "Climatisation & maintenance"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 45,
+        "currency": "USD",
+        "unit": "from"
+      },
+      "availability": {
+        "status": "available",
+        "booking_required": true,
+        "lead_time": "Same day when slot is available"
+      },
+      "service_area": [
+        "Kinshasa"
+      ],
+      "rating": 4.8,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "e6806ca5-8eac-5f56-9f64-1e97873d5b9c",
+      "demo": true,
+      "status": "published",
+      "vertical": "service",
+      "title": "Nettoyage à domicile",
+      "slug": "nettoyage-à-domicile",
+      "description": "Nettoyage complet d’appartement, bureaux et espaces commerciaux sur rendez-vous.",
+      "seller": {
+        "id": "55c916d2-ed66-5610-bc72-fe0ebdac5e6d",
+        "name": "Atelier Mambo",
+        "type": "services"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Kintambo",
+        "country": "CD"
+      },
+      "tags": [
+        "cleaning",
+        "home"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/cleaning,home?lock=204",
+          "alt": "Nettoyage à domicile"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 25,
+        "currency": "USD",
+        "unit": "from"
+      },
+      "availability": {
+        "status": "available",
+        "booking_required": true,
+        "lead_time": "Same day when slot is available"
+      },
+      "service_area": [
+        "Kinshasa"
+      ],
+      "rating": 4.5,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "8b12a798-4384-53ad-afd7-70d90f379099",
+      "demo": true,
+      "status": "published",
+      "vertical": "service",
+      "title": "Peinture intérieure",
+      "slug": "peinture-intérieure",
+      "description": "Préparation des murs, peinture et finitions propres pour pièces et petits bureaux.",
+      "seller": {
+        "id": "a17b43cd-d879-507f-af35-568ff81c6681",
+        "name": "Kin Express",
+        "type": "services"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "painting",
+        "home-improvement"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/painter,painting?lock=205",
+          "alt": "Peinture intérieure"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 60,
+        "currency": "USD",
+        "unit": "from"
+      },
+      "availability": {
+        "status": "available",
+        "booking_required": true,
+        "lead_time": "Same day when slot is available"
+      },
+      "service_area": [
+        "Kinshasa"
+      ],
+      "rating": 4.6,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "aa1fe8d3-f8e6-5e4f-a304-b904c5228c08",
+      "demo": true,
+      "status": "published",
+      "vertical": "service",
+      "title": "Déménagement local",
+      "slug": "déménagement-local",
+      "description": "Aide au déménagement avec manutention et véhicule selon volume.",
+      "seller": {
+        "id": "6bdbb74a-625f-58ce-a471-172d9c2ec74a",
+        "name": "Maison Saphir",
+        "type": "hospitality"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "moving",
+        "delivery"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/moving,boxes?lock=206",
+          "alt": "Déménagement local"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 80,
+        "currency": "USD",
+        "unit": "from"
+      },
+      "availability": {
+        "status": "available",
+        "booking_required": true,
+        "lead_time": "Same day when slot is available"
+      },
+      "service_area": [
+        "Kinshasa"
+      ],
+      "rating": 4.7,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "b4004461-5c97-52b0-bdf5-b409a74519f1",
+      "demo": true,
+      "status": "published",
+      "vertical": "service",
+      "title": "Réparation smartphones",
+      "slug": "réparation-smartphones",
+      "description": "Diagnostic écran, batterie, connecteur de charge et problèmes logiciels courants.",
+      "seller": {
+        "id": "55c916d2-ed66-5610-bc72-fe0ebdac5e6d",
+        "name": "Atelier Mambo",
+        "type": "services"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Kintambo",
+        "country": "CD"
+      },
+      "tags": [
+        "phone-repair",
+        "smartphone"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/phone,repair,technician?lock=207",
+          "alt": "Réparation smartphones"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 20,
+        "currency": "USD",
+        "unit": "from"
+      },
+      "availability": {
+        "status": "available",
+        "booking_required": true,
+        "lead_time": "Same day when slot is available"
+      },
+      "service_area": [
+        "Kinshasa"
+      ],
+      "rating": 4.8,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "80cf895e-16bf-5ca7-8dc4-85fb1cf16921",
+      "demo": true,
+      "status": "published",
+      "vertical": "service",
+      "title": "Photographe événementiel",
+      "slug": "photographe-événementiel",
+      "description": "Couverture photo pour mariage, anniversaire, corporate et événements privés.",
+      "seller": {
+        "id": "a17b43cd-d879-507f-af35-568ff81c6681",
+        "name": "Kin Express",
+        "type": "services"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "photography",
+        "events"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/photographer,event?lock=208",
+          "alt": "Photographe événementiel"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 120,
+        "currency": "USD",
+        "unit": "from"
+      },
+      "availability": {
+        "status": "available",
+        "booking_required": true,
+        "lead_time": "Same day when slot is available"
+      },
+      "service_area": [
+        "Kinshasa"
+      ],
+      "rating": 4.5,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "92fc0798-415b-50ff-b4aa-7769f70f0158",
+      "demo": true,
+      "status": "published",
+      "vertical": "service",
+      "title": "Création de site web",
+      "slug": "création-de-site-web",
+      "description": "Sites vitrines rapides pour PME, commerces et professionnels avec livraison et formation.",
+      "seller": {
+        "id": "6bdbb74a-625f-58ce-a471-172d9c2ec74a",
+        "name": "Maison Saphir",
+        "type": "hospitality"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "web",
+        "design",
+        "business"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/web-design,developer?lock=209",
+          "alt": "Création de site web"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 250,
+        "currency": "USD",
+        "unit": "from"
+      },
+      "availability": {
+        "status": "available",
+        "booking_required": true,
+        "lead_time": "Same day when slot is available"
+      },
+      "service_area": [
+        "Kinshasa"
+      ],
+      "rating": 4.6,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "693b3add-4eb4-5576-ac27-f152884c5f8e",
+      "demo": true,
+      "status": "published",
+      "vertical": "service",
+      "title": "Montage vidéo réseaux sociaux",
+      "slug": "montage-vidéo-réseaux-sociaux",
+      "description": "Montage vertical pour TikTok, Instagram Reels, Facebook et contenus commerciaux.",
+      "seller": {
+        "id": "55c916d2-ed66-5610-bc72-fe0ebdac5e6d",
+        "name": "Atelier Mambo",
+        "type": "services"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Kintambo",
+        "country": "CD"
+      },
+      "tags": [
+        "video",
+        "social-media"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/video-editing,creator?lock=210",
+          "alt": "Montage vidéo réseaux sociaux"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 50,
+        "currency": "USD",
+        "unit": "from"
+      },
+      "availability": {
+        "status": "available",
+        "booking_required": true,
+        "lead_time": "Same day when slot is available"
+      },
+      "service_area": [
+        "Kinshasa"
+      ],
+      "rating": 4.7,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "821601d9-e4af-594a-b5a8-27502c9ed7da",
+      "demo": true,
+      "status": "published",
+      "vertical": "service",
+      "title": "Barber à domicile",
+      "slug": "barber-à-domicile",
+      "description": "Coupe homme, barbe et finition directement à domicile sur réservation.",
+      "seller": {
+        "id": "a17b43cd-d879-507f-af35-568ff81c6681",
+        "name": "Kin Express",
+        "type": "services"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "barber",
+        "grooming"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/barber,barbershop?lock=211",
+          "alt": "Barber à domicile"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 20,
+        "currency": "USD",
+        "unit": "from"
+      },
+      "availability": {
+        "status": "available",
+        "booking_required": true,
+        "lead_time": "Same day when slot is available"
+      },
+      "service_area": [
+        "Kinshasa"
+      ],
+      "rating": 4.8,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "c64c2c97-1270-57aa-9ae3-8fa786ffee06",
+      "demo": true,
+      "status": "published",
+      "vertical": "service",
+      "title": "Traiteur événementiel",
+      "slug": "traiteur-événementiel",
+      "description": "Menus pour réunions, anniversaires et événements privés, avec livraison possible.",
+      "seller": {
+        "id": "6bdbb74a-625f-58ce-a471-172d9c2ec74a",
+        "name": "Maison Saphir",
+        "type": "hospitality"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "catering",
+        "food"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/catering,food?lock=212",
+          "alt": "Traiteur événementiel"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 10,
+        "currency": "USD",
+        "unit": "from"
+      },
+      "availability": {
+        "status": "available",
+        "booking_required": true,
+        "lead_time": "Same day when slot is available"
+      },
+      "service_area": [
+        "Kinshasa"
+      ],
+      "rating": 4.5,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "2ddfdf61-e251-5474-adce-8ccf67b855c4",
+      "demo": true,
+      "status": "published",
+      "vertical": "service",
+      "title": "Lavage automobile mobile",
+      "slug": "lavage-automobile-mobile",
+      "description": "Nettoyage intérieur/extérieur directement chez le client.",
+      "seller": {
+        "id": "55c916d2-ed66-5610-bc72-fe0ebdac5e6d",
+        "name": "Atelier Mambo",
+        "type": "services"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Kintambo",
+        "country": "CD"
+      },
+      "tags": [
+        "car-wash",
+        "auto"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/car-wash,cleaning?lock=213",
+          "alt": "Lavage automobile mobile"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 18,
+        "currency": "USD",
+        "unit": "from"
+      },
+      "availability": {
+        "status": "available",
+        "booking_required": true,
+        "lead_time": "Same day when slot is available"
+      },
+      "service_area": [
+        "Kinshasa"
+      ],
+      "rating": 4.6,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "b9c17d11-6a01-5356-b3dd-ec6ec27d986f",
+      "demo": true,
+      "status": "published",
+      "vertical": "service",
+      "title": "Entretien groupe électrogène",
+      "slug": "entretien-groupe-électrogène",
+      "description": "Diagnostic et entretien préventif pour groupes résidentiels et petits commerces.",
+      "seller": {
+        "id": "a17b43cd-d879-507f-af35-568ff81c6681",
+        "name": "Kin Express",
+        "type": "services"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "generator",
+        "maintenance"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/generator,technician?lock=214",
+          "alt": "Entretien groupe électrogène"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 55,
+        "currency": "USD",
+        "unit": "from"
+      },
+      "availability": {
+        "status": "available",
+        "booking_required": true,
+        "lead_time": "Same day when slot is available"
+      },
+      "service_area": [
+        "Kinshasa"
+      ],
+      "rating": 4.7,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "4e707f58-7358-5107-83e5-8f4336b9664a",
+      "demo": true,
+      "status": "published",
+      "vertical": "service",
+      "title": "Livraison express Kinshasa",
+      "slug": "livraison-express-kinshasa",
+      "description": "Courses locales et petites livraisons avec suivi par téléphone/WhatsApp.",
+      "seller": {
+        "id": "6bdbb74a-625f-58ce-a471-172d9c2ec74a",
+        "name": "Maison Saphir",
+        "type": "hospitality"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "delivery",
+        "courier"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/delivery,courier?lock=215",
+          "alt": "Livraison express Kinshasa"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 8,
+        "currency": "USD",
+        "unit": "from"
+      },
+      "availability": {
+        "status": "available",
+        "booking_required": true,
+        "lead_time": "Same day when slot is available"
+      },
+      "service_area": [
+        "Kinshasa"
+      ],
+      "rating": 4.8,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "a963e4aa-5f1d-547e-a389-dfc4ebd4449f",
+      "demo": true,
+      "status": "published",
+      "vertical": "restaurant",
+      "title": "Boma Kitchen",
+      "slug": "boma-kitchen",
+      "description": "Cuisine congolaise contemporaine, plats du jour et grillades dans une ambiance conviviale.",
+      "seller": {
+        "id": "48dad7ab-c160-5546-a5c0-72762b9be480",
+        "name": "Palmier Rouge",
+        "type": "restaurant"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Bandalungwa",
+        "country": "CD"
+      },
+      "tags": [
+        "restaurant",
+        "congolese-food"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/restaurant,congolese-food?lock=301",
+          "alt": "Boma Kitchen"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 18,
+        "currency": "USD",
+        "unit": "avg_person"
+      },
+      "cuisine": "Congolaise",
+      "opening_hours": {
+        "monday": "11:00-22:00",
+        "tuesday": "11:00-22:00",
+        "wednesday": "11:00-22:00",
+        "thursday": "11:00-22:00",
+        "friday": "11:00-23:00",
+        "saturday": "11:00-23:00",
+        "sunday": "12:00-21:00"
+      },
+      "reservation": {
+        "supported": true,
+        "party_sizes": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "rating": 4.3,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "2d8362f9-50ab-5ff1-b837-add4f31eb684",
+      "demo": true,
+      "status": "published",
+      "vertical": "restaurant",
+      "title": "Palmier Rouge",
+      "slug": "palmier-rouge",
+      "description": "Cuisine urbaine moderne, burgers maison, bowls et plats du soir.",
+      "seller": {
+        "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+        "name": "Rivière Suites",
+        "type": "hotel"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "restaurant",
+        "food"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/restaurant,food?lock=302",
+          "alt": "Palmier Rouge"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 15,
+        "currency": "USD",
+        "unit": "avg_person"
+      },
+      "cuisine": "Fusion",
+      "opening_hours": {
+        "monday": "11:00-22:00",
+        "tuesday": "11:00-22:00",
+        "wednesday": "11:00-22:00",
+        "thursday": "11:00-22:00",
+        "friday": "11:00-23:00",
+        "saturday": "11:00-23:00",
+        "sunday": "12:00-21:00"
+      },
+      "reservation": {
+        "supported": true,
+        "party_sizes": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "rating": 4.4,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "42079082-e5bb-5444-b1e7-a0613c826e93",
+      "demo": true,
+      "status": "published",
+      "vertical": "restaurant",
+      "title": "Maison Griotte",
+      "slug": "maison-griotte",
+      "description": "Carte familiale avec spécialités africaines, jus frais et desserts maison.",
+      "seller": {
+        "id": "85cc99f9-e7fa-5e97-8fad-0ce9fb7ac06c",
+        "name": "Boma Kitchen",
+        "type": "restaurant"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "restaurant",
+        "african-food"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/restaurant,african-food?lock=303",
+          "alt": "Maison Griotte"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 14,
+        "currency": "USD",
+        "unit": "avg_person"
+      },
+      "cuisine": "Africaine",
+      "opening_hours": {
+        "monday": "11:00-22:00",
+        "tuesday": "11:00-22:00",
+        "wednesday": "11:00-22:00",
+        "thursday": "11:00-22:00",
+        "friday": "11:00-23:00",
+        "saturday": "11:00-23:00",
+        "sunday": "12:00-21:00"
+      },
+      "reservation": {
+        "supported": true,
+        "party_sizes": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "rating": 4.5,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "acc52990-0fa9-5ee5-90b0-0041c6e1d1dc",
+      "demo": true,
+      "status": "published",
+      "vertical": "restaurant",
+      "title": "Le Baobab Table",
+      "slug": "le-baobab-table",
+      "description": "Déjeuner d’affaires, plats braisés et service à table dans un cadre calme.",
+      "seller": {
+        "id": "48dad7ab-c160-5546-a5c0-72762b9be480",
+        "name": "Palmier Rouge",
+        "type": "restaurant"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "restaurant",
+        "dining"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/restaurant,dining?lock=304",
+          "alt": "Le Baobab Table"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 22,
+        "currency": "USD",
+        "unit": "avg_person"
+      },
+      "cuisine": "Africaine",
+      "opening_hours": {
+        "monday": "11:00-22:00",
+        "tuesday": "11:00-22:00",
+        "wednesday": "11:00-22:00",
+        "thursday": "11:00-22:00",
+        "friday": "11:00-23:00",
+        "saturday": "11:00-23:00",
+        "sunday": "12:00-21:00"
+      },
+      "reservation": {
+        "supported": true,
+        "party_sizes": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "rating": 4.6,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "2501aa87-4f32-5ce8-8a51-d2ecaf864804",
+      "demo": true,
+      "status": "published",
+      "vertical": "restaurant",
+      "title": "Chez Mama Solange",
+      "slug": "chez-mama-solange",
+      "description": "Cuisine traditionnelle simple et généreuse, idéale pour déjeuner rapidement.",
+      "seller": {
+        "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+        "name": "Rivière Suites",
+        "type": "hotel"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Limete",
+        "country": "CD"
+      },
+      "tags": [
+        "restaurant",
+        "local-food"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/restaurant,local-food?lock=305",
+          "alt": "Chez Mama Solange"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 10,
+        "currency": "USD",
+        "unit": "avg_person"
+      },
+      "cuisine": "Congolaise",
+      "opening_hours": {
+        "monday": "11:00-22:00",
+        "tuesday": "11:00-22:00",
+        "wednesday": "11:00-22:00",
+        "thursday": "11:00-22:00",
+        "friday": "11:00-23:00",
+        "saturday": "11:00-23:00",
+        "sunday": "12:00-21:00"
+      },
+      "reservation": {
+        "supported": true,
+        "party_sizes": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "rating": 4.7,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "1b99d8f0-93de-5260-874a-8493c04669de",
+      "demo": true,
+      "status": "published",
+      "vertical": "restaurant",
+      "title": "Café Fleuve",
+      "slug": "café-fleuve",
+      "description": "Café, pâtisseries, brunch et petite restauration pour réunions ou rendez-vous.",
+      "seller": {
+        "id": "85cc99f9-e7fa-5e97-8fad-0ce9fb7ac06c",
+        "name": "Boma Kitchen",
+        "type": "restaurant"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "cafe",
+        "brunch",
+        "restaurant"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/cafe,brunch,restaurant?lock=306",
+          "alt": "Café Fleuve"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 12,
+        "currency": "USD",
+        "unit": "avg_person"
+      },
+      "cuisine": "Café / brunch",
+      "opening_hours": {
+        "monday": "11:00-22:00",
+        "tuesday": "11:00-22:00",
+        "wednesday": "11:00-22:00",
+        "thursday": "11:00-22:00",
+        "friday": "11:00-23:00",
+        "saturday": "11:00-23:00",
+        "sunday": "12:00-21:00"
+      },
+      "reservation": {
+        "supported": true,
+        "party_sizes": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "rating": 4.2,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "c81de379-d4ae-5a78-a1b9-63028037737e",
+      "demo": true,
+      "status": "published",
+      "vertical": "restaurant",
+      "title": "Terrasse Kasa‑Vubu",
+      "slug": "terrasse-kasa‑vubu",
+      "description": "Grillades, poisson et accompagnements avec espace extérieur.",
+      "seller": {
+        "id": "48dad7ab-c160-5546-a5c0-72762b9be480",
+        "name": "Palmier Rouge",
+        "type": "restaurant"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Kintambo",
+        "country": "CD"
+      },
+      "tags": [
+        "restaurant",
+        "grill"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/restaurant,grill?lock=307",
+          "alt": "Terrasse Kasa‑Vubu"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 17,
+        "currency": "USD",
+        "unit": "avg_person"
+      },
+      "cuisine": "Grillades",
+      "opening_hours": {
+        "monday": "11:00-22:00",
+        "tuesday": "11:00-22:00",
+        "wednesday": "11:00-22:00",
+        "thursday": "11:00-22:00",
+        "friday": "11:00-23:00",
+        "saturday": "11:00-23:00",
+        "sunday": "12:00-21:00"
+      },
+      "reservation": {
+        "supported": true,
+        "party_sizes": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "rating": 4.3,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "0eb5c550-489a-5493-be98-01aea978cd19",
+      "demo": true,
+      "status": "published",
+      "vertical": "restaurant",
+      "title": "Soleil d’Asie",
+      "slug": "soleil-d’asie",
+      "description": "Wok, nouilles, riz sauté et plats inspirés de la cuisine asiatique.",
+      "seller": {
+        "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+        "name": "Rivière Suites",
+        "type": "hotel"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "asian",
+        "restaurant",
+        "food"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/asian,restaurant,food?lock=308",
+          "alt": "Soleil d’Asie"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 16,
+        "currency": "USD",
+        "unit": "avg_person"
+      },
+      "cuisine": "Asiatique",
+      "opening_hours": {
+        "monday": "11:00-22:00",
+        "tuesday": "11:00-22:00",
+        "wednesday": "11:00-22:00",
+        "thursday": "11:00-22:00",
+        "friday": "11:00-23:00",
+        "saturday": "11:00-23:00",
+        "sunday": "12:00-21:00"
+      },
+      "reservation": {
+        "supported": true,
+        "party_sizes": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "rating": 4.4,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "8c112800-b990-5d6a-9cc0-762b3cf328eb",
+      "demo": true,
+      "status": "published",
+      "vertical": "restaurant",
+      "title": "La Table des Arts",
+      "slug": "la-table-des-arts",
+      "description": "Restaurant de quartier avec menu saisonnier et assiettes à partager.",
+      "seller": {
+        "id": "85cc99f9-e7fa-5e97-8fad-0ce9fb7ac06c",
+        "name": "Boma Kitchen",
+        "type": "restaurant"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "restaurant",
+        "food"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/restaurant,food?lock=309",
+          "alt": "La Table des Arts"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 20,
+        "currency": "USD",
+        "unit": "avg_person"
+      },
+      "cuisine": "Fusion",
+      "opening_hours": {
+        "monday": "11:00-22:00",
+        "tuesday": "11:00-22:00",
+        "wednesday": "11:00-22:00",
+        "thursday": "11:00-22:00",
+        "friday": "11:00-23:00",
+        "saturday": "11:00-23:00",
+        "sunday": "12:00-21:00"
+      },
+      "reservation": {
+        "supported": true,
+        "party_sizes": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "rating": 4.5,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "03693100-c83c-5ad8-87cc-5b2fc80e8c3c",
+      "demo": true,
+      "status": "published",
+      "vertical": "restaurant",
+      "title": "Mango Rooftop",
+      "slug": "mango-rooftop",
+      "description": "Cuisine légère, mocktails et vue urbaine pour déjeuner ou afterwork.",
+      "seller": {
+        "id": "48dad7ab-c160-5546-a5c0-72762b9be480",
+        "name": "Palmier Rouge",
+        "type": "restaurant"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "rooftop",
+        "restaurant"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/rooftop,restaurant?lock=310",
+          "alt": "Mango Rooftop"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 24,
+        "currency": "USD",
+        "unit": "avg_person"
+      },
+      "cuisine": "Contemporaine",
+      "opening_hours": {
+        "monday": "11:00-22:00",
+        "tuesday": "11:00-22:00",
+        "wednesday": "11:00-22:00",
+        "thursday": "11:00-22:00",
+        "friday": "11:00-23:00",
+        "saturday": "11:00-23:00",
+        "sunday": "12:00-21:00"
+      },
+      "reservation": {
+        "supported": true,
+        "party_sizes": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "rating": 4.6,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "3ce5cba6-adc9-51a1-84dc-995f13b1dd7c",
+      "demo": true,
+      "status": "published",
+      "vertical": "restaurant",
+      "title": "Bol & Basilic",
+      "slug": "bol-&-basilic",
+      "description": "Salades, bowls et plats rapides, option végétarienne disponible.",
+      "seller": {
+        "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+        "name": "Rivière Suites",
+        "type": "hotel"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Limete",
+        "country": "CD"
+      },
+      "tags": [
+        "healthy",
+        "restaurant"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/healthy,restaurant?lock=311",
+          "alt": "Bol & Basilic"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 13,
+        "currency": "USD",
+        "unit": "avg_person"
+      },
+      "cuisine": "Healthy",
+      "opening_hours": {
+        "monday": "11:00-22:00",
+        "tuesday": "11:00-22:00",
+        "wednesday": "11:00-22:00",
+        "thursday": "11:00-22:00",
+        "friday": "11:00-23:00",
+        "saturday": "11:00-23:00",
+        "sunday": "12:00-21:00"
+      },
+      "reservation": {
+        "supported": true,
+        "party_sizes": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "rating": 4.7,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "081aeb93-13a3-529d-8324-5b2344782485",
+      "demo": true,
+      "status": "published",
+      "vertical": "restaurant",
+      "title": "Le Patio Vert",
+      "slug": "le-patio-vert",
+      "description": "Cuisine familiale, espace jardin et menus de groupe sur réservation.",
+      "seller": {
+        "id": "85cc99f9-e7fa-5e97-8fad-0ce9fb7ac06c",
+        "name": "Boma Kitchen",
+        "type": "restaurant"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "restaurant",
+        "garden"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/restaurant,garden?lock=312",
+          "alt": "Le Patio Vert"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 19,
+        "currency": "USD",
+        "unit": "avg_person"
+      },
+      "cuisine": "Africaine",
+      "opening_hours": {
+        "monday": "11:00-22:00",
+        "tuesday": "11:00-22:00",
+        "wednesday": "11:00-22:00",
+        "thursday": "11:00-22:00",
+        "friday": "11:00-23:00",
+        "saturday": "11:00-23:00",
+        "sunday": "12:00-21:00"
+      },
+      "reservation": {
+        "supported": true,
+        "party_sizes": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "rating": 4.2,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "ad6c5042-945f-54c5-9091-febccf660ebe",
+      "demo": true,
+      "status": "published",
+      "vertical": "restaurant",
+      "title": "Kin Burger Lab",
+      "slug": "kin-burger-lab",
+      "description": "Burgers artisanaux, poulet croustillant et frites maison.",
+      "seller": {
+        "id": "48dad7ab-c160-5546-a5c0-72762b9be480",
+        "name": "Palmier Rouge",
+        "type": "restaurant"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Bandalungwa",
+        "country": "CD"
+      },
+      "tags": [
+        "burger",
+        "restaurant"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/burger,restaurant?lock=313",
+          "alt": "Kin Burger Lab"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 11,
+        "currency": "USD",
+        "unit": "avg_person"
+      },
+      "cuisine": "Fast casual",
+      "opening_hours": {
+        "monday": "11:00-22:00",
+        "tuesday": "11:00-22:00",
+        "wednesday": "11:00-22:00",
+        "thursday": "11:00-22:00",
+        "friday": "11:00-23:00",
+        "saturday": "11:00-23:00",
+        "sunday": "12:00-21:00"
+      },
+      "reservation": {
+        "supported": true,
+        "party_sizes": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "rating": 4.3,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "45aeb3f8-c048-5541-9411-8acbf9186fe7",
+      "demo": true,
+      "status": "published",
+      "vertical": "restaurant",
+      "title": "Saveurs du Marché",
+      "slug": "saveurs-du-marché",
+      "description": "Plats du jour inspirés des produits de marché et recettes locales.",
+      "seller": {
+        "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+        "name": "Rivière Suites",
+        "type": "hotel"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Masina",
+        "country": "CD"
+      },
+      "tags": [
+        "restaurant",
+        "local-food"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/restaurant,local-food?lock=314",
+          "alt": "Saveurs du Marché"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 9,
+        "currency": "USD",
+        "unit": "avg_person"
+      },
+      "cuisine": "Congolaise",
+      "opening_hours": {
+        "monday": "11:00-22:00",
+        "tuesday": "11:00-22:00",
+        "wednesday": "11:00-22:00",
+        "thursday": "11:00-22:00",
+        "friday": "11:00-23:00",
+        "saturday": "11:00-23:00",
+        "sunday": "12:00-21:00"
+      },
+      "reservation": {
+        "supported": true,
+        "party_sizes": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "rating": 4.4,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "ccc36d51-451b-5cb5-86b5-1863a169dc61",
+      "demo": true,
+      "status": "published",
+      "vertical": "restaurant",
+      "title": "Noki Pizzeria",
+      "slug": "noki-pizzeria",
+      "description": "Pizzas au four, pâtes fraîches et options à emporter.",
+      "seller": {
+        "id": "85cc99f9-e7fa-5e97-8fad-0ce9fb7ac06c",
+        "name": "Boma Kitchen",
+        "type": "restaurant"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "pizza",
+        "restaurant"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/pizza,restaurant?lock=315",
+          "alt": "Noki Pizzeria"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 15,
+        "currency": "USD",
+        "unit": "avg_person"
+      },
+      "cuisine": "Italienne",
+      "opening_hours": {
+        "monday": "11:00-22:00",
+        "tuesday": "11:00-22:00",
+        "wednesday": "11:00-22:00",
+        "thursday": "11:00-22:00",
+        "friday": "11:00-23:00",
+        "saturday": "11:00-23:00",
+        "sunday": "12:00-21:00"
+      },
+      "reservation": {
+        "supported": true,
+        "party_sizes": [
+          2,
+          4,
+          6,
+          8
+        ]
+      },
+      "rating": 4.5,
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "815aa4d1-9ea6-52dc-9e7d-44fff9f3ae54",
+      "demo": true,
+      "status": "published",
+      "vertical": "hotel",
+      "title": "Rivière Suites",
+      "slug": "rivière-suites",
+      "description": "Boutique hôtel calme avec chambres climatisées, petit-déjeuner et Wi‑Fi.",
+      "seller": {
+        "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+        "name": "Kin Habitat",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "hotel",
+        "room"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/hotel,room?lock=401",
+          "alt": "Rivière Suites"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 85,
+        "currency": "USD",
+        "unit": "night"
+      },
+      "stars": 4,
+      "amenities": [
+        "Wi‑Fi",
+        "Climatisation",
+        "Petit-déjeuner"
+      ],
+      "reservation": {
+        "supported": true,
+        "checkin": "14:00",
+        "checkout": "12:00"
+      },
+      "rooms": [
+        "Standard",
+        "Deluxe",
+        "Suite"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "da52ddbe-3fa3-5c55-8bd0-98b41b943878",
+      "demo": true,
+      "status": "published",
+      "vertical": "hotel",
+      "title": "Maison Gombe Hotel",
+      "slug": "maison-gombe-hotel",
+      "description": "Hôtel urbain proche des bureaux et restaurants, avec chambres business.",
+      "seller": {
+        "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+        "name": "Rivière Suites",
+        "type": "hotel"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "hotel",
+        "bedroom"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/hotel,bedroom?lock=402",
+          "alt": "Maison Gombe Hotel"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 110,
+        "currency": "USD",
+        "unit": "night"
+      },
+      "stars": 4,
+      "amenities": [
+        "Wi‑Fi",
+        "Climatisation",
+        "Petit-déjeuner"
+      ],
+      "reservation": {
+        "supported": true,
+        "checkin": "14:00",
+        "checkout": "12:00"
+      },
+      "rooms": [
+        "Standard",
+        "Deluxe",
+        "Suite"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "1b7b7d35-952d-53d0-b2d8-2d0ed8c3837e",
+      "demo": true,
+      "status": "published",
+      "vertical": "hotel",
+      "title": "Palm Residence",
+      "slug": "palm-residence",
+      "description": "Résidence hôtelière avec studios et appartements pour courts séjours.",
+      "seller": {
+        "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+        "name": "Congo Horizon Homes",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "hotel",
+        "apartment"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/hotel,apartment?lock=403",
+          "alt": "Palm Residence"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 75,
+        "currency": "USD",
+        "unit": "night"
+      },
+      "stars": 3,
+      "amenities": [
+        "Wi‑Fi",
+        "Climatisation",
+        "Petit-déjeuner"
+      ],
+      "reservation": {
+        "supported": true,
+        "checkin": "14:00",
+        "checkout": "12:00"
+      },
+      "rooms": [
+        "Standard",
+        "Deluxe",
+        "Suite"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "70f6ef0c-4ad1-5e9f-8bad-7b4fd052799f",
+      "demo": true,
+      "status": "published",
+      "vertical": "hotel",
+      "title": "Congo Horizon Lodge",
+      "slug": "congo-horizon-lodge",
+      "description": "Séjour confortable avec jardin, espace détente et service de petit-déjeuner.",
+      "seller": {
+        "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+        "name": "Kin Habitat",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "hotel",
+        "lodge"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/hotel,lodge?lock=404",
+          "alt": "Congo Horizon Lodge"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 95,
+        "currency": "USD",
+        "unit": "night"
+      },
+      "stars": 3,
+      "amenities": [
+        "Wi‑Fi",
+        "Climatisation",
+        "Petit-déjeuner"
+      ],
+      "reservation": {
+        "supported": true,
+        "checkin": "14:00",
+        "checkout": "12:00"
+      },
+      "rooms": [
+        "Standard",
+        "Deluxe",
+        "Suite"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "e1d4249a-32ce-5001-8216-9f721b4463bd",
+      "demo": true,
+      "status": "published",
+      "vertical": "hotel",
+      "title": "Kin Plaza Stay",
+      "slug": "kin-plaza-stay",
+      "description": "Chambres modernes pour voyageurs d’affaires et visiteurs de passage.",
+      "seller": {
+        "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+        "name": "Rivière Suites",
+        "type": "hotel"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Limete",
+        "country": "CD"
+      },
+      "tags": [
+        "hotel",
+        "room"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/hotel,room?lock=405",
+          "alt": "Kin Plaza Stay"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 100,
+        "currency": "USD",
+        "unit": "night"
+      },
+      "stars": 4,
+      "amenities": [
+        "Wi‑Fi",
+        "Climatisation",
+        "Petit-déjeuner"
+      ],
+      "reservation": {
+        "supported": true,
+        "checkin": "14:00",
+        "checkout": "12:00"
+      },
+      "rooms": [
+        "Standard",
+        "Deluxe",
+        "Suite"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "120e6db4-eec2-57d4-b934-d19676eeec20",
+      "demo": true,
+      "status": "published",
+      "vertical": "hotel",
+      "title": "Le Jardin des Suites",
+      "slug": "le-jardin-des-suites",
+      "description": "Petite adresse résidentielle avec terrasse et chambres spacieuses.",
+      "seller": {
+        "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+        "name": "Congo Horizon Homes",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Kintambo",
+        "country": "CD"
+      },
+      "tags": [
+        "hotel",
+        "garden"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/hotel,garden?lock=406",
+          "alt": "Le Jardin des Suites"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 90,
+        "currency": "USD",
+        "unit": "night"
+      },
+      "stars": 3,
+      "amenities": [
+        "Wi‑Fi",
+        "Climatisation",
+        "Petit-déjeuner"
+      ],
+      "reservation": {
+        "supported": true,
+        "checkin": "14:00",
+        "checkout": "12:00"
+      },
+      "rooms": [
+        "Standard",
+        "Deluxe",
+        "Suite"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "1f5730b8-1f67-5b65-bec9-1f8a6a6ece6b",
+      "demo": true,
+      "status": "published",
+      "vertical": "hotel",
+      "title": "Fleuve View Residence",
+      "slug": "fleuve-view-residence",
+      "description": "Suites avec espace salon et vue urbaine, adaptées aux séjours de plusieurs nuits.",
+      "seller": {
+        "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+        "name": "Kin Habitat",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "hotel",
+        "suite"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/hotel,suite?lock=407",
+          "alt": "Fleuve View Residence"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 125,
+        "currency": "USD",
+        "unit": "night"
+      },
+      "stars": 4,
+      "amenities": [
+        "Wi‑Fi",
+        "Climatisation",
+        "Petit-déjeuner"
+      ],
+      "reservation": {
+        "supported": true,
+        "checkin": "14:00",
+        "checkout": "12:00"
+      },
+      "rooms": [
+        "Standard",
+        "Deluxe",
+        "Suite"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "be5dd453-42d9-50aa-bac9-2a2cece7050c",
+      "demo": true,
+      "status": "published",
+      "vertical": "hotel",
+      "title": "Makala City Hotel",
+      "slug": "makala-city-hotel",
+      "description": "Hôtel pratique avec chambres standard et premium, réception 24/7.",
+      "seller": {
+        "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+        "name": "Rivière Suites",
+        "type": "hotel"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Kasa‑Vubu",
+        "country": "CD"
+      },
+      "tags": [
+        "hotel",
+        "lobby"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/hotel,lobby?lock=408",
+          "alt": "Makala City Hotel"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 65,
+        "currency": "USD",
+        "unit": "night"
+      },
+      "stars": 3,
+      "amenities": [
+        "Wi‑Fi",
+        "Climatisation",
+        "Petit-déjeuner"
+      ],
+      "reservation": {
+        "supported": true,
+        "checkin": "14:00",
+        "checkout": "12:00"
+      },
+      "rooms": [
+        "Standard",
+        "Deluxe",
+        "Suite"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "1374f8a7-378b-5004-bcbb-c55fb98f15af",
+      "demo": true,
+      "status": "published",
+      "vertical": "hotel",
+      "title": "Ubuntu Grand Stay",
+      "slug": "ubuntu-grand-stay",
+      "description": "Hébergement premium avec restaurant et salle de réunion.",
+      "seller": {
+        "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+        "name": "Congo Horizon Homes",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "hotel",
+        "luxury"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/hotel,luxury?lock=409",
+          "alt": "Ubuntu Grand Stay"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 145,
+        "currency": "USD",
+        "unit": "night"
+      },
+      "stars": 4,
+      "amenities": [
+        "Wi‑Fi",
+        "Climatisation",
+        "Petit-déjeuner"
+      ],
+      "reservation": {
+        "supported": true,
+        "checkin": "14:00",
+        "checkout": "12:00"
+      },
+      "rooms": [
+        "Standard",
+        "Deluxe",
+        "Suite"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "6515d1f9-b87d-57eb-919d-63380166fb95",
+      "demo": true,
+      "status": "published",
+      "vertical": "hotel",
+      "title": "Belle Vue Garden Hotel",
+      "slug": "belle-vue-garden-hotel",
+      "description": "Hôtel à taille humaine avec jardin et petite piscine.",
+      "seller": {
+        "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+        "name": "Kin Habitat",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "hotel",
+        "pool"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/hotel,pool?lock=410",
+          "alt": "Belle Vue Garden Hotel"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 105,
+        "currency": "USD",
+        "unit": "night"
+      },
+      "stars": 4,
+      "amenities": [
+        "Wi‑Fi",
+        "Climatisation",
+        "Petit-déjeuner"
+      ],
+      "reservation": {
+        "supported": true,
+        "checkin": "14:00",
+        "checkout": "12:00"
+      },
+      "rooms": [
+        "Standard",
+        "Deluxe",
+        "Suite"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "07df601f-c550-57a2-92ad-03de3d3a722e",
+      "demo": true,
+      "status": "published",
+      "vertical": "hotel",
+      "title": "Kasaï Comfort Inn",
+      "slug": "kasaï-comfort-inn",
+      "description": "Chambres simples, Wi‑Fi et petit-déjeuner pour séjours professionnels.",
+      "seller": {
+        "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+        "name": "Rivière Suites",
+        "type": "hotel"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Limete",
+        "country": "CD"
+      },
+      "tags": [
+        "hotel",
+        "room"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/hotel,room?lock=411",
+          "alt": "Kasaï Comfort Inn"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 60,
+        "currency": "USD",
+        "unit": "night"
+      },
+      "stars": 3,
+      "amenities": [
+        "Wi‑Fi",
+        "Climatisation",
+        "Petit-déjeuner"
+      ],
+      "reservation": {
+        "supported": true,
+        "checkin": "14:00",
+        "checkout": "12:00"
+      },
+      "rooms": [
+        "Standard",
+        "Deluxe",
+        "Suite"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "108f8511-0a46-530f-8371-abf6d1c42907",
+      "demo": true,
+      "status": "published",
+      "vertical": "hotel",
+      "title": "Acacia Business Hotel",
+      "slug": "acacia-business-hotel",
+      "description": "Chambres business, salle de réunion et check-in flexible.",
+      "seller": {
+        "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+        "name": "Congo Horizon Homes",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "hotel",
+        "business"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/hotel,business?lock=412",
+          "alt": "Acacia Business Hotel"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 130,
+        "currency": "USD",
+        "unit": "night"
+      },
+      "stars": 4,
+      "amenities": [
+        "Wi‑Fi",
+        "Climatisation",
+        "Petit-déjeuner"
+      ],
+      "reservation": {
+        "supported": true,
+        "checkin": "14:00",
+        "checkout": "12:00"
+      },
+      "rooms": [
+        "Standard",
+        "Deluxe",
+        "Suite"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "a7f3ab91-f67e-5fb7-951c-9e9c2b133e09",
+      "demo": true,
+      "status": "published",
+      "vertical": "hotel",
+      "title": "Maison Congo Retreat",
+      "slug": "maison-congo-retreat",
+      "description": "Adresse calme pour week-end, avec espace extérieur et restauration sur place.",
+      "seller": {
+        "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+        "name": "Kin Habitat",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Mont-Ngafula",
+        "country": "CD"
+      },
+      "tags": [
+        "hotel",
+        "resort"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/hotel,resort?lock=413",
+          "alt": "Maison Congo Retreat"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 120,
+        "currency": "USD",
+        "unit": "night"
+      },
+      "stars": 4,
+      "amenities": [
+        "Wi‑Fi",
+        "Climatisation",
+        "Petit-déjeuner"
+      ],
+      "reservation": {
+        "supported": true,
+        "checkin": "14:00",
+        "checkout": "12:00"
+      },
+      "rooms": [
+        "Standard",
+        "Deluxe",
+        "Suite"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "da7d5b2f-8f08-564c-b33d-942e81e1dc50",
+      "demo": true,
+      "status": "published",
+      "vertical": "hotel",
+      "title": "Cité Verte Suites",
+      "slug": "cité-verte-suites",
+      "description": "Studios équipés pour longs séjours, avec coin cuisine et service ménage.",
+      "seller": {
+        "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+        "name": "Rivière Suites",
+        "type": "hotel"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "hotel",
+        "studio"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/hotel,studio?lock=414",
+          "alt": "Cité Verte Suites"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 70,
+        "currency": "USD",
+        "unit": "night"
+      },
+      "stars": 3,
+      "amenities": [
+        "Wi‑Fi",
+        "Climatisation",
+        "Petit-déjeuner"
+      ],
+      "reservation": {
+        "supported": true,
+        "checkin": "14:00",
+        "checkout": "12:00"
+      },
+      "rooms": [
+        "Standard",
+        "Deluxe",
+        "Suite"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "9622547a-2f63-5fdb-9636-5d4d835f102e",
+      "demo": true,
+      "status": "published",
+      "vertical": "hotel",
+      "title": "Les Palmiers Residence",
+      "slug": "les-palmiers-residence",
+      "description": "Résidence avec chambres familiales et suites, idéale pour groupes.",
+      "seller": {
+        "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+        "name": "Congo Horizon Homes",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Kintambo",
+        "country": "CD"
+      },
+      "tags": [
+        "hotel",
+        "residence"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/hotel,residence?lock=415",
+          "alt": "Les Palmiers Residence"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 115,
+        "currency": "USD",
+        "unit": "night"
+      },
+      "stars": 3,
+      "amenities": [
+        "Wi‑Fi",
+        "Climatisation",
+        "Petit-déjeuner"
+      ],
+      "reservation": {
+        "supported": true,
+        "checkin": "14:00",
+        "checkout": "12:00"
+      },
+      "rooms": [
+        "Standard",
+        "Deluxe",
+        "Suite"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "227121e1-3406-5f5e-8dbe-6800818b0127",
+      "demo": true,
+      "status": "published",
+      "vertical": "real_estate",
+      "title": "Appartement 2 chambres – Gombe",
+      "slug": "appartement-2-chambres-–-gombe",
+      "description": "Appartement lumineux de 2 chambres avec salon, cuisine équipée et parking sécurisé.",
+      "seller": {
+        "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+        "name": "Congo Horizon Homes",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "apartment",
+        "interior"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/apartment,interior?lock=501",
+          "alt": "Appartement 2 chambres – Gombe"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 1200,
+        "currency": "USD",
+        "unit": "month"
+      },
+      "transaction_type": "rent",
+      "bedrooms": 2,
+      "bathrooms": 2,
+      "property_type": "residential",
+      "availability": {
+        "status": "available"
+      },
+      "features": [
+        "Parking",
+        "Sécurité",
+        "Accès routier"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "f6daacfd-7389-534d-8305-5f8ae7fc927f",
+      "demo": true,
+      "status": "published",
+      "vertical": "real_estate",
+      "title": "Appartement 3 chambres – Ngaliema",
+      "slug": "appartement-3-chambres-–-ngaliema",
+      "description": "Grand appartement familial avec trois chambres, balcon et espace salon.",
+      "seller": {
+        "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+        "name": "Kin Habitat",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "apartment",
+        "home"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/apartment,home?lock=502",
+          "alt": "Appartement 3 chambres – Ngaliema"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 1500,
+        "currency": "USD",
+        "unit": "month"
+      },
+      "transaction_type": "rent",
+      "bedrooms": 3,
+      "bathrooms": 2,
+      "property_type": "residential",
+      "availability": {
+        "status": "available"
+      },
+      "features": [
+        "Parking",
+        "Sécurité"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "695bfb49-3ef9-528d-b48a-f75ca98f75bc",
+      "demo": true,
+      "status": "published",
+      "vertical": "real_estate",
+      "title": "Maison 4 chambres avec jardin – Mont‑Ngafula",
+      "slug": "maison-4-chambres-avec-jardin-–-mont‑ngafula",
+      "description": "Maison familiale avec jardin, cour fermée et dépendance.",
+      "seller": {
+        "id": "8e25423c-bea3-51ea-adb6-c063f2973b2d",
+        "name": "Urban Key RDC",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Mont-Ngafula",
+        "country": "CD"
+      },
+      "tags": [
+        "house",
+        "garden"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/house,garden?lock=503",
+          "alt": "Maison 4 chambres avec jardin – Mont‑Ngafula"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 185000,
+        "currency": "USD",
+        "unit": "sale"
+      },
+      "transaction_type": "sale",
+      "bedrooms": 4,
+      "bathrooms": 3,
+      "property_type": "residential",
+      "availability": {
+        "status": "available"
+      },
+      "features": [
+        "Parking",
+        "Sécurité",
+        "Accès routier"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "0bb520e9-139c-581f-aa26-55da5e2c3439",
+      "demo": true,
+      "status": "published",
+      "vertical": "real_estate",
+      "title": "Villa moderne – Binza",
+      "slug": "villa-moderne-–-binza",
+      "description": "Villa contemporaine avec grand séjour, chambres climatisées et parking.",
+      "seller": {
+        "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+        "name": "Congo Horizon Homes",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Binza",
+        "country": "CD"
+      },
+      "tags": [
+        "villa",
+        "house"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/villa,house?lock=504",
+          "alt": "Villa moderne – Binza"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 2600,
+        "currency": "USD",
+        "unit": "month"
+      },
+      "transaction_type": "rent",
+      "bedrooms": 4,
+      "bathrooms": 3,
+      "property_type": "residential",
+      "availability": {
+        "status": "available"
+      },
+      "features": [
+        "Parking",
+        "Sécurité"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "0893967e-a717-5bb6-8b91-53f5e00dd17e",
+      "demo": true,
+      "status": "published",
+      "vertical": "real_estate",
+      "title": "Studio meublé – Gombe",
+      "slug": "studio-meublé-–-gombe",
+      "description": "Studio prêt à habiter pour professionnel ou séjour moyen terme.",
+      "seller": {
+        "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+        "name": "Kin Habitat",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "studio",
+        "apartment"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/studio,apartment?lock=505",
+          "alt": "Studio meublé – Gombe"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 850,
+        "currency": "USD",
+        "unit": "month"
+      },
+      "transaction_type": "rent",
+      "bedrooms": 1,
+      "bathrooms": 1,
+      "property_type": "residential",
+      "availability": {
+        "status": "available"
+      },
+      "features": [
+        "Parking",
+        "Sécurité",
+        "Accès routier"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "c60f4b99-c779-5dba-9c19-d600cc61957c",
+      "demo": true,
+      "status": "published",
+      "vertical": "real_estate",
+      "title": "Appartement standing – Kintambo",
+      "slug": "appartement-standing-–-kintambo",
+      "description": "Deux chambres, cuisine ouverte et espace de vie rénové.",
+      "seller": {
+        "id": "8e25423c-bea3-51ea-adb6-c063f2973b2d",
+        "name": "Urban Key RDC",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Kintambo",
+        "country": "CD"
+      },
+      "tags": [
+        "apartment",
+        "interior"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/apartment,interior?lock=506",
+          "alt": "Appartement standing – Kintambo"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 1100,
+        "currency": "USD",
+        "unit": "month"
+      },
+      "transaction_type": "rent",
+      "bedrooms": 2,
+      "bathrooms": 2,
+      "property_type": "residential",
+      "availability": {
+        "status": "available"
+      },
+      "features": [
+        "Parking",
+        "Sécurité"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "6fbf8230-c472-57c1-a9c0-3ef0d06c6a8a",
+      "demo": true,
+      "status": "published",
+      "vertical": "real_estate",
+      "title": "Maison 3 chambres – Limete",
+      "slug": "maison-3-chambres-–-limete",
+      "description": "Maison résidentielle avec cour, portail et espace pour petite famille.",
+      "seller": {
+        "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+        "name": "Congo Horizon Homes",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Limete",
+        "country": "CD"
+      },
+      "tags": [
+        "house",
+        "residential"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/house,residential?lock=507",
+          "alt": "Maison 3 chambres – Limete"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 140000,
+        "currency": "USD",
+        "unit": "sale"
+      },
+      "transaction_type": "sale",
+      "bedrooms": 3,
+      "bathrooms": 2,
+      "property_type": "residential",
+      "availability": {
+        "status": "available"
+      },
+      "features": [
+        "Parking",
+        "Sécurité",
+        "Accès routier"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "9de16fd3-9920-59b1-9295-2b4e38e40944",
+      "demo": true,
+      "status": "published",
+      "vertical": "real_estate",
+      "title": "Terrain résidentiel – Kimwenza",
+      "slug": "terrain-résidentiel-–-kimwenza",
+      "description": "Parcelle résidentielle pour projet familial, accès routier à proximité.",
+      "seller": {
+        "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+        "name": "Kin Habitat",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Kimwenza",
+        "country": "CD"
+      },
+      "tags": [
+        "land",
+        "property"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/land,property?lock=508",
+          "alt": "Terrain résidentiel – Kimwenza"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 45000,
+        "currency": "USD",
+        "unit": "sale"
+      },
+      "transaction_type": "sale",
+      "bedrooms": 0,
+      "bathrooms": 0,
+      "property_type": "commercial/land",
+      "availability": {
+        "status": "available"
+      },
+      "features": [
+        "Parking",
+        "Sécurité"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "9c24a818-a9db-53ca-b21d-f50575e10def",
+      "demo": true,
+      "status": "published",
+      "vertical": "real_estate",
+      "title": "Bureau commercial – Gombe",
+      "slug": "bureau-commercial-–-gombe",
+      "description": "Plateau de bureaux pour PME avec espace d’accueil et salle de réunion.",
+      "seller": {
+        "id": "8e25423c-bea3-51ea-adb6-c063f2973b2d",
+        "name": "Urban Key RDC",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Gombe",
+        "country": "CD"
+      },
+      "tags": [
+        "office",
+        "commercial"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/office,commercial?lock=509",
+          "alt": "Bureau commercial – Gombe"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 2200,
+        "currency": "USD",
+        "unit": "month"
+      },
+      "transaction_type": "rent",
+      "bedrooms": 0,
+      "bathrooms": 2,
+      "property_type": "commercial/land",
+      "availability": {
+        "status": "available"
+      },
+      "features": [
+        "Parking",
+        "Sécurité",
+        "Accès routier"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "a11433c3-ab98-5bde-87b4-35e26f314d84",
+      "demo": true,
+      "status": "published",
+      "vertical": "real_estate",
+      "title": "Appartement familial – Bandalungwa",
+      "slug": "appartement-familial-–-bandalungwa",
+      "description": "Trois chambres, deux salles de bain et cuisine séparée.",
+      "seller": {
+        "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+        "name": "Congo Horizon Homes",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Bandalungwa",
+        "country": "CD"
+      },
+      "tags": [
+        "apartment",
+        "family"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/apartment,family?lock=510",
+          "alt": "Appartement familial – Bandalungwa"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 1000,
+        "currency": "USD",
+        "unit": "month"
+      },
+      "transaction_type": "rent",
+      "bedrooms": 3,
+      "bathrooms": 2,
+      "property_type": "residential",
+      "availability": {
+        "status": "available"
+      },
+      "features": [
+        "Parking",
+        "Sécurité"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "7c3fcf0c-dd76-59bf-a406-8fefb9f02d05",
+      "demo": true,
+      "status": "published",
+      "vertical": "real_estate",
+      "title": "Duplex 3 chambres – Ma Campagne",
+      "slug": "duplex-3-chambres-–-ma-campagne",
+      "description": "Duplex avec terrasse, vue dégagée et parking privé.",
+      "seller": {
+        "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+        "name": "Kin Habitat",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ma Campagne",
+        "country": "CD"
+      },
+      "tags": [
+        "duplex",
+        "house"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/duplex,house?lock=511",
+          "alt": "Duplex 3 chambres – Ma Campagne"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 210000,
+        "currency": "USD",
+        "unit": "sale"
+      },
+      "transaction_type": "sale",
+      "bedrooms": 3,
+      "bathrooms": 3,
+      "property_type": "residential",
+      "availability": {
+        "status": "available"
+      },
+      "features": [
+        "Parking",
+        "Sécurité",
+        "Accès routier"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "64969e51-0ac6-582a-8334-5b90a3ad38e3",
+      "demo": true,
+      "status": "published",
+      "vertical": "real_estate",
+      "title": "Maison à rénover – Kalamu",
+      "slug": "maison-à-rénover-–-kalamu",
+      "description": "Maison ancienne à rénover, adaptée à un projet résidentiel ou mixte.",
+      "seller": {
+        "id": "8e25423c-bea3-51ea-adb6-c063f2973b2d",
+        "name": "Urban Key RDC",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Kalamu",
+        "country": "CD"
+      },
+      "tags": [
+        "house",
+        "renovation"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/house,renovation?lock=512",
+          "alt": "Maison à rénover – Kalamu"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 90000,
+        "currency": "USD",
+        "unit": "sale"
+      },
+      "transaction_type": "sale",
+      "bedrooms": 3,
+      "bathrooms": 2,
+      "property_type": "residential",
+      "availability": {
+        "status": "available"
+      },
+      "features": [
+        "Parking",
+        "Sécurité"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "6f25ce39-ec2c-5ddf-ad71-58582bf72b10",
+      "demo": true,
+      "status": "published",
+      "vertical": "real_estate",
+      "title": "Local commercial – Masina",
+      "slug": "local-commercial-–-masina",
+      "description": "Local en bordure d’axe passant, adapté boutique, agence ou service.",
+      "seller": {
+        "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+        "name": "Congo Horizon Homes",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Masina",
+        "country": "CD"
+      },
+      "tags": [
+        "shop",
+        "commercial"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/shop,commercial?lock=513",
+          "alt": "Local commercial – Masina"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 750,
+        "currency": "USD",
+        "unit": "month"
+      },
+      "transaction_type": "rent",
+      "bedrooms": 0,
+      "bathrooms": 1,
+      "property_type": "commercial/land",
+      "availability": {
+        "status": "available"
+      },
+      "features": [
+        "Parking",
+        "Sécurité",
+        "Accès routier"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "a1906041-54fa-5bf5-990b-41b5d5dae875",
+      "demo": true,
+      "status": "published",
+      "vertical": "real_estate",
+      "title": "Appartement neuf – Limete Résidentiel",
+      "slug": "appartement-neuf-–-limete-résidentiel",
+      "description": "Deux chambres, finition moderne et résidence sécurisée.",
+      "seller": {
+        "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+        "name": "Kin Habitat",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Limete",
+        "country": "CD"
+      },
+      "tags": [
+        "new-apartment",
+        "interior"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/new-apartment,interior?lock=514",
+          "alt": "Appartement neuf – Limete Résidentiel"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 1250,
+        "currency": "USD",
+        "unit": "month"
+      },
+      "transaction_type": "rent",
+      "bedrooms": 2,
+      "bathrooms": 2,
+      "property_type": "residential",
+      "availability": {
+        "status": "available"
+      },
+      "features": [
+        "Parking",
+        "Sécurité"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    },
+    {
+      "id": "e186f41d-26af-5ac6-9490-93d0bb9d708b",
+      "demo": true,
+      "status": "published",
+      "vertical": "real_estate",
+      "title": "Villa familiale – Ngaliema",
+      "slug": "villa-familiale-–-ngaliema",
+      "description": "Villa de cinq chambres avec grand jardin et espace de stationnement.",
+      "seller": {
+        "id": "8e25423c-bea3-51ea-adb6-c063f2973b2d",
+        "name": "Urban Key RDC",
+        "type": "real_estate"
+      },
+      "location": {
+        "city": "Kinshasa",
+        "neighborhood": "Ngaliema",
+        "country": "CD"
+      },
+      "tags": [
+        "villa",
+        "garden"
+      ],
+      "images": [
+        {
+          "url": "https://loremflickr.com/960/720/villa,garden?lock=515",
+          "alt": "Villa familiale – Ngaliema"
+        }
+      ],
+      "contact": {
+        "channel": "whatsapp",
+        "demo_number": "+243 810 000 001"
+      },
+      "source": "Trezutil demo dataset",
+      "price": {
+        "amount": 320000,
+        "currency": "USD",
+        "unit": "sale"
+      },
+      "transaction_type": "sale",
+      "bedrooms": 5,
+      "bathrooms": 4,
+      "property_type": "residential",
+      "availability": {
+        "status": "available"
+      },
+      "features": [
+        "Parking",
+        "Sécurité",
+        "Accès routier"
+      ],
+      "demo_badge": "DEMO",
+      "updated_at": "2026-09-27T00:00:00Z"
+    }
+  ]
+}

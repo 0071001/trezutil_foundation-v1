@@ -1,0 +1,753 @@
+[
+  {
+    "id": "9815f584-431f-5f97-b519-396842eee602",
+    "demo": true,
+    "status": "published",
+    "vertical": "service",
+    "title": "Plomberie express",
+    "slug": "plomberie-express",
+    "description": "Réparation de fuite, débouchage, robinetterie et petites installations sanitaires. Intervention à domicile.",
+    "seller": {
+      "id": "55c916d2-ed66-5610-bc72-fe0ebdac5e6d",
+      "name": "Atelier Mambo",
+      "type": "services"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Kintambo",
+      "country": "CD"
+    },
+    "tags": [
+      "plumbing",
+      "home-repair"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/plumber,plumbing?lock=201",
+        "alt": "Plomberie express"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 35,
+      "currency": "USD",
+      "unit": "from"
+    },
+    "availability": {
+      "status": "available",
+      "booking_required": true,
+      "lead_time": "Same day when slot is available"
+    },
+    "service_area": [
+      "Kinshasa"
+    ],
+    "rating": 4.6,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "26e0cbe2-d1bc-5549-9409-9431f92d320c",
+    "demo": true,
+    "status": "published",
+    "vertical": "service",
+    "title": "Électricité bâtiment",
+    "slug": "électricité-bâtiment",
+    "description": "Diagnostic, prises, luminaires, disjoncteurs et petites installations électriques résidentielles.",
+    "seller": {
+      "id": "a17b43cd-d879-507f-af35-568ff81c6681",
+      "name": "Kin Express",
+      "type": "services"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "electrician",
+      "electrical"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/electrician,electrical?lock=202",
+        "alt": "Électricité bâtiment"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 40,
+      "currency": "USD",
+      "unit": "from"
+    },
+    "availability": {
+      "status": "available",
+      "booking_required": true,
+      "lead_time": "Same day when slot is available"
+    },
+    "service_area": [
+      "Kinshasa"
+    ],
+    "rating": 4.7,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "d8a2acb2-cb2e-5caf-adeb-6cc42de4e586",
+    "demo": true,
+    "status": "published",
+    "vertical": "service",
+    "title": "Climatisation & maintenance",
+    "slug": "climatisation-&-maintenance",
+    "description": "Nettoyage, entretien et dépannage de climatiseurs split et unités domestiques.",
+    "seller": {
+      "id": "6bdbb74a-625f-58ce-a471-172d9c2ec74a",
+      "name": "Maison Saphir",
+      "type": "hospitality"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "air-conditioner",
+      "maintenance"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/airconditioner,technician?lock=203",
+        "alt": "Climatisation & maintenance"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 45,
+      "currency": "USD",
+      "unit": "from"
+    },
+    "availability": {
+      "status": "available",
+      "booking_required": true,
+      "lead_time": "Same day when slot is available"
+    },
+    "service_area": [
+      "Kinshasa"
+    ],
+    "rating": 4.8,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "e6806ca5-8eac-5f56-9f64-1e97873d5b9c",
+    "demo": true,
+    "status": "published",
+    "vertical": "service",
+    "title": "Nettoyage à domicile",
+    "slug": "nettoyage-à-domicile",
+    "description": "Nettoyage complet d’appartement, bureaux et espaces commerciaux sur rendez-vous.",
+    "seller": {
+      "id": "55c916d2-ed66-5610-bc72-fe0ebdac5e6d",
+      "name": "Atelier Mambo",
+      "type": "services"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Kintambo",
+      "country": "CD"
+    },
+    "tags": [
+      "cleaning",
+      "home"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/cleaning,home?lock=204",
+        "alt": "Nettoyage à domicile"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 25,
+      "currency": "USD",
+      "unit": "from"
+    },
+    "availability": {
+      "status": "available",
+      "booking_required": true,
+      "lead_time": "Same day when slot is available"
+    },
+    "service_area": [
+      "Kinshasa"
+    ],
+    "rating": 4.5,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "8b12a798-4384-53ad-afd7-70d90f379099",
+    "demo": true,
+    "status": "published",
+    "vertical": "service",
+    "title": "Peinture intérieure",
+    "slug": "peinture-intérieure",
+    "description": "Préparation des murs, peinture et finitions propres pour pièces et petits bureaux.",
+    "seller": {
+      "id": "a17b43cd-d879-507f-af35-568ff81c6681",
+      "name": "Kin Express",
+      "type": "services"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "painting",
+      "home-improvement"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/painter,painting?lock=205",
+        "alt": "Peinture intérieure"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 60,
+      "currency": "USD",
+      "unit": "from"
+    },
+    "availability": {
+      "status": "available",
+      "booking_required": true,
+      "lead_time": "Same day when slot is available"
+    },
+    "service_area": [
+      "Kinshasa"
+    ],
+    "rating": 4.6,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "aa1fe8d3-f8e6-5e4f-a304-b904c5228c08",
+    "demo": true,
+    "status": "published",
+    "vertical": "service",
+    "title": "Déménagement local",
+    "slug": "déménagement-local",
+    "description": "Aide au déménagement avec manutention et véhicule selon volume.",
+    "seller": {
+      "id": "6bdbb74a-625f-58ce-a471-172d9c2ec74a",
+      "name": "Maison Saphir",
+      "type": "hospitality"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "moving",
+      "delivery"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/moving,boxes?lock=206",
+        "alt": "Déménagement local"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 80,
+      "currency": "USD",
+      "unit": "from"
+    },
+    "availability": {
+      "status": "available",
+      "booking_required": true,
+      "lead_time": "Same day when slot is available"
+    },
+    "service_area": [
+      "Kinshasa"
+    ],
+    "rating": 4.7,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "b4004461-5c97-52b0-bdf5-b409a74519f1",
+    "demo": true,
+    "status": "published",
+    "vertical": "service",
+    "title": "Réparation smartphones",
+    "slug": "réparation-smartphones",
+    "description": "Diagnostic écran, batterie, connecteur de charge et problèmes logiciels courants.",
+    "seller": {
+      "id": "55c916d2-ed66-5610-bc72-fe0ebdac5e6d",
+      "name": "Atelier Mambo",
+      "type": "services"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Kintambo",
+      "country": "CD"
+    },
+    "tags": [
+      "phone-repair",
+      "smartphone"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/phone,repair,technician?lock=207",
+        "alt": "Réparation smartphones"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 20,
+      "currency": "USD",
+      "unit": "from"
+    },
+    "availability": {
+      "status": "available",
+      "booking_required": true,
+      "lead_time": "Same day when slot is available"
+    },
+    "service_area": [
+      "Kinshasa"
+    ],
+    "rating": 4.8,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "80cf895e-16bf-5ca7-8dc4-85fb1cf16921",
+    "demo": true,
+    "status": "published",
+    "vertical": "service",
+    "title": "Photographe événementiel",
+    "slug": "photographe-événementiel",
+    "description": "Couverture photo pour mariage, anniversaire, corporate et événements privés.",
+    "seller": {
+      "id": "a17b43cd-d879-507f-af35-568ff81c6681",
+      "name": "Kin Express",
+      "type": "services"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "photography",
+      "events"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/photographer,event?lock=208",
+        "alt": "Photographe événementiel"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 120,
+      "currency": "USD",
+      "unit": "from"
+    },
+    "availability": {
+      "status": "available",
+      "booking_required": true,
+      "lead_time": "Same day when slot is available"
+    },
+    "service_area": [
+      "Kinshasa"
+    ],
+    "rating": 4.5,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "92fc0798-415b-50ff-b4aa-7769f70f0158",
+    "demo": true,
+    "status": "published",
+    "vertical": "service",
+    "title": "Création de site web",
+    "slug": "création-de-site-web",
+    "description": "Sites vitrines rapides pour PME, commerces et professionnels avec livraison et formation.",
+    "seller": {
+      "id": "6bdbb74a-625f-58ce-a471-172d9c2ec74a",
+      "name": "Maison Saphir",
+      "type": "hospitality"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "web",
+      "design",
+      "business"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/web-design,developer?lock=209",
+        "alt": "Création de site web"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 250,
+      "currency": "USD",
+      "unit": "from"
+    },
+    "availability": {
+      "status": "available",
+      "booking_required": true,
+      "lead_time": "Same day when slot is available"
+    },
+    "service_area": [
+      "Kinshasa"
+    ],
+    "rating": 4.6,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "693b3add-4eb4-5576-ac27-f152884c5f8e",
+    "demo": true,
+    "status": "published",
+    "vertical": "service",
+    "title": "Montage vidéo réseaux sociaux",
+    "slug": "montage-vidéo-réseaux-sociaux",
+    "description": "Montage vertical pour TikTok, Instagram Reels, Facebook et contenus commerciaux.",
+    "seller": {
+      "id": "55c916d2-ed66-5610-bc72-fe0ebdac5e6d",
+      "name": "Atelier Mambo",
+      "type": "services"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Kintambo",
+      "country": "CD"
+    },
+    "tags": [
+      "video",
+      "social-media"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/video-editing,creator?lock=210",
+        "alt": "Montage vidéo réseaux sociaux"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 50,
+      "currency": "USD",
+      "unit": "from"
+    },
+    "availability": {
+      "status": "available",
+      "booking_required": true,
+      "lead_time": "Same day when slot is available"
+    },
+    "service_area": [
+      "Kinshasa"
+    ],
+    "rating": 4.7,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "821601d9-e4af-594a-b5a8-27502c9ed7da",
+    "demo": true,
+    "status": "published",
+    "vertical": "service",
+    "title": "Barber à domicile",
+    "slug": "barber-à-domicile",
+    "description": "Coupe homme, barbe et finition directement à domicile sur réservation.",
+    "seller": {
+      "id": "a17b43cd-d879-507f-af35-568ff81c6681",
+      "name": "Kin Express",
+      "type": "services"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "barber",
+      "grooming"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/barber,barbershop?lock=211",
+        "alt": "Barber à domicile"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 20,
+      "currency": "USD",
+      "unit": "from"
+    },
+    "availability": {
+      "status": "available",
+      "booking_required": true,
+      "lead_time": "Same day when slot is available"
+    },
+    "service_area": [
+      "Kinshasa"
+    ],
+    "rating": 4.8,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "c64c2c97-1270-57aa-9ae3-8fa786ffee06",
+    "demo": true,
+    "status": "published",
+    "vertical": "service",
+    "title": "Traiteur événementiel",
+    "slug": "traiteur-événementiel",
+    "description": "Menus pour réunions, anniversaires et événements privés, avec livraison possible.",
+    "seller": {
+      "id": "6bdbb74a-625f-58ce-a471-172d9c2ec74a",
+      "name": "Maison Saphir",
+      "type": "hospitality"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "catering",
+      "food"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/catering,food?lock=212",
+        "alt": "Traiteur événementiel"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 10,
+      "currency": "USD",
+      "unit": "from"
+    },
+    "availability": {
+      "status": "available",
+      "booking_required": true,
+      "lead_time": "Same day when slot is available"
+    },
+    "service_area": [
+      "Kinshasa"
+    ],
+    "rating": 4.5,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "2ddfdf61-e251-5474-adce-8ccf67b855c4",
+    "demo": true,
+    "status": "published",
+    "vertical": "service",
+    "title": "Lavage automobile mobile",
+    "slug": "lavage-automobile-mobile",
+    "description": "Nettoyage intérieur/extérieur directement chez le client.",
+    "seller": {
+      "id": "55c916d2-ed66-5610-bc72-fe0ebdac5e6d",
+      "name": "Atelier Mambo",
+      "type": "services"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Kintambo",
+      "country": "CD"
+    },
+    "tags": [
+      "car-wash",
+      "auto"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/car-wash,cleaning?lock=213",
+        "alt": "Lavage automobile mobile"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 18,
+      "currency": "USD",
+      "unit": "from"
+    },
+    "availability": {
+      "status": "available",
+      "booking_required": true,
+      "lead_time": "Same day when slot is available"
+    },
+    "service_area": [
+      "Kinshasa"
+    ],
+    "rating": 4.6,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "b9c17d11-6a01-5356-b3dd-ec6ec27d986f",
+    "demo": true,
+    "status": "published",
+    "vertical": "service",
+    "title": "Entretien groupe électrogène",
+    "slug": "entretien-groupe-électrogène",
+    "description": "Diagnostic et entretien préventif pour groupes résidentiels et petits commerces.",
+    "seller": {
+      "id": "a17b43cd-d879-507f-af35-568ff81c6681",
+      "name": "Kin Express",
+      "type": "services"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "generator",
+      "maintenance"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/generator,technician?lock=214",
+        "alt": "Entretien groupe électrogène"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 55,
+      "currency": "USD",
+      "unit": "from"
+    },
+    "availability": {
+      "status": "available",
+      "booking_required": true,
+      "lead_time": "Same day when slot is available"
+    },
+    "service_area": [
+      "Kinshasa"
+    ],
+    "rating": 4.7,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "4e707f58-7358-5107-83e5-8f4336b9664a",
+    "demo": true,
+    "status": "published",
+    "vertical": "service",
+    "title": "Livraison express Kinshasa",
+    "slug": "livraison-express-kinshasa",
+    "description": "Courses locales et petites livraisons avec suivi par téléphone/WhatsApp.",
+    "seller": {
+      "id": "6bdbb74a-625f-58ce-a471-172d9c2ec74a",
+      "name": "Maison Saphir",
+      "type": "hospitality"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "delivery",
+      "courier"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/delivery,courier?lock=215",
+        "alt": "Livraison express Kinshasa"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 8,
+      "currency": "USD",
+      "unit": "from"
+    },
+    "availability": {
+      "status": "available",
+      "booking_required": true,
+      "lead_time": "Same day when slot is available"
+    },
+    "service_area": [
+      "Kinshasa"
+    ],
+    "rating": 4.8,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  }
+]

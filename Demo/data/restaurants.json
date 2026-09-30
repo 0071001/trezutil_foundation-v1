@@ -1,0 +1,919 @@
+[
+  {
+    "id": "a963e4aa-5f1d-547e-a389-dfc4ebd4449f",
+    "demo": true,
+    "status": "published",
+    "vertical": "restaurant",
+    "title": "Boma Kitchen",
+    "slug": "boma-kitchen",
+    "description": "Cuisine congolaise contemporaine, plats du jour et grillades dans une ambiance conviviale.",
+    "seller": {
+      "id": "48dad7ab-c160-5546-a5c0-72762b9be480",
+      "name": "Palmier Rouge",
+      "type": "restaurant"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Bandalungwa",
+      "country": "CD"
+    },
+    "tags": [
+      "restaurant",
+      "congolese-food"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/restaurant,congolese-food?lock=301",
+        "alt": "Boma Kitchen"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 18,
+      "currency": "USD",
+      "unit": "avg_person"
+    },
+    "cuisine": "Congolaise",
+    "opening_hours": {
+      "monday": "11:00-22:00",
+      "tuesday": "11:00-22:00",
+      "wednesday": "11:00-22:00",
+      "thursday": "11:00-22:00",
+      "friday": "11:00-23:00",
+      "saturday": "11:00-23:00",
+      "sunday": "12:00-21:00"
+    },
+    "reservation": {
+      "supported": true,
+      "party_sizes": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    "rating": 4.3,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "2d8362f9-50ab-5ff1-b837-add4f31eb684",
+    "demo": true,
+    "status": "published",
+    "vertical": "restaurant",
+    "title": "Palmier Rouge",
+    "slug": "palmier-rouge",
+    "description": "Cuisine urbaine moderne, burgers maison, bowls et plats du soir.",
+    "seller": {
+      "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+      "name": "Rivière Suites",
+      "type": "hotel"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "restaurant",
+      "food"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/restaurant,food?lock=302",
+        "alt": "Palmier Rouge"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 15,
+      "currency": "USD",
+      "unit": "avg_person"
+    },
+    "cuisine": "Fusion",
+    "opening_hours": {
+      "monday": "11:00-22:00",
+      "tuesday": "11:00-22:00",
+      "wednesday": "11:00-22:00",
+      "thursday": "11:00-22:00",
+      "friday": "11:00-23:00",
+      "saturday": "11:00-23:00",
+      "sunday": "12:00-21:00"
+    },
+    "reservation": {
+      "supported": true,
+      "party_sizes": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    "rating": 4.4,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "42079082-e5bb-5444-b1e7-a0613c826e93",
+    "demo": true,
+    "status": "published",
+    "vertical": "restaurant",
+    "title": "Maison Griotte",
+    "slug": "maison-griotte",
+    "description": "Carte familiale avec spécialités africaines, jus frais et desserts maison.",
+    "seller": {
+      "id": "85cc99f9-e7fa-5e97-8fad-0ce9fb7ac06c",
+      "name": "Boma Kitchen",
+      "type": "restaurant"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "restaurant",
+      "african-food"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/restaurant,african-food?lock=303",
+        "alt": "Maison Griotte"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 14,
+      "currency": "USD",
+      "unit": "avg_person"
+    },
+    "cuisine": "Africaine",
+    "opening_hours": {
+      "monday": "11:00-22:00",
+      "tuesday": "11:00-22:00",
+      "wednesday": "11:00-22:00",
+      "thursday": "11:00-22:00",
+      "friday": "11:00-23:00",
+      "saturday": "11:00-23:00",
+      "sunday": "12:00-21:00"
+    },
+    "reservation": {
+      "supported": true,
+      "party_sizes": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    "rating": 4.5,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "acc52990-0fa9-5ee5-90b0-0041c6e1d1dc",
+    "demo": true,
+    "status": "published",
+    "vertical": "restaurant",
+    "title": "Le Baobab Table",
+    "slug": "le-baobab-table",
+    "description": "Déjeuner d’affaires, plats braisés et service à table dans un cadre calme.",
+    "seller": {
+      "id": "48dad7ab-c160-5546-a5c0-72762b9be480",
+      "name": "Palmier Rouge",
+      "type": "restaurant"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "restaurant",
+      "dining"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/restaurant,dining?lock=304",
+        "alt": "Le Baobab Table"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 22,
+      "currency": "USD",
+      "unit": "avg_person"
+    },
+    "cuisine": "Africaine",
+    "opening_hours": {
+      "monday": "11:00-22:00",
+      "tuesday": "11:00-22:00",
+      "wednesday": "11:00-22:00",
+      "thursday": "11:00-22:00",
+      "friday": "11:00-23:00",
+      "saturday": "11:00-23:00",
+      "sunday": "12:00-21:00"
+    },
+    "reservation": {
+      "supported": true,
+      "party_sizes": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    "rating": 4.6,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "2501aa87-4f32-5ce8-8a51-d2ecaf864804",
+    "demo": true,
+    "status": "published",
+    "vertical": "restaurant",
+    "title": "Chez Mama Solange",
+    "slug": "chez-mama-solange",
+    "description": "Cuisine traditionnelle simple et généreuse, idéale pour déjeuner rapidement.",
+    "seller": {
+      "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+      "name": "Rivière Suites",
+      "type": "hotel"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Limete",
+      "country": "CD"
+    },
+    "tags": [
+      "restaurant",
+      "local-food"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/restaurant,local-food?lock=305",
+        "alt": "Chez Mama Solange"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 10,
+      "currency": "USD",
+      "unit": "avg_person"
+    },
+    "cuisine": "Congolaise",
+    "opening_hours": {
+      "monday": "11:00-22:00",
+      "tuesday": "11:00-22:00",
+      "wednesday": "11:00-22:00",
+      "thursday": "11:00-22:00",
+      "friday": "11:00-23:00",
+      "saturday": "11:00-23:00",
+      "sunday": "12:00-21:00"
+    },
+    "reservation": {
+      "supported": true,
+      "party_sizes": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    "rating": 4.7,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "1b99d8f0-93de-5260-874a-8493c04669de",
+    "demo": true,
+    "status": "published",
+    "vertical": "restaurant",
+    "title": "Café Fleuve",
+    "slug": "café-fleuve",
+    "description": "Café, pâtisseries, brunch et petite restauration pour réunions ou rendez-vous.",
+    "seller": {
+      "id": "85cc99f9-e7fa-5e97-8fad-0ce9fb7ac06c",
+      "name": "Boma Kitchen",
+      "type": "restaurant"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "cafe",
+      "brunch",
+      "restaurant"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/cafe,brunch,restaurant?lock=306",
+        "alt": "Café Fleuve"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 12,
+      "currency": "USD",
+      "unit": "avg_person"
+    },
+    "cuisine": "Café / brunch",
+    "opening_hours": {
+      "monday": "11:00-22:00",
+      "tuesday": "11:00-22:00",
+      "wednesday": "11:00-22:00",
+      "thursday": "11:00-22:00",
+      "friday": "11:00-23:00",
+      "saturday": "11:00-23:00",
+      "sunday": "12:00-21:00"
+    },
+    "reservation": {
+      "supported": true,
+      "party_sizes": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    "rating": 4.2,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "c81de379-d4ae-5a78-a1b9-63028037737e",
+    "demo": true,
+    "status": "published",
+    "vertical": "restaurant",
+    "title": "Terrasse Kasa‑Vubu",
+    "slug": "terrasse-kasa‑vubu",
+    "description": "Grillades, poisson et accompagnements avec espace extérieur.",
+    "seller": {
+      "id": "48dad7ab-c160-5546-a5c0-72762b9be480",
+      "name": "Palmier Rouge",
+      "type": "restaurant"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Kintambo",
+      "country": "CD"
+    },
+    "tags": [
+      "restaurant",
+      "grill"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/restaurant,grill?lock=307",
+        "alt": "Terrasse Kasa‑Vubu"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 17,
+      "currency": "USD",
+      "unit": "avg_person"
+    },
+    "cuisine": "Grillades",
+    "opening_hours": {
+      "monday": "11:00-22:00",
+      "tuesday": "11:00-22:00",
+      "wednesday": "11:00-22:00",
+      "thursday": "11:00-22:00",
+      "friday": "11:00-23:00",
+      "saturday": "11:00-23:00",
+      "sunday": "12:00-21:00"
+    },
+    "reservation": {
+      "supported": true,
+      "party_sizes": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    "rating": 4.3,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "0eb5c550-489a-5493-be98-01aea978cd19",
+    "demo": true,
+    "status": "published",
+    "vertical": "restaurant",
+    "title": "Soleil d’Asie",
+    "slug": "soleil-d’asie",
+    "description": "Wok, nouilles, riz sauté et plats inspirés de la cuisine asiatique.",
+    "seller": {
+      "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+      "name": "Rivière Suites",
+      "type": "hotel"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "asian",
+      "restaurant",
+      "food"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/asian,restaurant,food?lock=308",
+        "alt": "Soleil d’Asie"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 16,
+      "currency": "USD",
+      "unit": "avg_person"
+    },
+    "cuisine": "Asiatique",
+    "opening_hours": {
+      "monday": "11:00-22:00",
+      "tuesday": "11:00-22:00",
+      "wednesday": "11:00-22:00",
+      "thursday": "11:00-22:00",
+      "friday": "11:00-23:00",
+      "saturday": "11:00-23:00",
+      "sunday": "12:00-21:00"
+    },
+    "reservation": {
+      "supported": true,
+      "party_sizes": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    "rating": 4.4,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "8c112800-b990-5d6a-9cc0-762b3cf328eb",
+    "demo": true,
+    "status": "published",
+    "vertical": "restaurant",
+    "title": "La Table des Arts",
+    "slug": "la-table-des-arts",
+    "description": "Restaurant de quartier avec menu saisonnier et assiettes à partager.",
+    "seller": {
+      "id": "85cc99f9-e7fa-5e97-8fad-0ce9fb7ac06c",
+      "name": "Boma Kitchen",
+      "type": "restaurant"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "restaurant",
+      "food"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/restaurant,food?lock=309",
+        "alt": "La Table des Arts"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 20,
+      "currency": "USD",
+      "unit": "avg_person"
+    },
+    "cuisine": "Fusion",
+    "opening_hours": {
+      "monday": "11:00-22:00",
+      "tuesday": "11:00-22:00",
+      "wednesday": "11:00-22:00",
+      "thursday": "11:00-22:00",
+      "friday": "11:00-23:00",
+      "saturday": "11:00-23:00",
+      "sunday": "12:00-21:00"
+    },
+    "reservation": {
+      "supported": true,
+      "party_sizes": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    "rating": 4.5,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "03693100-c83c-5ad8-87cc-5b2fc80e8c3c",
+    "demo": true,
+    "status": "published",
+    "vertical": "restaurant",
+    "title": "Mango Rooftop",
+    "slug": "mango-rooftop",
+    "description": "Cuisine légère, mocktails et vue urbaine pour déjeuner ou afterwork.",
+    "seller": {
+      "id": "48dad7ab-c160-5546-a5c0-72762b9be480",
+      "name": "Palmier Rouge",
+      "type": "restaurant"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "rooftop",
+      "restaurant"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/rooftop,restaurant?lock=310",
+        "alt": "Mango Rooftop"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 24,
+      "currency": "USD",
+      "unit": "avg_person"
+    },
+    "cuisine": "Contemporaine",
+    "opening_hours": {
+      "monday": "11:00-22:00",
+      "tuesday": "11:00-22:00",
+      "wednesday": "11:00-22:00",
+      "thursday": "11:00-22:00",
+      "friday": "11:00-23:00",
+      "saturday": "11:00-23:00",
+      "sunday": "12:00-21:00"
+    },
+    "reservation": {
+      "supported": true,
+      "party_sizes": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    "rating": 4.6,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "3ce5cba6-adc9-51a1-84dc-995f13b1dd7c",
+    "demo": true,
+    "status": "published",
+    "vertical": "restaurant",
+    "title": "Bol & Basilic",
+    "slug": "bol-&-basilic",
+    "description": "Salades, bowls et plats rapides, option végétarienne disponible.",
+    "seller": {
+      "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+      "name": "Rivière Suites",
+      "type": "hotel"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Limete",
+      "country": "CD"
+    },
+    "tags": [
+      "healthy",
+      "restaurant"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/healthy,restaurant?lock=311",
+        "alt": "Bol & Basilic"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 13,
+      "currency": "USD",
+      "unit": "avg_person"
+    },
+    "cuisine": "Healthy",
+    "opening_hours": {
+      "monday": "11:00-22:00",
+      "tuesday": "11:00-22:00",
+      "wednesday": "11:00-22:00",
+      "thursday": "11:00-22:00",
+      "friday": "11:00-23:00",
+      "saturday": "11:00-23:00",
+      "sunday": "12:00-21:00"
+    },
+    "reservation": {
+      "supported": true,
+      "party_sizes": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    "rating": 4.7,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "081aeb93-13a3-529d-8324-5b2344782485",
+    "demo": true,
+    "status": "published",
+    "vertical": "restaurant",
+    "title": "Le Patio Vert",
+    "slug": "le-patio-vert",
+    "description": "Cuisine familiale, espace jardin et menus de groupe sur réservation.",
+    "seller": {
+      "id": "85cc99f9-e7fa-5e97-8fad-0ce9fb7ac06c",
+      "name": "Boma Kitchen",
+      "type": "restaurant"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "restaurant",
+      "garden"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/restaurant,garden?lock=312",
+        "alt": "Le Patio Vert"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 19,
+      "currency": "USD",
+      "unit": "avg_person"
+    },
+    "cuisine": "Africaine",
+    "opening_hours": {
+      "monday": "11:00-22:00",
+      "tuesday": "11:00-22:00",
+      "wednesday": "11:00-22:00",
+      "thursday": "11:00-22:00",
+      "friday": "11:00-23:00",
+      "saturday": "11:00-23:00",
+      "sunday": "12:00-21:00"
+    },
+    "reservation": {
+      "supported": true,
+      "party_sizes": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    "rating": 4.2,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "ad6c5042-945f-54c5-9091-febccf660ebe",
+    "demo": true,
+    "status": "published",
+    "vertical": "restaurant",
+    "title": "Kin Burger Lab",
+    "slug": "kin-burger-lab",
+    "description": "Burgers artisanaux, poulet croustillant et frites maison.",
+    "seller": {
+      "id": "48dad7ab-c160-5546-a5c0-72762b9be480",
+      "name": "Palmier Rouge",
+      "type": "restaurant"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Bandalungwa",
+      "country": "CD"
+    },
+    "tags": [
+      "burger",
+      "restaurant"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/burger,restaurant?lock=313",
+        "alt": "Kin Burger Lab"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 11,
+      "currency": "USD",
+      "unit": "avg_person"
+    },
+    "cuisine": "Fast casual",
+    "opening_hours": {
+      "monday": "11:00-22:00",
+      "tuesday": "11:00-22:00",
+      "wednesday": "11:00-22:00",
+      "thursday": "11:00-22:00",
+      "friday": "11:00-23:00",
+      "saturday": "11:00-23:00",
+      "sunday": "12:00-21:00"
+    },
+    "reservation": {
+      "supported": true,
+      "party_sizes": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    "rating": 4.3,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "45aeb3f8-c048-5541-9411-8acbf9186fe7",
+    "demo": true,
+    "status": "published",
+    "vertical": "restaurant",
+    "title": "Saveurs du Marché",
+    "slug": "saveurs-du-marché",
+    "description": "Plats du jour inspirés des produits de marché et recettes locales.",
+    "seller": {
+      "id": "f6ce1868-e905-5511-85b6-19f112d717b2",
+      "name": "Rivière Suites",
+      "type": "hotel"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Masina",
+      "country": "CD"
+    },
+    "tags": [
+      "restaurant",
+      "local-food"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/restaurant,local-food?lock=314",
+        "alt": "Saveurs du Marché"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 9,
+      "currency": "USD",
+      "unit": "avg_person"
+    },
+    "cuisine": "Congolaise",
+    "opening_hours": {
+      "monday": "11:00-22:00",
+      "tuesday": "11:00-22:00",
+      "wednesday": "11:00-22:00",
+      "thursday": "11:00-22:00",
+      "friday": "11:00-23:00",
+      "saturday": "11:00-23:00",
+      "sunday": "12:00-21:00"
+    },
+    "reservation": {
+      "supported": true,
+      "party_sizes": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    "rating": 4.4,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "ccc36d51-451b-5cb5-86b5-1863a169dc61",
+    "demo": true,
+    "status": "published",
+    "vertical": "restaurant",
+    "title": "Noki Pizzeria",
+    "slug": "noki-pizzeria",
+    "description": "Pizzas au four, pâtes fraîches et options à emporter.",
+    "seller": {
+      "id": "85cc99f9-e7fa-5e97-8fad-0ce9fb7ac06c",
+      "name": "Boma Kitchen",
+      "type": "restaurant"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "pizza",
+      "restaurant"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/pizza,restaurant?lock=315",
+        "alt": "Noki Pizzeria"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 15,
+      "currency": "USD",
+      "unit": "avg_person"
+    },
+    "cuisine": "Italienne",
+    "opening_hours": {
+      "monday": "11:00-22:00",
+      "tuesday": "11:00-22:00",
+      "wednesday": "11:00-22:00",
+      "thursday": "11:00-22:00",
+      "friday": "11:00-23:00",
+      "saturday": "11:00-23:00",
+      "sunday": "12:00-21:00"
+    },
+    "reservation": {
+      "supported": true,
+      "party_sizes": [
+        2,
+        4,
+        6,
+        8
+      ]
+    },
+    "rating": 4.5,
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  }
+]

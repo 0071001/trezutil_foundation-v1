@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Trezutil Demo Listing",
+  "type": "object",
+  "required": [
+    "id",
+    "title",
+    "description",
+    "vertical",
+    "seller",
+    "location",
+    "images",
+    "demo"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "demo": {
+      "type": "boolean"
+    },
+    "vertical": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "price": {
+      "type": "object"
+    },
+    "seller": {
+      "type": "object"
+    },
+    "location": {
+      "type": "object"
+    },
+    "images": {
+      "type": "array"
+    },
+    "tags": {
+      "type": "array"
+    }
+  }
+}

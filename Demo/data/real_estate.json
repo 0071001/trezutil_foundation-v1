@@ -1,0 +1,790 @@
+[
+  {
+    "id": "227121e1-3406-5f5e-8dbe-6800818b0127",
+    "demo": true,
+    "status": "published",
+    "vertical": "real_estate",
+    "title": "Appartement 2 chambres – Gombe",
+    "slug": "appartement-2-chambres-–-gombe",
+    "description": "Appartement lumineux de 2 chambres avec salon, cuisine équipée et parking sécurisé.",
+    "seller": {
+      "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+      "name": "Congo Horizon Homes",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "apartment",
+      "interior"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/apartment,interior?lock=501",
+        "alt": "Appartement 2 chambres – Gombe"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 1200,
+      "currency": "USD",
+      "unit": "month"
+    },
+    "transaction_type": "rent",
+    "bedrooms": 2,
+    "bathrooms": 2,
+    "property_type": "residential",
+    "availability": {
+      "status": "available"
+    },
+    "features": [
+      "Parking",
+      "Sécurité",
+      "Accès routier"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "f6daacfd-7389-534d-8305-5f8ae7fc927f",
+    "demo": true,
+    "status": "published",
+    "vertical": "real_estate",
+    "title": "Appartement 3 chambres – Ngaliema",
+    "slug": "appartement-3-chambres-–-ngaliema",
+    "description": "Grand appartement familial avec trois chambres, balcon et espace salon.",
+    "seller": {
+      "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+      "name": "Kin Habitat",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "apartment",
+      "home"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/apartment,home?lock=502",
+        "alt": "Appartement 3 chambres – Ngaliema"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 1500,
+      "currency": "USD",
+      "unit": "month"
+    },
+    "transaction_type": "rent",
+    "bedrooms": 3,
+    "bathrooms": 2,
+    "property_type": "residential",
+    "availability": {
+      "status": "available"
+    },
+    "features": [
+      "Parking",
+      "Sécurité"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "695bfb49-3ef9-528d-b48a-f75ca98f75bc",
+    "demo": true,
+    "status": "published",
+    "vertical": "real_estate",
+    "title": "Maison 4 chambres avec jardin – Mont‑Ngafula",
+    "slug": "maison-4-chambres-avec-jardin-–-mont‑ngafula",
+    "description": "Maison familiale avec jardin, cour fermée et dépendance.",
+    "seller": {
+      "id": "8e25423c-bea3-51ea-adb6-c063f2973b2d",
+      "name": "Urban Key RDC",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Mont-Ngafula",
+      "country": "CD"
+    },
+    "tags": [
+      "house",
+      "garden"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/house,garden?lock=503",
+        "alt": "Maison 4 chambres avec jardin – Mont‑Ngafula"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 185000,
+      "currency": "USD",
+      "unit": "sale"
+    },
+    "transaction_type": "sale",
+    "bedrooms": 4,
+    "bathrooms": 3,
+    "property_type": "residential",
+    "availability": {
+      "status": "available"
+    },
+    "features": [
+      "Parking",
+      "Sécurité",
+      "Accès routier"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "0bb520e9-139c-581f-aa26-55da5e2c3439",
+    "demo": true,
+    "status": "published",
+    "vertical": "real_estate",
+    "title": "Villa moderne – Binza",
+    "slug": "villa-moderne-–-binza",
+    "description": "Villa contemporaine avec grand séjour, chambres climatisées et parking.",
+    "seller": {
+      "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+      "name": "Congo Horizon Homes",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Binza",
+      "country": "CD"
+    },
+    "tags": [
+      "villa",
+      "house"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/villa,house?lock=504",
+        "alt": "Villa moderne – Binza"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 2600,
+      "currency": "USD",
+      "unit": "month"
+    },
+    "transaction_type": "rent",
+    "bedrooms": 4,
+    "bathrooms": 3,
+    "property_type": "residential",
+    "availability": {
+      "status": "available"
+    },
+    "features": [
+      "Parking",
+      "Sécurité"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "0893967e-a717-5bb6-8b91-53f5e00dd17e",
+    "demo": true,
+    "status": "published",
+    "vertical": "real_estate",
+    "title": "Studio meublé – Gombe",
+    "slug": "studio-meublé-–-gombe",
+    "description": "Studio prêt à habiter pour professionnel ou séjour moyen terme.",
+    "seller": {
+      "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+      "name": "Kin Habitat",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "studio",
+      "apartment"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/studio,apartment?lock=505",
+        "alt": "Studio meublé – Gombe"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 850,
+      "currency": "USD",
+      "unit": "month"
+    },
+    "transaction_type": "rent",
+    "bedrooms": 1,
+    "bathrooms": 1,
+    "property_type": "residential",
+    "availability": {
+      "status": "available"
+    },
+    "features": [
+      "Parking",
+      "Sécurité",
+      "Accès routier"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "c60f4b99-c779-5dba-9c19-d600cc61957c",
+    "demo": true,
+    "status": "published",
+    "vertical": "real_estate",
+    "title": "Appartement standing – Kintambo",
+    "slug": "appartement-standing-–-kintambo",
+    "description": "Deux chambres, cuisine ouverte et espace de vie rénové.",
+    "seller": {
+      "id": "8e25423c-bea3-51ea-adb6-c063f2973b2d",
+      "name": "Urban Key RDC",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Kintambo",
+      "country": "CD"
+    },
+    "tags": [
+      "apartment",
+      "interior"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/apartment,interior?lock=506",
+        "alt": "Appartement standing – Kintambo"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 1100,
+      "currency": "USD",
+      "unit": "month"
+    },
+    "transaction_type": "rent",
+    "bedrooms": 2,
+    "bathrooms": 2,
+    "property_type": "residential",
+    "availability": {
+      "status": "available"
+    },
+    "features": [
+      "Parking",
+      "Sécurité"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "6fbf8230-c472-57c1-a9c0-3ef0d06c6a8a",
+    "demo": true,
+    "status": "published",
+    "vertical": "real_estate",
+    "title": "Maison 3 chambres – Limete",
+    "slug": "maison-3-chambres-–-limete",
+    "description": "Maison résidentielle avec cour, portail et espace pour petite famille.",
+    "seller": {
+      "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+      "name": "Congo Horizon Homes",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Limete",
+      "country": "CD"
+    },
+    "tags": [
+      "house",
+      "residential"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/house,residential?lock=507",
+        "alt": "Maison 3 chambres – Limete"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 140000,
+      "currency": "USD",
+      "unit": "sale"
+    },
+    "transaction_type": "sale",
+    "bedrooms": 3,
+    "bathrooms": 2,
+    "property_type": "residential",
+    "availability": {
+      "status": "available"
+    },
+    "features": [
+      "Parking",
+      "Sécurité",
+      "Accès routier"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "9de16fd3-9920-59b1-9295-2b4e38e40944",
+    "demo": true,
+    "status": "published",
+    "vertical": "real_estate",
+    "title": "Terrain résidentiel – Kimwenza",
+    "slug": "terrain-résidentiel-–-kimwenza",
+    "description": "Parcelle résidentielle pour projet familial, accès routier à proximité.",
+    "seller": {
+      "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+      "name": "Kin Habitat",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Kimwenza",
+      "country": "CD"
+    },
+    "tags": [
+      "land",
+      "property"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/land,property?lock=508",
+        "alt": "Terrain résidentiel – Kimwenza"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 45000,
+      "currency": "USD",
+      "unit": "sale"
+    },
+    "transaction_type": "sale",
+    "bedrooms": 0,
+    "bathrooms": 0,
+    "property_type": "commercial/land",
+    "availability": {
+      "status": "available"
+    },
+    "features": [
+      "Parking",
+      "Sécurité"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "9c24a818-a9db-53ca-b21d-f50575e10def",
+    "demo": true,
+    "status": "published",
+    "vertical": "real_estate",
+    "title": "Bureau commercial – Gombe",
+    "slug": "bureau-commercial-–-gombe",
+    "description": "Plateau de bureaux pour PME avec espace d’accueil et salle de réunion.",
+    "seller": {
+      "id": "8e25423c-bea3-51ea-adb6-c063f2973b2d",
+      "name": "Urban Key RDC",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "office",
+      "commercial"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/office,commercial?lock=509",
+        "alt": "Bureau commercial – Gombe"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 2200,
+      "currency": "USD",
+      "unit": "month"
+    },
+    "transaction_type": "rent",
+    "bedrooms": 0,
+    "bathrooms": 2,
+    "property_type": "commercial/land",
+    "availability": {
+      "status": "available"
+    },
+    "features": [
+      "Parking",
+      "Sécurité",
+      "Accès routier"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "a11433c3-ab98-5bde-87b4-35e26f314d84",
+    "demo": true,
+    "status": "published",
+    "vertical": "real_estate",
+    "title": "Appartement familial – Bandalungwa",
+    "slug": "appartement-familial-–-bandalungwa",
+    "description": "Trois chambres, deux salles de bain et cuisine séparée.",
+    "seller": {
+      "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+      "name": "Congo Horizon Homes",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Bandalungwa",
+      "country": "CD"
+    },
+    "tags": [
+      "apartment",
+      "family"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/apartment,family?lock=510",
+        "alt": "Appartement familial – Bandalungwa"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 1000,
+      "currency": "USD",
+      "unit": "month"
+    },
+    "transaction_type": "rent",
+    "bedrooms": 3,
+    "bathrooms": 2,
+    "property_type": "residential",
+    "availability": {
+      "status": "available"
+    },
+    "features": [
+      "Parking",
+      "Sécurité"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "7c3fcf0c-dd76-59bf-a406-8fefb9f02d05",
+    "demo": true,
+    "status": "published",
+    "vertical": "real_estate",
+    "title": "Duplex 3 chambres – Ma Campagne",
+    "slug": "duplex-3-chambres-–-ma-campagne",
+    "description": "Duplex avec terrasse, vue dégagée et parking privé.",
+    "seller": {
+      "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+      "name": "Kin Habitat",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ma Campagne",
+      "country": "CD"
+    },
+    "tags": [
+      "duplex",
+      "house"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/duplex,house?lock=511",
+        "alt": "Duplex 3 chambres – Ma Campagne"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 210000,
+      "currency": "USD",
+      "unit": "sale"
+    },
+    "transaction_type": "sale",
+    "bedrooms": 3,
+    "bathrooms": 3,
+    "property_type": "residential",
+    "availability": {
+      "status": "available"
+    },
+    "features": [
+      "Parking",
+      "Sécurité",
+      "Accès routier"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "64969e51-0ac6-582a-8334-5b90a3ad38e3",
+    "demo": true,
+    "status": "published",
+    "vertical": "real_estate",
+    "title": "Maison à rénover – Kalamu",
+    "slug": "maison-à-rénover-–-kalamu",
+    "description": "Maison ancienne à rénover, adaptée à un projet résidentiel ou mixte.",
+    "seller": {
+      "id": "8e25423c-bea3-51ea-adb6-c063f2973b2d",
+      "name": "Urban Key RDC",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Kalamu",
+      "country": "CD"
+    },
+    "tags": [
+      "house",
+      "renovation"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/house,renovation?lock=512",
+        "alt": "Maison à rénover – Kalamu"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 90000,
+      "currency": "USD",
+      "unit": "sale"
+    },
+    "transaction_type": "sale",
+    "bedrooms": 3,
+    "bathrooms": 2,
+    "property_type": "residential",
+    "availability": {
+      "status": "available"
+    },
+    "features": [
+      "Parking",
+      "Sécurité"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "6f25ce39-ec2c-5ddf-ad71-58582bf72b10",
+    "demo": true,
+    "status": "published",
+    "vertical": "real_estate",
+    "title": "Local commercial – Masina",
+    "slug": "local-commercial-–-masina",
+    "description": "Local en bordure d’axe passant, adapté boutique, agence ou service.",
+    "seller": {
+      "id": "38902597-7f46-562a-a70a-3080eac4acf6",
+      "name": "Congo Horizon Homes",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Masina",
+      "country": "CD"
+    },
+    "tags": [
+      "shop",
+      "commercial"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/shop,commercial?lock=513",
+        "alt": "Local commercial – Masina"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 750,
+      "currency": "USD",
+      "unit": "month"
+    },
+    "transaction_type": "rent",
+    "bedrooms": 0,
+    "bathrooms": 1,
+    "property_type": "commercial/land",
+    "availability": {
+      "status": "available"
+    },
+    "features": [
+      "Parking",
+      "Sécurité",
+      "Accès routier"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "a1906041-54fa-5bf5-990b-41b5d5dae875",
+    "demo": true,
+    "status": "published",
+    "vertical": "real_estate",
+    "title": "Appartement neuf – Limete Résidentiel",
+    "slug": "appartement-neuf-–-limete-résidentiel",
+    "description": "Deux chambres, finition moderne et résidence sécurisée.",
+    "seller": {
+      "id": "6222b919-2f93-5e49-bd95-cd71c26e56f1",
+      "name": "Kin Habitat",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Limete",
+      "country": "CD"
+    },
+    "tags": [
+      "new-apartment",
+      "interior"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/new-apartment,interior?lock=514",
+        "alt": "Appartement neuf – Limete Résidentiel"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 1250,
+      "currency": "USD",
+      "unit": "month"
+    },
+    "transaction_type": "rent",
+    "bedrooms": 2,
+    "bathrooms": 2,
+    "property_type": "residential",
+    "availability": {
+      "status": "available"
+    },
+    "features": [
+      "Parking",
+      "Sécurité"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "e186f41d-26af-5ac6-9490-93d0bb9d708b",
+    "demo": true,
+    "status": "published",
+    "vertical": "real_estate",
+    "title": "Villa familiale – Ngaliema",
+    "slug": "villa-familiale-–-ngaliema",
+    "description": "Villa de cinq chambres avec grand jardin et espace de stationnement.",
+    "seller": {
+      "id": "8e25423c-bea3-51ea-adb6-c063f2973b2d",
+      "name": "Urban Key RDC",
+      "type": "real_estate"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "villa",
+      "garden"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/villa,garden?lock=515",
+        "alt": "Villa familiale – Ngaliema"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 320000,
+      "currency": "USD",
+      "unit": "sale"
+    },
+    "transaction_type": "sale",
+    "bedrooms": 5,
+    "bathrooms": 4,
+    "property_type": "residential",
+    "availability": {
+      "status": "available"
+    },
+    "features": [
+      "Parking",
+      "Sécurité",
+      "Accès routier"
+    ],
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  }
+]

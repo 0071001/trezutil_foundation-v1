@@ -1,0 +1,812 @@
+[
+  {
+    "id": "0a2e938d-34f3-5174-8bc5-4316482444b5",
+    "demo": true,
+    "status": "published",
+    "vertical": "product",
+    "title": "iPhone 15 128 Go",
+    "slug": "iphone-15-128-go",
+    "description": "Smartphone Apple récent, écran lumineux, USB‑C et excellent état. Garantie démo 6 mois.",
+    "seller": {
+      "id": "21582a51-0989-59f4-b50d-ce7618a20633",
+      "name": "Kivu Digital Store",
+      "type": "retail"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "smartphone",
+      "apple",
+      "iphone"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/iphone,smartphone?lock=101",
+        "alt": "iPhone 15 128 Go"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 699,
+      "currency": "USD",
+      "unit": null
+    },
+    "availability": {
+      "status": "in_stock",
+      "quantity": 6
+    },
+    "delivery": {
+      "available": true,
+      "estimated": "Today / tomorrow"
+    },
+    "attributes": {
+      "condition": "new",
+      "warranty": "Demo 6 months"
+    },
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "9f543323-180e-5264-acd0-f766e11f99da",
+    "demo": true,
+    "status": "published",
+    "vertical": "product",
+    "title": "Samsung Galaxy S24 256 Go",
+    "slug": "samsung-galaxy-s24-256-go",
+    "description": "Flagship Android compact avec écran AMOLED, excellente photo et batterie longue durée.",
+    "seller": {
+      "id": "ed9b7d45-6e15-5065-97ca-118c9bcbf20e",
+      "name": "Mosaïque Tech",
+      "type": "retail"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Limete",
+      "country": "CD"
+    },
+    "tags": [
+      "smartphone",
+      "samsung",
+      "android"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/samsung,smartphone?lock=102",
+        "alt": "Samsung Galaxy S24 256 Go"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 749,
+      "currency": "USD",
+      "unit": null
+    },
+    "availability": {
+      "status": "in_stock",
+      "quantity": 6
+    },
+    "delivery": {
+      "available": true,
+      "estimated": "Today / tomorrow"
+    },
+    "attributes": {
+      "condition": "new",
+      "warranty": "Demo 6 months"
+    },
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "5b1efcf0-6a11-53fb-a47f-915e12c462af",
+    "demo": true,
+    "status": "published",
+    "vertical": "product",
+    "title": "Google Pixel 8 128 Go",
+    "slug": "google-pixel-8-128-go",
+    "description": "Smartphone photo avec traitement d’image avancé et expérience Android fluide.",
+    "seller": {
+      "id": "19d48984-14d5-5d43-b808-6ed4786e2131",
+      "name": "Nova Home",
+      "type": "retail"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "smartphone",
+      "pixel",
+      "android"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/google,pixel,smartphone?lock=103",
+        "alt": "Google Pixel 8 128 Go"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 529,
+      "currency": "USD",
+      "unit": null
+    },
+    "availability": {
+      "status": "in_stock",
+      "quantity": 5
+    },
+    "delivery": {
+      "available": true,
+      "estimated": "Today / tomorrow"
+    },
+    "attributes": {
+      "condition": "new",
+      "warranty": "Demo 6 months"
+    },
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "f5e21683-09ff-5422-9806-f38e688c44f5",
+    "demo": true,
+    "status": "published",
+    "vertical": "product",
+    "title": "MacBook Air M2 13 pouces",
+    "slug": "macbook-air-m2-13-pouces",
+    "description": "Ordinateur fin et silencieux pour études, bureautique, création légère et mobilité.",
+    "seller": {
+      "id": "21582a51-0989-59f4-b50d-ce7618a20633",
+      "name": "Kivu Digital Store",
+      "type": "retail"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "laptop",
+      "apple",
+      "macbook"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/macbook,laptop?lock=104",
+        "alt": "MacBook Air M2 13 pouces"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 999,
+      "currency": "USD",
+      "unit": null
+    },
+    "availability": {
+      "status": "in_stock",
+      "quantity": 5
+    },
+    "delivery": {
+      "available": true,
+      "estimated": "Today / tomorrow"
+    },
+    "attributes": {
+      "condition": "new",
+      "warranty": "Demo 6 months"
+    },
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "c1970651-59b4-5a6f-b3ae-3982a61ddf1a",
+    "demo": true,
+    "status": "published",
+    "vertical": "product",
+    "title": "Dell Latitude 5440",
+    "slug": "dell-latitude-5440",
+    "description": "Laptop professionnel, 16 Go RAM et SSD 512 Go, adapté au travail quotidien.",
+    "seller": {
+      "id": "ed9b7d45-6e15-5065-97ca-118c9bcbf20e",
+      "name": "Mosaïque Tech",
+      "type": "retail"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Limete",
+      "country": "CD"
+    },
+    "tags": [
+      "laptop",
+      "dell",
+      "business"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/dell,laptop?lock=105",
+        "alt": "Dell Latitude 5440"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 679,
+      "currency": "USD",
+      "unit": null
+    },
+    "availability": {
+      "status": "in_stock",
+      "quantity": 5
+    },
+    "delivery": {
+      "available": true,
+      "estimated": "Today / tomorrow"
+    },
+    "attributes": {
+      "condition": "new",
+      "warranty": "Demo 6 months"
+    },
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "1da9c5ce-b059-5056-be80-463d61e32ad0",
+    "demo": true,
+    "status": "published",
+    "vertical": "product",
+    "title": "Sony WH‑1000XM5",
+    "slug": "sony-wh‑1000xm5",
+    "description": "Casque sans fil premium avec réduction de bruit active et autonomie longue durée.",
+    "seller": {
+      "id": "19d48984-14d5-5d43-b808-6ed4786e2131",
+      "name": "Nova Home",
+      "type": "retail"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "audio",
+      "headphones",
+      "sony"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/headphones,sony?lock=106",
+        "alt": "Sony WH‑1000XM5"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 329,
+      "currency": "USD",
+      "unit": null
+    },
+    "availability": {
+      "status": "in_stock",
+      "quantity": 4
+    },
+    "delivery": {
+      "available": true,
+      "estimated": "Today / tomorrow"
+    },
+    "attributes": {
+      "condition": "new",
+      "warranty": "Demo 6 months"
+    },
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "1cfe01db-9717-5c80-b3c2-3f81d521f314",
+    "demo": true,
+    "status": "published",
+    "vertical": "product",
+    "title": "JBL Charge 5",
+    "slug": "jbl-charge-5",
+    "description": "Enceinte Bluetooth portable, résistante aux éclaboussures, idéale maison et extérieur.",
+    "seller": {
+      "id": "21582a51-0989-59f4-b50d-ce7618a20633",
+      "name": "Kivu Digital Store",
+      "type": "retail"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "audio",
+      "speaker",
+      "jbl"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/bluetooth,speaker?lock=107",
+        "alt": "JBL Charge 5"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 149,
+      "currency": "USD",
+      "unit": null
+    },
+    "availability": {
+      "status": "in_stock",
+      "quantity": 4
+    },
+    "delivery": {
+      "available": true,
+      "estimated": "Today / tomorrow"
+    },
+    "attributes": {
+      "condition": "new",
+      "warranty": "Demo 6 months"
+    },
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "9c2b9e34-60e5-5c1d-b40a-1187cfa3b7ac",
+    "demo": true,
+    "status": "published",
+    "vertical": "product",
+    "title": "Apple Watch Series 9",
+    "slug": "apple-watch-series-9",
+    "description": "Montre connectée avec suivi d’activité, notifications et intégration iPhone.",
+    "seller": {
+      "id": "ed9b7d45-6e15-5065-97ca-118c9bcbf20e",
+      "name": "Mosaïque Tech",
+      "type": "retail"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Limete",
+      "country": "CD"
+    },
+    "tags": [
+      "wearable",
+      "apple",
+      "watch"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/smartwatch,apple?lock=108",
+        "alt": "Apple Watch Series 9"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 399,
+      "currency": "USD",
+      "unit": null
+    },
+    "availability": {
+      "status": "in_stock",
+      "quantity": 4
+    },
+    "delivery": {
+      "available": true,
+      "estimated": "Today / tomorrow"
+    },
+    "attributes": {
+      "condition": "new",
+      "warranty": "Demo 6 months"
+    },
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "391c5536-424f-56e2-b6d7-4ec9d59e529b",
+    "demo": true,
+    "status": "published",
+    "vertical": "product",
+    "title": "PlayStation 5 Slim",
+    "slug": "playstation-5-slim",
+    "description": "Console de salon nouvelle génération, version Slim avec stockage SSD.",
+    "seller": {
+      "id": "19d48984-14d5-5d43-b808-6ed4786e2131",
+      "name": "Nova Home",
+      "type": "retail"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "gaming",
+      "playstation",
+      "console"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/playstation,console?lock=109",
+        "alt": "PlayStation 5 Slim"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 549,
+      "currency": "USD",
+      "unit": null
+    },
+    "availability": {
+      "status": "in_stock",
+      "quantity": 3
+    },
+    "delivery": {
+      "available": true,
+      "estimated": "Today / tomorrow"
+    },
+    "attributes": {
+      "condition": "new",
+      "warranty": "Demo 6 months"
+    },
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "85a358fd-a796-5c12-a308-ff1f29dca12c",
+    "demo": true,
+    "status": "published",
+    "vertical": "product",
+    "title": "Nintendo Switch OLED",
+    "slug": "nintendo-switch-oled",
+    "description": "Console hybride avec écran OLED, dock TV et mode portable.",
+    "seller": {
+      "id": "21582a51-0989-59f4-b50d-ce7618a20633",
+      "name": "Kivu Digital Store",
+      "type": "retail"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "gaming",
+      "nintendo",
+      "console"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/nintendo,switch?lock=110",
+        "alt": "Nintendo Switch OLED"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 349,
+      "currency": "USD",
+      "unit": null
+    },
+    "availability": {
+      "status": "in_stock",
+      "quantity": 3
+    },
+    "delivery": {
+      "available": true,
+      "estimated": "Today / tomorrow"
+    },
+    "attributes": {
+      "condition": "new",
+      "warranty": "Demo 6 months"
+    },
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "17c6d809-e97a-5934-b870-a79da2ba2010",
+    "demo": true,
+    "status": "published",
+    "vertical": "product",
+    "title": "TV Samsung 55 pouces 4K",
+    "slug": "tv-samsung-55-pouces-4k",
+    "description": "Téléviseur 4K avec interface Smart TV et belle restitution HDR.",
+    "seller": {
+      "id": "ed9b7d45-6e15-5065-97ca-118c9bcbf20e",
+      "name": "Mosaïque Tech",
+      "type": "retail"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Limete",
+      "country": "CD"
+    },
+    "tags": [
+      "tv",
+      "samsung",
+      "4k"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/samsung,tv,television?lock=111",
+        "alt": "TV Samsung 55 pouces 4K"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 699,
+      "currency": "USD",
+      "unit": null
+    },
+    "availability": {
+      "status": "in_stock",
+      "quantity": 3
+    },
+    "delivery": {
+      "available": true,
+      "estimated": "Today / tomorrow"
+    },
+    "attributes": {
+      "condition": "new",
+      "warranty": "Demo 6 months"
+    },
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "5e9623f5-a7d1-5a9a-a449-48377ee1d119",
+    "demo": true,
+    "status": "published",
+    "vertical": "product",
+    "title": "Réfrigérateur Hisense 320 L",
+    "slug": "réfrigérateur-hisense-320-l",
+    "description": "Réfrigérateur grande capacité pour appartement ou petite famille, finition inox.",
+    "seller": {
+      "id": "19d48984-14d5-5d43-b808-6ed4786e2131",
+      "name": "Nova Home",
+      "type": "retail"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "appliance",
+      "refrigerator",
+      "hisense"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/refrigerator,kitchen?lock=112",
+        "alt": "Réfrigérateur Hisense 320 L"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 599,
+      "currency": "USD",
+      "unit": null
+    },
+    "availability": {
+      "status": "in_stock",
+      "quantity": 2
+    },
+    "delivery": {
+      "available": true,
+      "estimated": "Today / tomorrow"
+    },
+    "attributes": {
+      "condition": "new",
+      "warranty": "Demo 6 months"
+    },
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "73299216-d8e2-57b1-bc9e-a1a16234bfab",
+    "demo": true,
+    "status": "published",
+    "vertical": "product",
+    "title": "Climatiseur LG Dual Inverter 12k BTU",
+    "slug": "climatiseur-lg-dual-inverter-12k-btu",
+    "description": "Climatiseur inverter pour chambre ou petit salon, économique en énergie.",
+    "seller": {
+      "id": "21582a51-0989-59f4-b50d-ce7618a20633",
+      "name": "Kivu Digital Store",
+      "type": "retail"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Gombe",
+      "country": "CD"
+    },
+    "tags": [
+      "appliance",
+      "air-conditioner",
+      "lg"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/airconditioner,home?lock=113",
+        "alt": "Climatiseur LG Dual Inverter 12k BTU"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 649,
+      "currency": "USD",
+      "unit": null
+    },
+    "availability": {
+      "status": "in_stock",
+      "quantity": 2
+    },
+    "delivery": {
+      "available": true,
+      "estimated": "Today / tomorrow"
+    },
+    "attributes": {
+      "condition": "new",
+      "warranty": "Demo 6 months"
+    },
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "b5593ac6-1bf0-595d-9544-c20e2071efb6",
+    "demo": true,
+    "status": "published",
+    "vertical": "product",
+    "title": "Appareil photo Canon EOS R50",
+    "slug": "appareil-photo-canon-eos-r50",
+    "description": "Boîtier mirrorless compact pour contenu, événementiel et photographie.",
+    "seller": {
+      "id": "ed9b7d45-6e15-5065-97ca-118c9bcbf20e",
+      "name": "Mosaïque Tech",
+      "type": "retail"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Limete",
+      "country": "CD"
+    },
+    "tags": [
+      "camera",
+      "canon",
+      "photography"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/canon,camera?lock=114",
+        "alt": "Appareil photo Canon EOS R50"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 779,
+      "currency": "USD",
+      "unit": null
+    },
+    "availability": {
+      "status": "in_stock",
+      "quantity": 2
+    },
+    "delivery": {
+      "available": true,
+      "estimated": "Today / tomorrow"
+    },
+    "attributes": {
+      "condition": "new",
+      "warranty": "Demo 6 months"
+    },
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  },
+  {
+    "id": "5cab96a8-2058-54a9-8a99-ba9fa71df51c",
+    "demo": true,
+    "status": "published",
+    "vertical": "product",
+    "title": "Imprimante Epson EcoTank L3250",
+    "slug": "imprimante-epson-ecotank-l3250",
+    "description": "Imprimante multifonction économique avec réservoirs rechargeables.",
+    "seller": {
+      "id": "19d48984-14d5-5d43-b808-6ed4786e2131",
+      "name": "Nova Home",
+      "type": "retail"
+    },
+    "location": {
+      "city": "Kinshasa",
+      "neighborhood": "Ngaliema",
+      "country": "CD"
+    },
+    "tags": [
+      "printer",
+      "epson",
+      "office"
+    ],
+    "images": [
+      {
+        "url": "https://loremflickr.com/960/720/epson,printer?lock=115",
+        "alt": "Imprimante Epson EcoTank L3250"
+      }
+    ],
+    "contact": {
+      "channel": "whatsapp",
+      "demo_number": "+243 810 000 001"
+    },
+    "source": "Trezutil demo dataset",
+    "price": {
+      "amount": 229,
+      "currency": "USD",
+      "unit": null
+    },
+    "availability": {
+      "status": "in_stock",
+      "quantity": 2
+    },
+    "delivery": {
+      "available": true,
+      "estimated": "Today / tomorrow"
+    },
+    "attributes": {
+      "condition": "new",
+      "warranty": "Demo 6 months"
+    },
+    "demo_badge": "DEMO",
+    "updated_at": "2026-09-27T00:00:00Z"
+  }
+]
