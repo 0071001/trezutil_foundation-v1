@@ -9,6 +9,8 @@
 package gateway
 
 import (
+	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -52,6 +54,28 @@ func LoadConfig() Config {
 		UpstreamTimeout: durationEnv("GATEWAY_UPSTREAM_TIMEOUT", 30*time.Second),
 		Upstreams:       defaultUpstreams(),
 	}
+}
+
+// Validate rejects a configuration that must not serve real traffic. With
+// strict set (any APP_ENV except development/test) the CORS allowlist must be
+// set explicitly (the development default is never used), must not contain
+// "*", and must not still hold the documentation placeholder.
+func (c Config) Validate(strict bool) error {
+	if !strict {
+		return nil
+	}
+	if strings.TrimSpace(os.Getenv("CORS_ALLOWED_ORIGINS")) == "" || len(c.AllowedOrigins) == 0 {
+		return errors.New("CORS_ALLOWED_ORIGINS must be set to the public origin(s) of the web app")
+	}
+	for _, o := range c.AllowedOrigins {
+		switch {
+		case o == "*":
+			return errors.New(`CORS_ALLOWED_ORIGINS must not contain "*"`)
+		case strings.Contains(strings.ToLower(o), "example"):
+			return fmt.Errorf("CORS_ALLOWED_ORIGINS still holds the documentation placeholder (%s)", o)
+		}
+	}
+	return nil
 }
 
 func defaultUpstreams() map[string]*Upstream {

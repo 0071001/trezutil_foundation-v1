@@ -6,6 +6,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/trezutil/trezutil/infrastructure/postgres"
@@ -44,6 +45,16 @@ func main() {
 	// The OTP code HMAC key defaults to a derivation of the JWT secret so a
 	// single secret suffices; OTP_CODE_SECRET overrides it.
 	codeSecret := common.Getenv("OTP_CODE_SECRET", "otp:"+jwtCfg.SecretKey)
+	if auth.Strict() {
+		// Outside development the OTP hashing key must be its own strong secret:
+		// one leaked key must not compromise both tokens and sign-in codes.
+		if err := auth.ValidateSecret("OTP_CODE_SECRET", os.Getenv("OTP_CODE_SECRET")); err != nil {
+			log.Fatalf("identity-service: %v", err)
+		}
+		if os.Getenv("OTP_CODE_SECRET") == jwtCfg.SecretKey {
+			log.Fatalf("identity-service: OTP_CODE_SECRET must differ from JWT_SECRET")
+		}
+	}
 
 	svc, err := identity.NewService(identity.Config{
 		Users:          postgres.NewUserRepository(db),

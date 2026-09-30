@@ -17,6 +17,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/trezutil/trezutil/internal/api"
+	"github.com/trezutil/trezutil/packages/common"
 	"github.com/trezutil/trezutil/packages/observability"
 )
 
@@ -63,7 +64,7 @@ func (g *Gateway) Handler() http.Handler {
 	mux.Handle("/metrics", observability.PublicMetricsHandler())
 	mux.Handle("/api/v1/", http.HandlerFunc(g.apiRouter))
 	mux.Handle("/", http.HandlerFunc(g.staticHandler))
-	return g.requestID(g.logging(g.cors(mux)))
+	return g.requestID(g.logging(securityHeaders(g.cors(mux))))
 }
 
 type apiRoute struct {
@@ -329,6 +330,25 @@ func (g *Gateway) logging(next http.Handler) http.Handler {
 	})
 }
 
+// securityHeaders adds the baseline browser protections to every response.
+// HSTS is sent only when the request arrived over TLS (directly or through the
+// TLS-terminating proxy's X-Forwarded-Proto), so plain-HTTP staging is not pinned.
+// A Content-Security-Policy is deliberately left to the reverse proxy: it must
+// be tuned to the payment provider's script and frame origins.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
+		if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // gatewayRoute is the bounded metric label of a gateway request: the API
 // resource (/api/v1/orders), a probe, or "static" for the web app.
 func (g *Gateway) gatewayRoute(path string) string {
@@ -379,7 +399,16 @@ func (g *Gateway) cors(next http.Handler) http.Handler {
 
 func clientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		return strings.TrimSpace(strings.Split(xff, ",")[0])
+		// Only the entries appended by our own proxies are trustworthy (see common.ClientIP).
+		parts := strings.Split(xff, ",")
+		i := len(parts) - common.TrustedProxyHops()
+		if i < 0 {
+			i = 0
+		}
+		if i >= len(parts) {
+			i = len(parts) - 1
+		}
+		return strings.TrimSpace(parts[i])
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil || host == "" {

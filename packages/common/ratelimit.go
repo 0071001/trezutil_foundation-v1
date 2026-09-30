@@ -3,6 +3,8 @@ package common
 import (
 	"net"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -54,15 +56,37 @@ func (l *WindowLimiter) Allow(key string) bool {
 	return true
 }
 
-// ClientIP returns the client address as seen by the nearest trusted proxy.
-// The gateway's reverse proxy appends the peer address to X-Forwarded-For, so
-// the last entry is the one the client cannot forge; earlier entries are
-// client-controlled and ignored.
+// TrustedProxyHops is the number of proxies in front of the gateway that
+// append to X-Forwarded-For (TRUSTED_PROXY_HOPS, default 0, clamped to 0..5).
+func TrustedProxyHops() int {
+	n, err := strconv.Atoi(strings.TrimSpace(os.Getenv("TRUSTED_PROXY_HOPS")))
+	if err != nil || n < 0 {
+		return 0
+	}
+	if n > 5 {
+		return 5
+	}
+	return n
+}
+
+// ClientIP returns the client address for rate limiting and logs.
+//
+// The gateway's reverse proxy appends the address of its own peer to
+// X-Forwarded-For, so the last entry cannot be forged by the client. When a
+// TLS-terminating proxy sits in front of the gateway (TRUSTED_PROXY_HOPS=1,
+// the documented production topology) that last entry is the proxy, and the
+// real client is the entry before it; without the setting every user would
+// share the proxy's address and one per-IP limit. Entries further left are
+// client-controlled and never trusted beyond the configured hops.
 func ClientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		parts := strings.Split(xff, ",")
-		if last := strings.TrimSpace(parts[len(parts)-1]); last != "" {
-			return last
+		i := len(parts) - 1 - TrustedProxyHops()
+		if i < 0 {
+			i = 0
+		}
+		if ip := strings.TrimSpace(parts[i]); ip != "" {
+			return ip
 		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)

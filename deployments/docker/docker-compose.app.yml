@@ -12,9 +12,13 @@ x-service: &service
   pull_policy: never # built locally by the migrate service
   restart: unless-stopped
   environment: &service-env
+    # Any value except development/test enforces strong secrets and explicit CORS.
     APP_ENV: ${APP_ENV:-production}
     LOG_LEVEL: ${LOG_LEVEL:-info}
-    DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+    # Proxies in front of the gateway that append to X-Forwarded-For (1 behind Caddy/nginx/Traefik).
+    # Per-IP rate limits see the real client only when this matches the topology.
+    TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-0}
+    DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=${POSTGRES_SSLMODE:-disable}
     JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required (32+ chars)}
     JWT_ISSUER: ${JWT_ISSUER:-trezutil}
     JWT_AUDIENCE: ${JWT_AUDIENCE:-trezutil-api}
@@ -66,7 +70,7 @@ services:
       dockerfile: deployments/docker/Dockerfile
     command: ["/app/bin/migrate"]
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=${POSTGRES_SSLMODE:-disable}
     depends_on:
       postgres:
         condition: service_healthy
@@ -78,7 +82,7 @@ services:
     environment:
       <<: *service-env
       HTTP_PORT: "8086"
-      OTP_CODE_SECRET: ${OTP_CODE_SECRET:-}
+      OTP_CODE_SECRET: ${OTP_CODE_SECRET:?OTP_CODE_SECRET is required (32+ random chars, different from JWT_SECRET)}
       WHATSAPP_API_BASE_URL: ${WHATSAPP_API_BASE_URL:-https://graph.facebook.com/v20.0}
       WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
       WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
@@ -147,7 +151,7 @@ services:
       # Bearer token for GET /metrics on this internet-facing gateway (unset = not served).
       METRICS_TOKEN: ${METRICS_TOKEN:-}
       WEB_ROOT: /app/web
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-https://trezutil.example}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required (public origin of the web app)}
       IDENTITY_SERVICE_URL: http://identity-service:8086
       SEARCH_SERVICE_URL: http://search-service:8081
       CONVERSATION_SERVICE_URL: http://conversation-service:8091

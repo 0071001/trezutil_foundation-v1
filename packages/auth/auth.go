@@ -49,6 +49,11 @@ func ConfigFromEnv() (domain.JWTConfig, error) {
 	if len(secret) < MinSecretLength {
 		return domain.JWTConfig{}, fmt.Errorf("JWT_SECRET must be set to at least %d characters", MinSecretLength)
 	}
+	if Strict() {
+		if err := ValidateSecret("JWT_SECRET", secret); err != nil {
+			return domain.JWTConfig{}, err
+		}
+	}
 	return domain.JWTConfig{
 		SecretKey:       secret,
 		Issuer:          envOr("JWT_ISSUER", "trezutil"),
