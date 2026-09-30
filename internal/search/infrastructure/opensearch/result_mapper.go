@@ -12,6 +12,7 @@ func mapHitToSearchResult(hit SearchHit) (domain.SearchResult, error) {
 	result := domain.SearchResult{
 		ListingID: getStringField(hit.Source, "listing_id"),
 		Title:     getStringField(hit.Source, "title"),
+		Vertical:  getStringField(hit.Source, "vertical"),
 		Score:     hit.Score,
 	}
 

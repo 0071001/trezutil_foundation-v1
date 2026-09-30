@@ -12,5 +12,7 @@ Current baseline:
 - 0006 Channel-independent core
 - 0007 Multi-provider AI gateway
 - 0008 Payment provider abstraction
+- 0009 Unified API gateway
+- 0010 Native sellers first; verticals as packs over the Commerce Core
 
 New ADRs should be added when a decision is durable, cross-cutting or difficult to reverse.

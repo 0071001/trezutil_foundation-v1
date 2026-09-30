@@ -22,8 +22,8 @@ func NewListingRepository(db *sql.DB) *ListingRepository {
 
 // Create inserts a new listing into the database.
 func (r *ListingRepository) Create(ctx context.Context, listing *domain.Listing) error {
-	query := `INSERT INTO listings (id, organization_id, seller_id, store_id, category_id, title, description, listing_type, pricing_model, price_amount, price_currency, status, metadata, published_at, created_at, updated_at) 
-	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)`
+	query := `INSERT INTO listings (id, organization_id, seller_id, store_id, category_id, title, description, listing_type, pricing_model, price_amount, price_currency, status, metadata, published_at, created_at, updated_at, vertical) 
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)`
 
 	var desc sql.NullString
 	if listing.Description != nil {
@@ -40,7 +40,7 @@ func (r *ListingRepository) Create(ctx context.Context, listing *domain.Listing)
 		publishedAt = sql.NullTime{Valid: true, Time: toTime(*listing.PublishedAt)}
 	}
 
-	_, err := r.db.ExecContext(ctx, query, listing.ID, listing.OrganizationID, listing.SellerID, listing.StoreID, listing.CategoryID, listing.Title, desc, listing.ListingType, listing.PricingModel, listing.PriceAmount, listing.PriceCurrency, listing.Status, metadata, publishedAt, toTime(listing.CreatedAt), toTime(listing.UpdatedAt))
+	_, err := r.db.ExecContext(ctx, query, listing.ID, listing.OrganizationID, listing.SellerID, listing.StoreID, listing.CategoryID, listing.Title, desc, listing.ListingType, listing.PricingModel, listing.PriceAmount, listing.PriceCurrency, listing.Status, metadata, publishedAt, toTime(listing.CreatedAt), toTime(listing.UpdatedAt), nullVertical(listing))
 	if err != nil {
 		return fmt.Errorf("failed to create listing: %w", err)
 	}
@@ -49,13 +49,13 @@ func (r *ListingRepository) Create(ctx context.Context, listing *domain.Listing)
 
 // FindByID retrieves a listing by ID.
 func (r *ListingRepository) FindByID(ctx context.Context, id string) (*domain.Listing, error) {
-	query := `SELECT id, organization_id, seller_id, store_id, category_id, title, description, listing_type, pricing_model, price_amount, price_currency, status, metadata, published_at, created_at, updated_at FROM listings WHERE id = $1`
+	query := `SELECT id, organization_id, seller_id, store_id, category_id, title, description, listing_type, pricing_model, price_amount, price_currency, status, metadata, published_at, created_at, updated_at, vertical FROM listings WHERE id = $1`
 	row := r.db.QueryRowContext(ctx, query, id)
 
 	var u listingRow
 	var desc, metadata sql.NullString
 	var publishedAt sql.NullTime
-	err := row.Scan(&u.ID, &u.OrganizationID, &u.SellerID, &u.StoreID, &u.CategoryID, &u.Title, &desc, &u.ListingType, &u.PricingModel, &u.PriceAmount, &u.PriceCurrency, &u.Status, &metadata, &publishedAt, &u.CreatedAt, &u.UpdatedAt)
+	err := row.Scan(&u.ID, &u.OrganizationID, &u.SellerID, &u.StoreID, &u.CategoryID, &u.Title, &desc, &u.ListingType, &u.PricingModel, &u.PriceAmount, &u.PriceCurrency, &u.Status, &metadata, &publishedAt, &u.CreatedAt, &u.UpdatedAt, &u.Vertical)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("listing not found: %s", id)
@@ -71,6 +71,7 @@ func (r *ListingRepository) FindByID(ctx context.Context, id string) (*domain.Li
 		CategoryID:     u.CategoryID,
 		Title:          u.Title,
 		ListingType:    domain.ListingType(u.ListingType),
+		Vertical:       u.vertical(),
 		PricingModel:   domain.PricingModel(u.PricingModel),
 		PriceAmount:    u.PriceAmount,
 		PriceCurrency:  u.PriceCurrency,
@@ -94,7 +95,7 @@ func (r *ListingRepository) FindByID(ctx context.Context, id string) (*domain.Li
 
 // FindByOrganizationID retrieves all listings for an organization.
 func (r *ListingRepository) FindByOrganizationID(ctx context.Context, organizationID string, offset, limit int) ([]domain.Listing, error) {
-	query := `SELECT id, organization_id, seller_id, store_id, category_id, title, description, listing_type, pricing_model, price_amount, price_currency, status, metadata, published_at, created_at, updated_at FROM listings WHERE organization_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
+	query := `SELECT id, organization_id, seller_id, store_id, category_id, title, description, listing_type, pricing_model, price_amount, price_currency, status, metadata, published_at, created_at, updated_at, vertical FROM listings WHERE organization_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
 	rows, err := r.db.QueryContext(ctx, query, organizationID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query listings: %w", err)
@@ -106,7 +107,7 @@ func (r *ListingRepository) FindByOrganizationID(ctx context.Context, organizati
 		var u listingRow
 		var desc, metadata sql.NullString
 		var publishedAt sql.NullTime
-		if err := rows.Scan(&u.ID, &u.OrganizationID, &u.SellerID, &u.StoreID, &u.CategoryID, &u.Title, &desc, &u.ListingType, &u.PricingModel, &u.PriceAmount, &u.PriceCurrency, &u.Status, &metadata, &publishedAt, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.OrganizationID, &u.SellerID, &u.StoreID, &u.CategoryID, &u.Title, &desc, &u.ListingType, &u.PricingModel, &u.PriceAmount, &u.PriceCurrency, &u.Status, &metadata, &publishedAt, &u.CreatedAt, &u.UpdatedAt, &u.Vertical); err != nil {
 			return nil, fmt.Errorf("failed to scan listing: %w", err)
 		}
 
@@ -118,6 +119,7 @@ func (r *ListingRepository) FindByOrganizationID(ctx context.Context, organizati
 			CategoryID:     u.CategoryID,
 			Title:          u.Title,
 			ListingType:    domain.ListingType(u.ListingType),
+			Vertical:       u.vertical(),
 			PricingModel:   domain.PricingModel(u.PricingModel),
 			PriceAmount:    u.PriceAmount,
 			PriceCurrency:  u.PriceCurrency,
@@ -152,7 +154,7 @@ func (r *ListingRepository) FindByOrganizationID(ctx context.Context, organizati
 
 // FindBySellerID retrieves all listings for a seller.
 func (r *ListingRepository) FindBySellerID(ctx context.Context, sellerID string, offset, limit int) ([]domain.Listing, error) {
-	query := `SELECT id, organization_id, seller_id, store_id, category_id, title, description, listing_type, pricing_model, price_amount, price_currency, status, metadata, published_at, created_at, updated_at FROM listings WHERE seller_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
+	query := `SELECT id, organization_id, seller_id, store_id, category_id, title, description, listing_type, pricing_model, price_amount, price_currency, status, metadata, published_at, created_at, updated_at, vertical FROM listings WHERE seller_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
 	rows, err := r.db.QueryContext(ctx, query, sellerID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query listings: %w", err)
@@ -164,7 +166,7 @@ func (r *ListingRepository) FindBySellerID(ctx context.Context, sellerID string,
 		var u listingRow
 		var desc, metadata sql.NullString
 		var publishedAt sql.NullTime
-		if err := rows.Scan(&u.ID, &u.OrganizationID, &u.SellerID, &u.StoreID, &u.CategoryID, &u.Title, &desc, &u.ListingType, &u.PricingModel, &u.PriceAmount, &u.PriceCurrency, &u.Status, &metadata, &publishedAt, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.OrganizationID, &u.SellerID, &u.StoreID, &u.CategoryID, &u.Title, &desc, &u.ListingType, &u.PricingModel, &u.PriceAmount, &u.PriceCurrency, &u.Status, &metadata, &publishedAt, &u.CreatedAt, &u.UpdatedAt, &u.Vertical); err != nil {
 			return nil, fmt.Errorf("failed to scan listing: %w", err)
 		}
 
@@ -176,6 +178,7 @@ func (r *ListingRepository) FindBySellerID(ctx context.Context, sellerID string,
 			CategoryID:     u.CategoryID,
 			Title:          u.Title,
 			ListingType:    domain.ListingType(u.ListingType),
+			Vertical:       u.vertical(),
 			PricingModel:   domain.PricingModel(u.PricingModel),
 			PriceAmount:    u.PriceAmount,
 			PriceCurrency:  u.PriceCurrency,
@@ -210,7 +213,7 @@ func (r *ListingRepository) FindBySellerID(ctx context.Context, sellerID string,
 
 // FindByStoreID retrieves all listings for a store.
 func (r *ListingRepository) FindByStoreID(ctx context.Context, storeID string, offset, limit int) ([]domain.Listing, error) {
-	query := `SELECT id, organization_id, seller_id, store_id, category_id, title, description, listing_type, pricing_model, price_amount, price_currency, status, metadata, published_at, created_at, updated_at FROM listings WHERE store_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
+	query := `SELECT id, organization_id, seller_id, store_id, category_id, title, description, listing_type, pricing_model, price_amount, price_currency, status, metadata, published_at, created_at, updated_at, vertical FROM listings WHERE store_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
 	rows, err := r.db.QueryContext(ctx, query, storeID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query listings: %w", err)
@@ -222,7 +225,7 @@ func (r *ListingRepository) FindByStoreID(ctx context.Context, storeID string, o
 		var u listingRow
 		var desc, metadata sql.NullString
 		var publishedAt sql.NullTime
-		if err := rows.Scan(&u.ID, &u.OrganizationID, &u.SellerID, &u.StoreID, &u.CategoryID, &u.Title, &desc, &u.ListingType, &u.PricingModel, &u.PriceAmount, &u.PriceCurrency, &u.Status, &metadata, &publishedAt, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.OrganizationID, &u.SellerID, &u.StoreID, &u.CategoryID, &u.Title, &desc, &u.ListingType, &u.PricingModel, &u.PriceAmount, &u.PriceCurrency, &u.Status, &metadata, &publishedAt, &u.CreatedAt, &u.UpdatedAt, &u.Vertical); err != nil {
 			return nil, fmt.Errorf("failed to scan listing: %w", err)
 		}
 
@@ -234,6 +237,7 @@ func (r *ListingRepository) FindByStoreID(ctx context.Context, storeID string, o
 			CategoryID:     u.CategoryID,
 			Title:          u.Title,
 			ListingType:    domain.ListingType(u.ListingType),
+			Vertical:       u.vertical(),
 			PricingModel:   domain.PricingModel(u.PricingModel),
 			PriceAmount:    u.PriceAmount,
 			PriceCurrency:  u.PriceCurrency,
@@ -268,7 +272,7 @@ func (r *ListingRepository) FindByStoreID(ctx context.Context, storeID string, o
 
 // FindByCategoryID retrieves all listings for a category.
 func (r *ListingRepository) FindByCategoryID(ctx context.Context, categoryID string, offset, limit int) ([]domain.Listing, error) {
-	query := `SELECT id, organization_id, seller_id, store_id, category_id, title, description, listing_type, pricing_model, price_amount, price_currency, status, metadata, published_at, created_at, updated_at FROM listings WHERE category_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
+	query := `SELECT id, organization_id, seller_id, store_id, category_id, title, description, listing_type, pricing_model, price_amount, price_currency, status, metadata, published_at, created_at, updated_at, vertical FROM listings WHERE category_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
 	rows, err := r.db.QueryContext(ctx, query, categoryID, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query listings: %w", err)
@@ -280,7 +284,7 @@ func (r *ListingRepository) FindByCategoryID(ctx context.Context, categoryID str
 		var u listingRow
 		var desc, metadata sql.NullString
 		var publishedAt sql.NullTime
-		if err := rows.Scan(&u.ID, &u.OrganizationID, &u.SellerID, &u.StoreID, &u.CategoryID, &u.Title, &desc, &u.ListingType, &u.PricingModel, &u.PriceAmount, &u.PriceCurrency, &u.Status, &metadata, &publishedAt, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.OrganizationID, &u.SellerID, &u.StoreID, &u.CategoryID, &u.Title, &desc, &u.ListingType, &u.PricingModel, &u.PriceAmount, &u.PriceCurrency, &u.Status, &metadata, &publishedAt, &u.CreatedAt, &u.UpdatedAt, &u.Vertical); err != nil {
 			return nil, fmt.Errorf("failed to scan listing: %w", err)
 		}
 
@@ -292,6 +296,7 @@ func (r *ListingRepository) FindByCategoryID(ctx context.Context, categoryID str
 			CategoryID:     u.CategoryID,
 			Title:          u.Title,
 			ListingType:    domain.ListingType(u.ListingType),
+			Vertical:       u.vertical(),
 			PricingModel:   domain.PricingModel(u.PricingModel),
 			PriceAmount:    u.PriceAmount,
 			PriceCurrency:  u.PriceCurrency,
@@ -386,6 +391,25 @@ type listingRow struct {
 	Status         string
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
+	Vertical       sql.NullString
+}
+
+// vertical returns the stored vertical. A row without one (written by a binary
+// older than migration 000019) follows its listing type, like the backfill.
+func (u listingRow) vertical() domain.Vertical {
+	if u.Vertical.Valid && u.Vertical.String != "" {
+		return domain.Vertical(u.Vertical.String)
+	}
+	return domain.DefaultVerticalForListingType(domain.ListingType(u.ListingType))
+}
+
+// nullVertical stores the listing's vertical, defaulting from its listing type.
+func nullVertical(listing *domain.Listing) sql.NullString {
+	v := listing.Vertical
+	if v == "" {
+		v = domain.DefaultVerticalForListingType(listing.ListingType)
+	}
+	return sql.NullString{String: string(v), Valid: true}
 }
 
 // encodeListingMetadata serializes listing metadata for the JSONB column.

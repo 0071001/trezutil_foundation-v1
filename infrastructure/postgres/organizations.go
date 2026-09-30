@@ -345,7 +345,7 @@ func (r *StoreRepository) FindByID(ctx context.Context, id string) (*domain.Stor
 	var u storeRow
 	var desc, email, province, city, address sql.NullString
 	var lat, lng sql.NullFloat64
-	err := row.Scan(&u.ID, &u.OrganizationID, &u.Name, &u.Slug, &desc, &u.Phone, &email, &u.Country, &u.Province, &u.City, &u.Address, &lat, &lng, &u.Status, &u.CreatedAt, &u.UpdatedAt)
+	err := row.Scan(&u.ID, &u.OrganizationID, &u.Name, &u.Slug, &desc, &u.Phone, &email, &u.Country, &province, &city, &address, &lat, &lng, &u.Status, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, domain.ErrStoreNotFound
@@ -447,7 +447,7 @@ func (r *StoreRepository) FindByOrganizationID(ctx context.Context, organization
 		var u storeRow
 		var desc, email, province, city, address sql.NullString
 		var lat, lng sql.NullFloat64
-		if err := rows.Scan(&u.ID, &u.OrganizationID, &u.Name, &u.Slug, &desc, &u.Phone, &email, &u.Country, &u.Province, &u.City, &u.Address, &lat, &lng, &u.Status, &u.CreatedAt, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.OrganizationID, &u.Name, &u.Slug, &desc, &u.Phone, &email, &u.Country, &province, &city, &address, &lat, &lng, &u.Status, &u.CreatedAt, &u.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("failed to scan store: %w", err)
 		}
 
@@ -552,7 +552,7 @@ func (r *OrganizationRepository) FindByID(ctx context.Context, id string) (*doma
 
 	var u organizationRow
 	var desc, email, province, city, address sql.NullString
-	err := row.Scan(&u.ID, &u.Type, &u.LegalName, &u.DisplayName, &desc, &u.Phone, &email, &u.Status, &u.Country, &u.Province, &u.City, &u.Address, &u.VerificationStatus, &u.CreatedAt, &u.UpdatedAt)
+	err := row.Scan(&u.ID, &u.Type, &u.LegalName, &u.DisplayName, &desc, &u.Phone, &email, &u.Status, &u.Country, &province, &city, &address, &u.VerificationStatus, &u.CreatedAt, &u.UpdatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			return nil, domain.ErrOrganizationNotFound

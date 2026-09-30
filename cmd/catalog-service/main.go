@@ -11,6 +11,7 @@ import (
 	"github.com/trezutil/trezutil/infrastructure/postgres"
 	"github.com/trezutil/trezutil/internal/api"
 	"github.com/trezutil/trezutil/internal/application"
+	"github.com/trezutil/trezutil/internal/application/vertical"
 	"github.com/trezutil/trezutil/packages/auth"
 	"github.com/trezutil/trezutil/packages/common"
 	"github.com/trezutil/trezutil/packages/database"
@@ -44,7 +45,7 @@ func main() {
 		postgres.NewStoreRepository(db),
 		postgres.NewUserRepository(db),
 		nil,
-	)
+	).WithVerticals(vertical.DefaultCatalog())
 
 	listingHandler := api.NewListingHandler(listingUseCases)
 

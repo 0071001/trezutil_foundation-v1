@@ -50,14 +50,17 @@ type Listing struct {
 	Title          string
 	Description    *string
 	ListingType    ListingType
-	PricingModel   PricingModel
-	PriceAmount    float64
-	PriceCurrency  string
-	Status         ListingStatus
-	Metadata       map[string]interface{}
-	PublishedAt    *int64
-	CreatedAt      int64
-	UpdatedAt      int64
+	// Vertical is the commerce vertical the listing belongs to (HOTEL,
+	// RESTAURANT…). It is set when the listing is created and never changes.
+	Vertical      Vertical
+	PricingModel  PricingModel
+	PriceAmount   float64
+	PriceCurrency string
+	Status        ListingStatus
+	Metadata      map[string]interface{}
+	PublishedAt   *int64
+	CreatedAt     int64
+	UpdatedAt     int64
 }
 
 // NewListing creates a new Listing.
@@ -70,6 +73,7 @@ func NewListing(organizationID, sellerID, storeID, categoryID, title, listingTyp
 		CategoryID:     categoryID,
 		Title:          title,
 		ListingType:    ListingType(listingType),
+		Vertical:       DefaultVerticalForListingType(ListingType(listingType)),
 		PricingModel:   PricingModel(pricingModel),
 		PriceAmount:    priceAmount,
 		PriceCurrency:  priceCurrency,

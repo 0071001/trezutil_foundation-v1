@@ -13,6 +13,7 @@ import (
 	"github.com/trezutil/trezutil/infrastructure/postgres"
 	"github.com/trezutil/trezutil/internal/api"
 	"github.com/trezutil/trezutil/internal/application"
+	"github.com/trezutil/trezutil/internal/application/vertical"
 	"github.com/trezutil/trezutil/internal/domain"
 	searchapp "github.com/trezutil/trezutil/internal/search/application"
 	"github.com/trezutil/trezutil/internal/search/infrastructure/opensearch"
@@ -56,7 +57,7 @@ func main() {
 		availabilityRepo, locationRepo, listingLocationRepo,
 		postgres.NewOrganizationRepository(db), sellerRepo, storeRepo,
 		postgres.NewUserRepository(db), nil,
-	)
+	).WithVerticals(vertical.DefaultCatalog())
 
 	// OpenSearch read projection
 	osConfig := opensearch.Config{
@@ -120,6 +121,7 @@ func main() {
 	mux.HandleFunc("POST /v1/listings/update", api.UpdateListingH(listingUseCases))
 	mux.HandleFunc("GET /v1/listings/manage", organizationMemberOnly(postgres.NewOrganizationRepository(db), postgres.NewUserRepository(db), api.ManageListingsH(listingRepo)))
 	mux.HandleFunc("GET /v1/categories", api.ListCategoriesH(categoryRepo))
+	mux.HandleFunc("GET /v1/verticals", api.ListVerticalsH(vertical.DefaultCatalog()))
 	mux.HandleFunc("POST /v1/categories", api.CreateCategoryH(categoryRepo, postgres.NewUserRepository(db)))
 	mux.HandleFunc("GET /healthz", common.HealthHandler)
 	mux.HandleFunc("GET /health", common.HealthHandler)

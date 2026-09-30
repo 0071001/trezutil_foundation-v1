@@ -74,6 +74,7 @@ func (g *Gateway) routes() []apiRoute {
 		{"/api/v1/sellers", "identity"},
 		{"/api/v1/stores", "identity"},
 		{"/api/v1/categories", "search"},
+		{"/api/v1/verticals", "search"},
 		{"/api/v1/conversations", "conversation"},
 		{"/api/v1/packs", "conversation"},
 		{"/api/v1/webhooks/whatsapp", "conversation"},

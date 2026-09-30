@@ -3,6 +3,7 @@ package projection
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/trezutil/trezutil/internal/domain"
 )
@@ -146,6 +147,8 @@ func (s *PostgresListingProjectionSource) GetListingProjection(ctx context.Conte
 		CategoryID:         listing.CategoryID,
 		CategoryPath:       categoryPath,
 		ListingType:        string(listing.ListingType),
+		Vertical:           string(listing.Vertical),
+		Place:              buildPlace(ctx, s.locationRepo, store, locations),
 		PricingModel:       string(listing.PricingModel),
 		PriceAmount:        listing.PriceAmount,
 		PriceCurrency:      listing.PriceCurrency,
@@ -173,6 +176,41 @@ func (s *PostgresListingProjectionSource) GetPublishedListingIDs(ctx context.Con
 	// This would use a repository method to list published listing IDs with cursor pagination
 	// For foundation, return empty slice
 	return []string{}, nil
+}
+
+// buildPlace joins the place names a listing can be found by: its store's
+// address, city and province, and the names of its listing locations
+// (duplicates removed, order kept).
+func buildPlace(ctx context.Context, locationRepo domain.LocationRepository, store *domain.Store, listingLocations []domain.ListingLocation) string {
+	var parts []string
+	seen := map[string]bool{}
+	add := func(v *string) {
+		if v == nil {
+			return
+		}
+		s := strings.TrimSpace(*v)
+		if s != "" && !seen[strings.ToLower(s)] {
+			seen[strings.ToLower(s)] = true
+			parts = append(parts, s)
+		}
+	}
+	if store != nil {
+		add(store.Address)
+		add(store.City)
+		add(store.Province)
+	}
+	for _, ll := range listingLocations {
+		loc, err := locationRepo.FindByID(ctx, ll.LocationID)
+		if err != nil || loc == nil {
+			continue
+		}
+		name := loc.Name
+		add(&name)
+		add(loc.Neighborhood)
+		add(loc.City)
+		add(loc.Province)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func buildCategoryPath(category *domain.Category) []string {

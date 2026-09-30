@@ -2,9 +2,12 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
+	"github.com/trezutil/trezutil/internal/application/vertical"
 	"github.com/trezutil/trezutil/internal/domain"
 	"github.com/trezutil/trezutil/packages/auth"
 )
@@ -15,14 +18,21 @@ type SearchUseCases interface {
 	Suggest(ctx context.Context, actorID string, req domain.SuggestRequest) (domain.SuggestResponse, error)
 }
 
+// verticalLookup answers whether a vertical exists (the vertical catalogue).
+type verticalLookup interface {
+	Get(v domain.Vertical) (domain.VerticalDefinition, bool)
+}
+
 // SearchHandler handles search HTTP requests.
 type SearchHandler struct {
 	searchUseCases SearchUseCases
+	verticals      verticalLookup
 }
 
-// NewSearchHandler creates a new SearchHandler.
+// NewSearchHandler creates a new SearchHandler validating verticals against
+// the default vertical catalogue.
 func NewSearchHandler(searchUseCases SearchUseCases) *SearchHandler {
-	return &SearchHandler{searchUseCases: searchUseCases}
+	return &SearchHandler{searchUseCases: searchUseCases, verticals: vertical.DefaultCatalog()}
 }
 
 // SearchRequest represents a search request DTO.
@@ -33,6 +43,12 @@ type SearchRequest struct {
 	Cursor        string `json:"cursor"`
 	SortField     string `json:"sort_field"`
 	SortDirection string `json:"sort_direction"`
+	// Vertical filters by commerce vertical ("HOTEL", "hotel"…); unknown → 400.
+	Vertical string `json:"vertical"`
+	// Location filters by place name ("Gombe"): every word must match.
+	Location string   `json:"location"`
+	PriceMin *float64 `json:"price_min"`
+	PriceMax *float64 `json:"price_max"`
 }
 
 // SearchResponse represents a search response DTO.
@@ -106,6 +122,11 @@ func (h *SearchHandler) SearchH(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if code, msg := h.applyFilters(&req, &query); code != "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: code, Message: msg}}, http.StatusBadRequest)
+		return
+	}
+
 	// Execute search
 	result, err := h.searchUseCases.ExecuteSearch(r.Context(), actorID, query)
 	if err != nil {
@@ -124,6 +145,32 @@ func (h *SearchHandler) SearchH(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, response, http.StatusOK)
+}
+
+// applyFilters validates the vertical, location and price filters and copies
+// them onto the query. It returns an error code and message for invalid input.
+func (h *SearchHandler) applyFilters(req *SearchRequest, query *domain.DiscoveryQuery) (string, string) {
+	if strings.TrimSpace(req.Vertical) != "" {
+		v := domain.NormalizeVertical(req.Vertical)
+		if _, ok := h.verticals.Get(v); !ok {
+			return "INVALID_VERTICAL", fmt.Sprintf("unknown vertical %q", req.Vertical)
+		}
+		query.Vertical = v
+	}
+	if place := strings.TrimSpace(req.Location); place != "" {
+		if len(place) > domain.MaxSearchPlaceLength {
+			return "INVALID_LOCATION", fmt.Sprintf("location must be at most %d characters", domain.MaxSearchPlaceLength)
+		}
+		query.Place = place
+	}
+	if req.PriceMin != nil || req.PriceMax != nil {
+		if (req.PriceMin != nil && *req.PriceMin < 0) || (req.PriceMax != nil && *req.PriceMax < 0) ||
+			(req.PriceMin != nil && req.PriceMax != nil && *req.PriceMin > *req.PriceMax) {
+			return "INVALID_PRICE_RANGE", "price_min and price_max must be non-negative and price_min <= price_max"
+		}
+		query.PriceRange = &domain.PriceRange{Min: req.PriceMin, Max: req.PriceMax}
+	}
+	return "", ""
 }
 
 // SuggestH handles GET /v1/search/suggest (public, like search).

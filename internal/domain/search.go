@@ -154,15 +154,26 @@ type DiscoveryQuery struct {
 	StoreID      string
 	Delivery     *DeliveryRequirements
 	ListingType  *SearchListingType
-	Sort         *SearchSort
-	Pagination   PaginationCursor
+	// Vertical restricts results to one commerce vertical. Callers validate it
+	// against the vertical catalogue; an unknown vertical is an error, never OTHER.
+	Vertical Vertical
+	// Place restricts results to listings whose place (store address, city and
+	// province, listing locations) or title/description contains every word,
+	// e.g. "Gombe". Geo-radius search stays in Location/RadiusMeters.
+	Place      string
+	Sort       *SearchSort
+	Pagination PaginationCursor
 }
+
+// MaxSearchPlaceLength bounds DiscoveryQuery.Place.
+const MaxSearchPlaceLength = 100
 
 // SearchResult represents a single search result projection.
 // It is distinct from the authoritative Listing domain entity.
 type SearchResult struct {
 	ListingID          string
 	Title              string
+	Vertical           string
 	PriceAmount        float64
 	PriceCurrency      string
 	AvailabilityStatus string
@@ -317,6 +328,8 @@ type ListingProjection struct {
 	CategoryID         string
 	CategoryPath       []string
 	ListingType        string
+	Vertical           string
+	Place              string
 	PricingModel       string
 	PriceAmount        float64
 	PriceCurrency      string

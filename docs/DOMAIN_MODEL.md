@@ -150,6 +150,7 @@ Required concepts:
 - id
 - seller_id
 - type
+- vertical (HOTEL, RESTAURANT, RETAIL… — see docs/architecture/VERTICAL_COMMERCE_PACKS.md)
 - title
 - description
 - status

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	opensearch "github.com/opensearch-project/opensearch-go/v2"
 	"github.com/opensearch-project/opensearch-go/v2/opensearchapi"
@@ -175,6 +176,30 @@ func (c *Client) GetAlias(ctx context.Context, aliasName string) ([]string, erro
 	}
 
 	return indices, nil
+}
+
+// PutMapping adds fields to the mapping of an index (or of the indices behind
+// an alias). OpenSearch accepts new fields in place; changing an existing
+// field's type is rejected.
+func (c *Client) PutMapping(ctx context.Context, indexOrAlias string, mapping map[string]interface{}) error {
+	bodyBytes, err := json.Marshal(mapping)
+	if err != nil {
+		return fmt.Errorf("failed to marshal mapping: %w", err)
+	}
+	req := opensearchapi.IndicesPutMappingRequest{
+		Index: []string{indexOrAlias},
+		Body:  bytes.NewReader(bodyBytes),
+	}
+	resp, err := req.Do(ctx, c.client)
+	if err != nil {
+		return fmt.Errorf("failed to put mapping: %w", err)
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("opensearch put mapping returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return nil
 }
 
 // SwitchAlias switches an alias from one index to another atomically.

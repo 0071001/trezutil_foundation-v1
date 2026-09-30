@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -597,7 +598,14 @@ func (h *ListingHandler) CreateListingH(w http.ResponseWriter, r *http.Request) 
 
 	err := h.listingUseCases.CreateListing(r.Context(), actorID, req.Listing, req.Attributes, req.Media, req.Availability, req.Locations)
 	if err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		switch {
+		case errors.Is(err, domain.ErrInvalidParameter):
+			writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_PARAMETER", Message: err.Error()}}, http.StatusBadRequest)
+		case errors.Is(err, domain.ErrInsufficientPermissions):
+			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
+		default:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		}
 		return
 	}
 

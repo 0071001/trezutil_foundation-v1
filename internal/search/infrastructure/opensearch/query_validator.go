@@ -68,6 +68,14 @@ func validateSearchQuery(query domain.DiscoveryQuery) error {
 		}
 	}
 
+	// Vertical: the caller checks the catalogue; here only the shape.
+	if query.Vertical != "" && !query.Vertical.IsWellFormed() {
+		return fmt.Errorf("invalid vertical: %s", query.Vertical)
+	}
+	if len(query.Place) > domain.MaxSearchPlaceLength {
+		return fmt.Errorf("location exceeds maximum length %d", domain.MaxSearchPlaceLength)
+	}
+
 	// Listing type validation
 	if query.ListingType != nil {
 		switch string(*query.ListingType) {

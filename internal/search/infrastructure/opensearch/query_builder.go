@@ -59,6 +59,27 @@ func buildSearchQuery(query domain.DiscoveryQuery) map[string]interface{} {
 		})
 	}
 
+	// Vertical filter
+	if query.Vertical != "" {
+		boolQuery["filter"] = append(boolQuery["filter"].([]interface{}), map[string]interface{}{
+			"term": map[string]interface{}{
+				"vertical": string(query.Vertical),
+			},
+		})
+	}
+
+	// Place filter: every word must appear in the place names or the listing text.
+	if query.Place != "" {
+		boolQuery["filter"] = append(boolQuery["filter"].([]interface{}), map[string]interface{}{
+			"multi_match": map[string]interface{}{
+				"query":    query.Place,
+				"fields":   []string{"place", "title", "description", "store_name"},
+				"type":     "cross_fields",
+				"operator": "and",
+			},
+		})
+	}
+
 	// Price range filter
 	if query.PriceRange != nil {
 		priceRange := map[string]interface{}{}

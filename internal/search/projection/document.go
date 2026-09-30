@@ -13,6 +13,8 @@ type SearchListingDocument struct {
 	CategoryID         string                       `json:"category_id"`
 	CategoryPath       []string                     `json:"category_path"`
 	ListingType        string                       `json:"listing_type"`
+	Vertical           string                       `json:"vertical,omitempty"`
+	Place              string                       `json:"place,omitempty"`
 	PricingModel       string                       `json:"pricing_model"`
 	PriceAmount        float64                      `json:"price_amount"`
 	PriceCurrency      string                       `json:"price_currency"`
@@ -54,6 +56,8 @@ func (m *SearchListingDocumentMapper) MapToDocument(projection domain.ListingPro
 		CategoryID:         projection.CategoryID,
 		CategoryPath:       projection.CategoryPath,
 		ListingType:        projection.ListingType,
+		Vertical:           projection.Vertical,
+		Place:              projection.Place,
 		PricingModel:       projection.PricingModel,
 		PriceAmount:        projection.PriceAmount,
 		PriceCurrency:      projection.PriceCurrency,

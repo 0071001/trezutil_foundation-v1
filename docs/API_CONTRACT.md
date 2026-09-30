@@ -68,7 +68,7 @@ The server must persist the result for the required replay window.
 - `POST /v1/sellers/{seller_id}/verification`
 
 ### Listings
-- `POST /v1/listings`
+- `POST /v1/listings` — optional `Vertical` (e.g. `HOTEL`); it must accept the listing type (400 `INVALID_PARAMETER` otherwise), and defaults from the listing type when omitted
 - `GET /v1/listings/{listing_id}`
 - `PATCH /v1/listings/{listing_id}`
 - `POST /v1/listings/{listing_id}/publish`

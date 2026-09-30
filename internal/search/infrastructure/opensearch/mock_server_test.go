@@ -21,6 +21,8 @@ type MockOpenSearchServer struct {
 	server  *http.Server
 	url     string
 	indices map[string]*mockIndexEntry
+
+	mappingUpdates int
 }
 
 func NewMockOpenSearchServer() *MockOpenSearchServer {
@@ -80,6 +82,16 @@ func (m *MockOpenSearchServer) handler(w http.ResponseWriter, r *http.Request) {
 	// PUT /_aliases — bulk alias operations
 	if method == http.MethodPost && path == "/_aliases" {
 		m.handleUpdateAliases(w, r)
+		return
+	}
+
+	// PUT /{index}/_mapping — additive mapping change
+	if method == http.MethodPut && strings.HasSuffix(path, "/_mapping") {
+		m.mu.Lock()
+		m.mappingUpdates++
+		m.mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"acknowledged":true}`))
 		return
 	}
 

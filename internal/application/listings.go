@@ -24,6 +24,7 @@ type ListingUseCases struct {
 	storeRepo           domain.StoreRepository
 	userRepo            domain.UserRepository
 	auditLogger         domain.AuditLogger
+	verticals           domain.VerticalResolver
 }
 
 // NewListingUseCases creates a new ListingUseCases.
@@ -57,6 +58,30 @@ func NewListingUseCases(
 		userRepo:            userRepo,
 		auditLogger:         auditLogger,
 	}
+}
+
+// WithVerticals makes new listings resolve their vertical through the vertical
+// catalogue, so an explicit vertical is checked against the listing type.
+// Without it, a listing's vertical follows its listing type.
+func (u *ListingUseCases) WithVerticals(verticals domain.VerticalResolver) *ListingUseCases {
+	u.verticals = verticals
+	return u
+}
+
+// resolveVertical returns the vertical of a new listing: the requested one when
+// valid, otherwise the listing type's default (older clients send none).
+func (u *ListingUseCases) resolveVertical(listing *domain.Listing) (domain.Vertical, error) {
+	if u.verticals != nil {
+		return u.verticals.ResolveForListing(listing.Vertical, listing.ListingType)
+	}
+	if listing.Vertical == "" {
+		return domain.DefaultVerticalForListingType(listing.ListingType), nil
+	}
+	v := domain.NormalizeVertical(string(listing.Vertical))
+	if !v.IsWellFormed() {
+		return "", fmt.Errorf("%w: unknown vertical %q", domain.ErrInvalidParameter, listing.Vertical)
+	}
+	return v, nil
 }
 
 // CreateListing creates a new listing.
@@ -119,6 +144,12 @@ func (u *ListingUseCases) CreateListing(ctx context.Context, actorID string, lis
 	if err != nil {
 		return fmt.Errorf("category not found: %w", err)
 	}
+
+	vertical, err := u.resolveVertical(listing)
+	if err != nil {
+		return err
+	}
+	listing.Vertical = vertical
 
 	// Server-controlled fields: identity and lifecycle are never taken from the
 	// client. New listings always start as drafts and go live via PublishListing.
@@ -198,6 +229,7 @@ func (u *ListingUseCases) CreateListing(ctx context.Context, actorID string, lis
 				"organization_id": listing.OrganizationID,
 				"seller_id":       listing.SellerID,
 				"store_id":        listing.StoreID,
+				"vertical":        string(listing.Vertical),
 			},
 		})
 	}

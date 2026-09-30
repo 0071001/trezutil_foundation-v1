@@ -104,6 +104,25 @@ func TestRouteMappingSearchStrip(t *testing.T) {
 	}
 }
 
+func TestRouteMappingVerticalsStrip(t *testing.T) {
+	var gotPath string
+	search := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath = r.URL.Path
+	}))
+	t.Cleanup(search.Close)
+	_, srv := testGateway(t, map[string]*Upstream{
+		"search": {Name: "search", URL: mustURL(t, search.URL), StripAPI: true},
+	}, nil, t.TempDir())
+	resp, err := http.Get(srv.URL + "/api/v1/verticals")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if gotPath != "/v1/verticals" {
+		t.Fatalf("path: want /v1/verticals, got %s", gotPath)
+	}
+}
+
 func TestRouteMappingListingsStrip(t *testing.T) {
 	var gotPath string
 	search := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

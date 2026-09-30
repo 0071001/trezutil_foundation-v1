@@ -30,6 +30,11 @@ func (m *IndexManager) EnsureIndex(ctx context.Context) error {
 	}
 
 	if exists {
+		// Fields added after the index was created are added in place (an
+		// additive mapping change); the startup full resync then fills them.
+		if err := m.client.PutMapping(ctx, alias, additiveMapping()); err != nil {
+			return fmt.Errorf("failed to extend index mapping: %w", err)
+		}
 		return nil
 	}
 
@@ -87,6 +92,17 @@ func (m *IndexManager) IsVersionedIndex(name string) bool {
 	return strings.HasPrefix(name, "trezutil-listings-")
 }
 
+// additiveMapping lists fields added to the mapping after the first index
+// version (vertical-aware search). Re-applying it is a no-op.
+func additiveMapping() map[string]interface{} {
+	return map[string]interface{}{
+		"properties": map[string]interface{}{
+			"vertical": map[string]interface{}{"type": "keyword"},
+			"place":    map[string]interface{}{"type": "text", "analyzer": "standard"},
+		},
+	}
+}
+
 // buildMapping returns the OpenSearch mapping for the search index.
 func (m *IndexManager) buildMapping() map[string]interface{} {
 	return map[string]interface{}{
@@ -125,6 +141,13 @@ func (m *IndexManager) buildMapping() map[string]interface{} {
 			},
 			"listing_type": map[string]interface{}{
 				"type": "keyword",
+			},
+			"vertical": map[string]interface{}{
+				"type": "keyword",
+			},
+			"place": map[string]interface{}{
+				"type":     "text",
+				"analyzer": "standard",
 			},
 			"pricing_model": map[string]interface{}{
 				"type": "keyword",
