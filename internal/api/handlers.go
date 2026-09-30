@@ -89,6 +89,12 @@ type idempotentOrderCreator interface {
 	CreateOrderIdempotent(ctx context.Context, actorID string, listingID string, quantity int, idempotencyKey string) (*domain.Order, error)
 }
 
+// cartOrderCreator is implemented by order use cases that accept several
+// items in one order (application.OrderUseCases).
+type cartOrderCreator interface {
+	CreateOrderWithLines(ctx context.Context, actorID string, lines []domain.OrderLine, idempotencyKey string) (*domain.Order, error)
+}
+
 // ReservationUseCases interface for reservation operations.
 type ReservationUseCases interface {
 	CreateReservation(ctx context.Context, actorID string, listingID string, startAt int64, endAt int64, quantity int, partySize int, idempotencyKey string) (*domain.Reservation, error)
@@ -407,6 +413,54 @@ func NewOrderHandler(orderUseCases OrderUseCases) *OrderHandler {
 	return &OrderHandler{orderUseCases: orderUseCases}
 }
 
+// createCartOrder handles POST /v1/orders with an items array.
+func (h *OrderHandler) createCartOrder(w http.ResponseWriter, r *http.Request, actorID string, items []struct {
+	ListingID string `json:"listing_id"`
+	Quantity  int    `json:"quantity"`
+}) {
+	creator, ok := h.orderUseCases.(cartOrderCreator)
+	if !ok {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "NOT_SUPPORTED", Message: "Multi-item orders are not supported"}}, http.StatusNotImplemented)
+		return
+	}
+	lines := make([]domain.OrderLine, 0, len(items))
+	for _, it := range items {
+		q := it.Quantity
+		if q == 0 {
+			q = 1
+		}
+		lines = append(lines, domain.OrderLine{ListingID: it.ListingID, Quantity: q})
+	}
+	order, err := creator.CreateOrderWithLines(r.Context(), actorID, lines, r.Header.Get("Idempotency-Key"))
+	if err != nil {
+		switch {
+		case errors.Is(err, domain.ErrInvalidOrderLines):
+			writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_ORDER_ITEMS", Message: err.Error()}}, http.StatusBadRequest)
+		case errors.Is(err, domain.ErrOrderMixedStores):
+			writeJSON(w, ErrorResponse{Error: Error{Code: "MIXED_STORES", Message: err.Error()}}, http.StatusBadRequest)
+		case errors.Is(err, domain.ErrOrderNotFound):
+			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_NOT_FOUND", Message: "Listing not found"}}, http.StatusNotFound)
+		case errors.Is(err, domain.ErrInsufficientPermissions):
+			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
+		case errors.Is(err, domain.ErrListingUnavailable):
+			writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_UNAVAILABLE", Message: "An item is not available for purchase"}}, http.StatusConflict)
+		case errors.Is(err, domain.ErrIdempotencyConflict):
+			writeJSON(w, ErrorResponse{Error: Error{Code: "IDEMPOTENCY_CONFLICT", Message: "Idempotency-Key was already used for a different order"}}, http.StatusConflict)
+		default:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_CREATE_FAILED", Message: err.Error()}}, http.StatusInternalServerError)
+		}
+		return
+	}
+	writeJSON(w, map[string]interface{}{
+		"order_id":    order.ID,
+		"status":      string(order.Status),
+		"total":       order.TotalAmount,
+		"currency":    order.Currency,
+		"customer_id": order.CustomerID,
+		"items":       len(order.Items),
+	}, http.StatusCreated)
+}
+
 // CreateOrderH handles POST /v1/orders
 func (h *OrderHandler) CreateOrderH(w http.ResponseWriter, r *http.Request) {
 	actorID := auth.UserID(r.Context())
@@ -418,9 +472,18 @@ func (h *OrderHandler) CreateOrderH(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ListingID string `json:"listing_id"`
 		Quantity  int    `json:"quantity"`
+		Items     []struct {
+			ListingID string `json:"listing_id"`
+			Quantity  int    `json:"quantity"`
+		} `json:"items"`
 	}
 	if err := readJSONBody(r, &req); err != nil {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request format"}}, http.StatusBadRequest)
+		return
+	}
+
+	if len(req.Items) > 0 {
+		h.createCartOrder(w, r, actorID, req.Items)
 		return
 	}
 

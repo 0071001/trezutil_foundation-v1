@@ -98,7 +98,7 @@ Idempotency: each inbound message carries a `MessageIdempotencyKey`. Duplicate
 delivery produces the same logical response without duplicate side effects.
 
 ### Orders
-- `POST /v1/orders`
+- `POST /v1/orders` — one item (`listing_id`, `quantity`) or a cart (`items: [{listing_id, quantity}]`): all items must belong to one store and currency, repeated listings are merged, at most 30 lines and 99 of one item. Errors: 400 `INVALID_ORDER_ITEMS` / `MIXED_STORES`, 404 `LISTING_NOT_FOUND`, 409 `LISTING_UNAVAILABLE` / `IDEMPOTENCY_CONFLICT`. `Idempotency-Key` returns the original order when the same items are sent again.
 - `GET /v1/orders/{order_id}`
 - `POST /v1/orders/{order_id}/cancel`
 

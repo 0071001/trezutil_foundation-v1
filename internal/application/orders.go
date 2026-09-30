@@ -2,9 +2,7 @@ package application
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"math"
 	"time"
 
 	"github.com/trezutil/trezutil/internal/domain"
@@ -62,87 +60,7 @@ func (u *OrderUseCases) CreateOrderIdempotent(ctx context.Context, actorID strin
 	if quantity <= 0 {
 		return nil, fmt.Errorf("quantity must be positive")
 	}
-
-	if idempotencyKey != "" {
-		if existing, err := u.orderRepo.FindByCustomerIdempotencyKey(ctx, actorID, idempotencyKey); err == nil {
-			if len(existing.Items) != 1 || existing.Items[0].ListingID != listingID || existing.Items[0].Quantity != quantity {
-				return nil, domain.ErrIdempotencyConflict
-			}
-			return existing, nil
-		} else if !errors.Is(err, domain.ErrOrderNotFound) {
-			return nil, err
-		}
-	}
-
-	listing, err := u.listingRepo.FindByID(ctx, listingID)
-	if err != nil {
-		return nil, domain.ErrOrderNotFound
-	}
-
-	tenantID := listing.OrganizationID
-	if tenantID == "" {
-		return nil, fmt.Errorf("listing has no organization")
-	}
-
-	actor, err := u.userRepo.FindByID(ctx, actorID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to find actor: %w", err)
-	}
-
-	if !u.canCreateOrder(ctx, actor, tenantID) {
-		return nil, domain.ErrInsufficientPermissions
-	}
-
-	// Only live listings can be purchased.
-	if !listing.IsPublished() {
-		return nil, domain.ErrListingUnavailable
-	}
-
-	now := time.Now().Unix()
-	// Listing prices are stored as decimal major units; round to the nearest
-	// minor unit so e.g. 19.99 becomes 1999 rather than a truncated 1998.
-	unitPrice := domain.NewMoney(int64(math.Round(listing.PriceAmount*100)), listing.PriceCurrency)
-
-	item := domain.NewOrderItem("", listingID, listing.Title, quantity, unitPrice, now)
-
-	pricingSnapshot := domain.NewPricingSnapshot(
-		[]domain.OrderItem{*item},
-		domain.NewMoney(0, listing.PriceCurrency),
-		domain.NewMoney(0, listing.PriceCurrency),
-		now,
-	)
-
-	order := domain.NewOrder(tenantID, listing.SellerID, actorID, listing.StoreID, []*domain.OrderItem{item}, listing.PriceCurrency, now)
-	item.OrderID = order.ID
-	order.PricingSnapshot = pricingSnapshot
-	order.IdempotencyKey = idempotencyKey
-
-	if err := u.orderRepo.Create(ctx, order); err != nil {
-		if errors.Is(err, domain.ErrIdempotencyConflict) && idempotencyKey != "" {
-			// Lost a race with a concurrent retry: return the winner.
-			if existing, ferr := u.orderRepo.FindByCustomerIdempotencyKey(ctx, actorID, idempotencyKey); ferr == nil {
-				return existing, nil
-			}
-		}
-		return nil, fmt.Errorf("failed to create order: %w", err)
-	}
-
-	if u.auditLogger != nil {
-		u.auditLogger.Record(ctx, domain.AuditEntry{
-			ActorID:    actorID,
-			Action:     "order.created",
-			TargetType: "order",
-			TargetID:   order.ID,
-			Metadata: map[string]interface{}{
-				"organization_id": tenantID,
-				"listing_id":      listingID,
-				"quantity":        quantity,
-				"total_amount":    order.TotalAmount,
-			},
-		})
-	}
-
-	return order, nil
+	return u.CreateOrderWithLines(ctx, actorID, []domain.OrderLine{{ListingID: listingID, Quantity: quantity}}, idempotencyKey)
 }
 
 // GetOrder retrieves an order by ID with authorization.
@@ -247,6 +165,26 @@ func (u *OrderUseCases) canAccessOrder(ctx context.Context, order *domain.Order,
 	return false
 }
 
+// canManageOrder is the seller side of an order: the seller profile owner,
+// the organization's owner/admin/manager, or a platform admin/operator. Unlike
+// canAccessOrder it excludes the buyer, who must not move their own order
+// through seller-only transitions (confirm, ready, complete).
+func (u *OrderUseCases) canManageOrder(ctx context.Context, order *domain.Order, actorID string) bool {
+	if actor, err := u.userRepo.FindByID(ctx, actorID); err == nil && !actor.IsSuspended() &&
+		(actor.HasRole(domain.RoleAdmin) || actor.HasRole(domain.RoleOperator)) {
+		return true
+	}
+	if seller, err := u.sellerRepo.FindByUserID(ctx, actorID); err == nil && seller != nil && seller.ID == order.SellerID {
+		return true
+	}
+	if order.OrganizationID != "" {
+		if role, err := u.orgRepo.GetMemberRole(ctx, order.OrganizationID, actorID); err == nil {
+			return role == domain.OrganizationRoleOwner || role == domain.OrganizationRoleAdmin || role == domain.OrganizationRoleManager
+		}
+	}
+	return false
+}
+
 // ConfirmOrder confirms a paid order and consumes inventory.
 // This transitions the order from PAID to CONFIRMED and consumes inventory for each item.
 func (u *OrderUseCases) ConfirmOrder(ctx context.Context, actorID string, orderID string) (*domain.Order, error) {
@@ -262,7 +200,7 @@ func (u *OrderUseCases) ConfirmOrder(ctx context.Context, actorID string, orderI
 		return nil, domain.ErrOrderNotFound
 	}
 
-	if !u.canAccessOrder(ctx, order, actorID) {
+	if !u.canManageOrder(ctx, order, actorID) {
 		return nil, domain.ErrInsufficientPermissions
 	}
 
@@ -331,7 +269,7 @@ func (u *OrderUseCases) ReadyForFulfillment(ctx context.Context, actorID string,
 		return nil, domain.ErrOrderNotFound
 	}
 
-	if !u.canAccessOrder(ctx, order, actorID) {
+	if !u.canManageOrder(ctx, order, actorID) {
 		return nil, domain.ErrInsufficientPermissions
 	}
 
@@ -401,7 +339,7 @@ func (u *OrderUseCases) CompleteOrder(ctx context.Context, actorID string, order
 		return nil, domain.ErrOrderNotFound
 	}
 
-	if !u.canAccessOrder(ctx, order, actorID) {
+	if !u.canManageOrder(ctx, order, actorID) {
 		return nil, domain.ErrInsufficientPermissions
 	}
 

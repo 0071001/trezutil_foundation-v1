@@ -141,3 +141,66 @@ func TestSellerConsole_ListingIsolation(t *testing.T) {
 		t.Fatalf("org B reservations = %v %v", reservations, err)
 	}
 }
+
+// A buyer must never push their own order through seller-only transitions.
+func TestSellerConsole_OrderConfirmationIsSellerOnly(t *testing.T) {
+	db := NewTestDB(t)
+	defer db.Close()
+	db.Cleanup(t)
+	ctx := context.Background()
+
+	const (
+		owner, staff, buyer = "5e11e700-0000-4000-8000-0000000000c1", "5e11e700-0000-4000-8000-0000000000c2", "5e11e700-0000-4000-8000-0000000000c3"
+		org                 = "5e11e700-0000-4000-8000-00000000000c"
+		seller, store       = "5e11e700-0000-4000-8000-0000000005c1", "5e11e700-0000-4000-8000-0000000007c1"
+		category, listing   = "5e11e700-0000-4000-8000-00000000c002", "5e11e700-0000-4000-8000-0000000001c1"
+	)
+	sellerUser(t, db, ctx, owner, "+243810000011")
+	sellerUser(t, db, ctx, staff, "+243810000012")
+	sellerUser(t, db, ctx, buyer, "+243810000013")
+	createTestOrganization(t, db, ctx, org)
+	orgs := postgres.NewOrganizationRepository(db.DB)
+	for _, m := range []*domain.OrganizationMember{
+		domain.NewOrganizationMember(owner, org, domain.OrganizationRoleOwner),
+		domain.NewOrganizationMember(staff, org, domain.OrganizationRoleStaff),
+	} {
+		if err := orgs.AddMember(ctx, m); err != nil {
+			t.Fatal(err)
+		}
+	}
+	createTestSeller(t, db, ctx, seller, owner, org)
+	createTestStore(t, db, ctx, store, org)
+	createTestCategory(t, db, ctx, category)
+	createTestListing(t, db, ctx, listing, org, seller, store, category)
+	if _, err := db.DB.ExecContext(ctx, `UPDATE listings SET status='published' WHERE id=$1`, listing); err != nil {
+		t.Fatal(err)
+	}
+
+	orders := application.NewOrderUseCases(postgres.NewOrderRepository(db.DB), postgres.NewListingRepository(db.DB),
+		postgres.NewSellerRepository(db.DB), orgs, postgres.NewUserRepository(db.DB),
+		postgres.NewInventoryRepository(db.DB), postgres.NewFulfillmentRepository(db.DB), nil)
+	order, err := orders.CreateOrder(ctx, buyer, listing, 1)
+	if err != nil {
+		t.Fatalf("buyer creates order: %v", err)
+	}
+	if _, err := db.DB.ExecContext(ctx, `UPDATE orders SET status='paid' WHERE id=$1`, order.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, actor := range map[string]string{"buyer": buyer, "staff": staff} {
+		if _, err := orders.ConfirmOrder(ctx, actor, order.ID); !errors.Is(err, domain.ErrInsufficientPermissions) {
+			t.Fatalf("%s confirmed the order: %v", name, err)
+		}
+		if _, err := orders.CompleteOrder(ctx, actor, order.ID); !errors.Is(err, domain.ErrInsufficientPermissions) {
+			t.Fatalf("%s completed the order: %v", name, err)
+		}
+	}
+	// The buyer keeps read access to their own order.
+	if _, err := orders.GetOrder(ctx, buyer, order.ID); err != nil {
+		t.Fatalf("buyer reads own order: %v", err)
+	}
+	confirmed, err := orders.ConfirmOrder(ctx, owner, order.ID)
+	if err != nil || confirmed.Status != domain.OrderStatusConfirmed {
+		t.Fatalf("owner confirms: %v %v", confirmed, err)
+	}
+}
