@@ -53,8 +53,8 @@ export function CartPage() {
               <Heading level={2}>Summary</Heading>
               <div><span>Items</span><strong>{bag.reduce((n, b) => n + b.quantity, 0)}</strong></div>
               <div className="summary-total"><span>Estimated total</span><strong>{currencies.length === 1 ? formatMoney(total, currencies[0]) : 'Mixed currencies'}</strong></div>
-              <ActionLink className="primary-button full-button" href={`/checkout?listing_id=${encodeURIComponent(bag[0].listing_id)}&quantity=${bag[0].quantity}`}>Order the first item <Icon name="arrow" /></ActionLink>
-              <p>Each item becomes its own order with its seller. Sign in is only needed when you order.</p>
+              <ActionLink className="primary-button full-button" href="/checkout?bag=1">Order these items <Icon name="arrow" /></ActionLink>
+              <p>Items from one seller become one order; items from different sellers are ordered separately. Sign in is only needed when you order.</p>
               <ActionLink className="summary-help" href="/conversation"><Icon name="spark" />Need help choosing?</ActionLink>
             </aside>
           </div>

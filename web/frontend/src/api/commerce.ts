@@ -102,6 +102,11 @@ export const ordersApi = {
     const created = mapOrder(await http.post<unknown>('/orders', { listing_id: listingId, quantity }, { idempotencyKey }))
     return ordersApi.get(created.id)
   },
+  /** One order for several items of one store (a bag). The key makes a retry return the same order. */
+  async createCart(lines: { listing_id: string; quantity: number }[], idempotencyKey: string): Promise<OrderSummary> {
+    const created = mapOrder(await http.post<unknown>('/orders', { items: lines }, { idempotencyKey }))
+    return ordersApi.get(created.id)
+  },
   async get(orderId: string): Promise<OrderSummary> {
     return mapOrder(await http.get<unknown>(`/orders/${encodeURIComponent(orderId)}`))
   },
