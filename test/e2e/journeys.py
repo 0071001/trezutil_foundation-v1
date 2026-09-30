@@ -220,8 +220,18 @@ _, other_token_id = None, None
 other_token, _, _ = login("+243833333333")
 st, g = call("GET", f"/reservations/{r1['reservation_id']}", token=other_token)
 check("C: unrelated user cannot view reservation", st in (403, 404), (st, g))
-st, myres = call("GET", "/reservations", token=customer_token)
-check("C: customer lists own reservations", st == 200 and any(i.get("ID") == r1["reservation_id"] for i in myres.get("items", [])), (st, myres))
+# The list is paged (the customer accumulates bookings across runs): walk the pages.
+listed, offset = False, 0
+while True:
+    st, myres = call("GET", f"/reservations?limit=100&offset={offset}", token=customer_token)
+    page = myres.get("items", []) if st == 200 else []
+    if any(i.get("ID") == r1["reservation_id"] for i in page):
+        listed = True
+        break
+    if st != 200 or len(page) < 100:
+        break
+    offset += 100
+check("C: customer lists own reservations", st == 200 and listed, (st, offset))
 st, c = call("POST", f"/reservations/{r1['reservation_id']}/cancel", token=customer_token)
 check("C: customer cancels reservation", st == 200, (st, c))
 st, av2 = call("GET", f"/availability?listing_id={lid}&start_at={start}&end_at={end}", token=customer_token)
@@ -543,6 +553,82 @@ st, prod = call("POST", "/listings", {"listing": {"StoreID": store, "SellerID": 
                 "ListingType": "physical_product", "Vertical": "RETAIL", "PricingModel": "fixed", "PriceAmount": 25, "PriceCurrency": "USD"}}, token=seller_token)
 st2, _ = call("POST", f"/listings/publish?listing_id={prod.get('ID')}", token=seller_token)
 check("V: seller publishes a RETAIL product", st == 201 and st2 == 200 and prod.get("Vertical") == "RETAIL", (st, st2, prod))
+
+# ---------- Cart: several items of one store become ONE order with order lines ----------
+def retail(title, price, store_id=None, currency="USD"):
+    st_, body = call("POST", "/listings", {"listing": {"StoreID": store_id or store, "SellerID": seller, "CategoryID": cat, "Title": f"{title} {RUN}",
+                     "ListingType": "physical_product", "Vertical": "RETAIL", "PricingModel": "fixed", "PriceAmount": price, "PriceCurrency": currency}}, token=seller_token)
+    lid_ = body.get("ID") if isinstance(body, dict) else None
+    st2_, _ = call("POST", f"/listings/publish?listing_id={lid_}", token=seller_token)
+    return lid_ if st_ == 201 and st2_ == 200 else None
+
+cart_a, cart_b, cart_c = prod.get("ID"), retail("Cart cable", 12.5), retail("Cart case", 4)
+st, store2_body = call("POST", "/stores", {"OrganizationID": org, "Name": "Second shop", "Slug": "second-shop-" + RUN, "Country": "CD",
+                                           "Phone": "+243811111111", "Status": "active"}, token=seller_token)
+cart_other_store = retail("Other store item", 9, store_id=store2_body.get("ID")) if st == 201 else None
+cart_other_ccy = retail("Other currency item", 9000, currency="CDF")
+check("CART: three items of one store and items from another store and currency are published",
+      all([cart_a, cart_b, cart_c, cart_other_store, cart_other_ccy]), (cart_a, cart_b, cart_c, cart_other_store, cart_other_ccy))
+
+key = "cart-1-" + RUN
+items = [{"listing_id": cart_a, "quantity": 2}, {"listing_id": cart_b, "quantity": 1}, {"listing_id": cart_c, "quantity": 3}]
+st, co = call("POST", "/orders", {"items": items}, token=customer_token, headers={"Idempotency-Key": key})
+check("CART: POST /orders with items creates ONE order (201)", st == 201 and co.get("order_id") and co.get("items") == 3, (st, co))
+oid = co.get("order_id")
+st, od = call("GET", f"/orders/{oid}", token=customer_token)
+lines = {i["ListingID"]: i for i in od.get("Items", [])} if isinstance(od, dict) else {}
+check("CART: the order holds one line per item with the requested quantities",
+      len(lines) == 3 and [lines[k]["Quantity"] for k in (cart_a, cart_b, cart_c)] == [2, 1, 3], od)
+check("CART: each line snapshots the unit price in minor units",
+      [lines[k]["UnitPrice"]["AmountMinor"] for k in (cart_a, cart_b, cart_c)] == [2500, 1250, 400], lines)
+check("CART: the order total is the sum of the lines and the order is in the listings' currency",
+      od["TotalAmount"]["AmountMinor"] == 2 * 2500 + 1250 + 3 * 400 and od["TotalAmount"]["Currency"] == "USD", od.get("TotalAmount"))
+check("CART: the order belongs to the customer, the store's organization and store",
+      od["CustomerID"] == customer_id and od["OrganizationID"] == org and od["StoreID"] == store and od["Status"] == "draft",
+      {k: od.get(k) for k in ("CustomerID", "OrganizationID", "StoreID", "Status")})
+check("CART: one order row holding three order lines was written",
+      sql(f"SELECT count(*) FROM orders WHERE id='{oid}'") == "1" and sql(f"SELECT jsonb_array_length(items) FROM orders WHERE id='{oid}'") == "3")
+sql(f"UPDATE listings SET price_amount=99 WHERE id='{cart_a}'")
+st, od2 = call("GET", f"/orders/{oid}", token=customer_token)
+check("CART: a later price change does not alter the order (snapshot)", od2["TotalAmount"]["AmountMinor"] == od["TotalAmount"]["AmountMinor"], od2.get("TotalAmount"))
+sql(f"UPDATE listings SET price_amount=25 WHERE id='{cart_a}'")
+
+st, again = call("POST", "/orders", {"items": items}, token=customer_token, headers={"Idempotency-Key": key})
+check("CART: replaying the same key and items returns the same order, no second order",
+      st in (200, 201) and again.get("order_id") == oid and sql(f"SELECT count(*) FROM orders WHERE customer_id='{customer_id}' AND idempotency_key='{key}'") == "1", (st, again))
+st, again = call("POST", "/orders", {"items": list(reversed(items))}, token=customer_token, headers={"Idempotency-Key": key})
+check("CART: the same items in another order are still the same order", st in (200, 201) and again.get("order_id") == oid, (st, again))
+st, conflict = call("POST", "/orders", {"items": items[:2]}, token=customer_token, headers={"Idempotency-Key": key})
+check("CART: the same key with different items -> 409 IDEMPOTENCY_CONFLICT", st == 409 and conflict.get("error", {}).get("code") == "IDEMPOTENCY_CONFLICT", (st, conflict))
+st, conflict = call("POST", "/orders", {"items": [dict(items[0], quantity=5)] + items[1:]}, token=customer_token, headers={"Idempotency-Key": key})
+check("CART: the same key with a changed quantity -> 409", st == 409, (st, conflict))
+
+n_orders = sql(f"SELECT count(*) FROM orders WHERE customer_id='{customer_id}'")
+st, mixed = call("POST", "/orders", {"items": [items[0], {"listing_id": cart_other_store, "quantity": 1}]}, token=customer_token)
+check("CART: items from two stores are refused (400 MIXED_STORES)", st == 400 and mixed.get("error", {}).get("code") == "MIXED_STORES", (st, mixed))
+st, mixed = call("POST", "/orders", {"items": [items[0], {"listing_id": cart_other_ccy, "quantity": 1}]}, token=customer_token)
+check("CART: items in two currencies are refused (400 MIXED_STORES)", st == 400 and mixed.get("error", {}).get("code") == "MIXED_STORES", (st, mixed))
+st, bad = call("POST", "/orders", {"items": [{"listing_id": cart_a, "quantity": -1}]}, token=customer_token)
+check("CART: a negative quantity is refused (400 INVALID_ORDER_ITEMS)", st == 400 and bad.get("error", {}).get("code") == "INVALID_ORDER_ITEMS", (st, bad))
+st, bad = call("POST", "/orders", {"items": [{"listing_id": cart_a, "quantity": 100}]}, token=customer_token)
+check("CART: more than 99 of one item is refused (400)", st == 400, (st, bad))
+st, bad = call("POST", "/orders", {"items": [{"listing_id": str(uuid.uuid4()), "quantity": 1}]}, token=customer_token)
+check("CART: an unknown listing is refused (404)", st == 404, (st, bad))
+st, dr = call("POST", "/listings", {"listing": {"StoreID": store, "SellerID": seller, "CategoryID": cat, "Title": "Cart draft " + RUN, "ListingType": "physical_product", "Vertical": "RETAIL", "PricingModel": "fixed", "PriceAmount": 3, "PriceCurrency": "USD"}}, token=seller_token)
+st, bad = call("POST", "/orders", {"items": [{"listing_id": dr.get("ID"), "quantity": 1}]}, token=customer_token)
+check("CART: an unpublished listing is refused (409 LISTING_UNAVAILABLE)", st == 409 and bad.get("error", {}).get("code") == "LISTING_UNAVAILABLE", (st, bad))
+st, _ = call("POST", "/orders", {"items": items})
+check("CART: no token -> 401", st == 401, st)
+check("CART: refused carts wrote no orders", sql(f"SELECT count(*) FROM orders WHERE customer_id='{customer_id}'") == n_orders)
+
+st, _ = call("GET", f"/orders/{oid}", token=other_token)
+check("CART: another customer cannot read the order", st in (403, 404), st)
+st, inc = call("GET", f"/orders/incoming?tenant_id={org}", token=seller_token)
+check("CART: the seller sees the order in their incoming orders", st == 200 and any(i.get("ID") == oid for i in inc.get("items", [])), (st, inc))
+st, _ = call("GET", f"/orders/incoming?tenant_id={org}", token=other_token)
+check("CART: another user cannot read the seller's incoming orders", st in (403, 404), st)
+st, _ = call("POST", f"/orders/{oid}/confirm", token=customer_token)
+check("CART: the buyer cannot confirm their own cart order", st in (403, 409), st)
 
 # ---------- Security spot checks ----------
 st, _ = call("POST", "/orders?user_id=" + customer_id, {"listing_id": lid, "quantity": 1})
