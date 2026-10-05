@@ -12,7 +12,7 @@ import (
 // userRow represents a row from the users table.
 type userRow struct {
 	ID          string
-	Phone       string
+	Phone       sql.NullString // NULL for staff accounts, which sign in with an email
 	Email       sql.NullString
 	DisplayName string
 	Status      string
@@ -53,7 +53,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id string) (*domain.User,
 
 	user := &domain.User{
 		ID:          u.ID,
-		Phone:       u.Phone,
+		Phone:       u.Phone.String,
 		Email:       email,
 		DisplayName: u.DisplayName,
 		Status:      domain.UserStatus(u.Status),
@@ -99,7 +99,7 @@ func (r *UserRepository) FindByPhone(ctx context.Context, phone string) (*domain
 
 	user := &domain.User{
 		ID:          u.ID,
-		Phone:       u.Phone,
+		Phone:       u.Phone.String,
 		Email:       email,
 		DisplayName: u.DisplayName,
 		Status:      domain.UserStatus(u.Status),
@@ -137,7 +137,8 @@ func (r *UserRepository) Create(ctx context.Context, user *domain.User) error {
 		verifiedAt = sql.NullTime{Valid: true, Time: toTime(*user.VerifiedAt)}
 	}
 
-	_, err := r.db.ExecContext(ctx, query, user.ID, user.Phone, email, user.DisplayName, user.Status, toTime(user.CreatedAt), toTime(user.UpdatedAt), verifiedAt)
+	phone := sql.NullString{String: user.Phone, Valid: user.Phone != ""}
+	_, err := r.db.ExecContext(ctx, query, user.ID, phone, email, user.DisplayName, user.Status, toTime(user.CreatedAt), toTime(user.UpdatedAt), verifiedAt)
 	if err != nil {
 		return fmt.Errorf("failed to create user: %w", err)
 	}
@@ -158,7 +159,8 @@ func (r *UserRepository) Update(ctx context.Context, user *domain.User) error {
 		verifiedAt = sql.NullTime{Valid: true, Time: toTime(*user.VerifiedAt)}
 	}
 
-	_, err := r.db.ExecContext(ctx, query, user.Phone, email, user.DisplayName, user.Status, toTime(user.UpdatedAt), verifiedAt, user.ID)
+	phone := sql.NullString{String: user.Phone, Valid: user.Phone != ""}
+	_, err := r.db.ExecContext(ctx, query, phone, email, user.DisplayName, user.Status, toTime(user.UpdatedAt), verifiedAt, user.ID)
 	if err != nil {
 		return fmt.Errorf("failed to update user: %w", err)
 	}

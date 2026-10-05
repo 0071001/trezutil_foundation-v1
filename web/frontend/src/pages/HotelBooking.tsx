@@ -11,6 +11,7 @@ import { ActionLink, Brand, Button, Field, Heading, Icon } from '@/components/ui
 import { formatMoney } from '@/lib/format'
 import { validateStay } from '@/pages/HotelDetail'
 import type { ListingDetail } from '@/types'
+import { t, plural } from '@/lib/i18n'
 
 /*
  * Hotel stay booking in the Figma checkout language:
@@ -18,9 +19,6 @@ import type { ListingDetail } from '@/types'
  * Payment Core) or pay at the property.
  */
 
-function plural(n: number, word: string) {
-  return `${n} ${word}${n === 1 ? '' : 's'}`
-}
 
 export function HotelBooking({ listing }: { listing: ListingDetail }) {
   const [params] = useSearchParams()
@@ -38,7 +36,7 @@ export function HotelBooking({ listing }: { listing: ListingDetail }) {
   const [order, setOrder] = useState<OrderSummary | null>(null)
   const idempotencyKey = useMemo(() => crypto.randomUUID(), [])
 
-  useEffect(() => { document.title = `Book ${listing.title} — Trezutil` }, [listing.title])
+  useEffect(() => { document.title = t('Book {title} — Trezutil', { title: listing.title }) }, [listing.title])
 
   const check = async () => {
     const invalid = validateStay(checkIn, checkOut, guests)
@@ -90,63 +88,63 @@ export function HotelBooking({ listing }: { listing: ListingDetail }) {
   return (
     <AppShell hideDock>
       <section className="page-section checkout-page">
-        <div className="checkout-head"><Brand /><span><Icon name="calendar" size={15} />Hotel stay</span></div>
-        <div role="list" className="checkout-progress" aria-label="Booking progress">
-          {['Stay', 'Reserve', 'Confirmation'].map((item, i) => <div role="listitem" className={step >= i + 1 ? 'active' : ''} key={item} aria-current={step === i + 1 ? 'step' : undefined}><span>{step > i + 1 ? '✓' : i + 1}</span><strong>{item}</strong></div>)}
+        <div className="checkout-head"><Brand /><span><Icon name="calendar" size={15} />{t('Hotel stay')}</span></div>
+        <div role="list" className="checkout-progress" aria-label={t('Booking progress')}>
+          {[t('Stay'), t('Reserve'), t('Confirmation')].map((item, i) => <div role="listitem" className={step >= i + 1 ? 'active' : ''} key={item} aria-current={step === i + 1 ? 'step' : undefined}><span>{step > i + 1 ? '✓' : i + 1}</span><strong>{item}</strong></div>)}
         </div>
         <div className="checkout-layout">
           <div className="checkout-form">
             {booked ? (
               <div className="checkout-success"><span className="empty-mark"><Icon name="check" size={26} /></span>
-                <Heading level={2}>{booked.status === 'confirmed' ? 'You’re booked!' : 'Request sent'}</Heading>
+                <Heading level={2}>{booked.status === 'confirmed' ? t('You’re booked!') : t('Request sent')}</Heading>
                 <p>{listing.title} · {plural(nights, 'night')} · {plural(booked.party_size, 'guest')}</p>
                 <div className="info-rows">
-                  <div><span>Check-in</span><strong>{checkIn}</strong></div>
-                  <div><span>Check-out</span><strong>{checkOut}</strong></div>
-                  <div><span>Rooms</span><strong>{booked.quantity}</strong></div>
-                  <div><span>Total</span><strong>{formatMoney(total, listing.price_currency)}</strong></div>
+                  <div><span>{t('Check-in')}</span><strong>{checkIn}</strong></div>
+                  <div><span>{t('Check-out')}</span><strong>{checkOut}</strong></div>
+                  <div><span>{t('Rooms')}</span><strong>{booked.quantity}</strong></div>
+                  <div><span>{t('Total')}</span><strong>{formatMoney(total, listing.price_currency)}</strong></div>
                 </div>
                 {order ? <PaymentPanel order={order} onUpdated={setOrder} /> : (
                   <div className="checkout-buttons">
-                    <Button className="primary-button" onClick={() => void payNow()} busy={paying}>{paying ? 'Preparing payment…' : 'Pay now'}<Icon name="arrow" /></Button>
-                    <ActionLink className="outline-button" href={`/reservations/${encodeURIComponent(booked.id)}`}>Pay at the property</ActionLink>
+                    <Button className="primary-button" onClick={() => void payNow()} busy={paying}>{paying ? t('Preparing payment…') : t('Pay now')}<Icon name="arrow" /></Button>
+                    <ActionLink className="outline-button" href={`/reservations/${encodeURIComponent(booked.id)}`}>{t('Pay at the property')}</ActionLink>
                   </div>
                 )}
                 {error && <ErrorState error={error} compact />}
-                <div className="checkout-buttons"><ActionLink className="text-action" href={`/reservations/${encodeURIComponent(booked.id)}`}>View reservation</ActionLink><ActionLink className="text-action" href="/reservations">All reservations</ActionLink></div>
+                <div className="checkout-buttons"><ActionLink className="text-action" href={`/reservations/${encodeURIComponent(booked.id)}`}>{t('View reservation')}</ActionLink><ActionLink className="text-action" href="/reservations">{t('All reservations')}</ActionLink></div>
               </div>
             ) : (
               <form onSubmit={reserve} noValidate>
-                <Heading level={2}>Your stay</Heading>
-                <p>Rooms are held only when you reserve; we check every night of your stay first.</p>
+                <Heading level={2}>{t('Your stay')}</Heading>
+                <p>{t('Rooms are held only when you reserve; we check every night of your stay first.')}</p>
                 <div className="form-grid">
-                  <Field label="Check-in"><input type="date" value={checkIn} min={dateInput(0)} onChange={(e) => setCheckIn(e.target.value)} /></Field>
-                  <Field label="Check-out"><input type="date" value={checkOut} min={checkIn} onChange={(e) => setCheckOut(e.target.value)} /></Field>
-                  <Field label="Guests"><input type="number" min={1} max={100} value={guests} onChange={(e) => setGuests(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} /></Field>
-                  <Field label="Rooms"><input type="number" min={1} max={20} value={rooms} onChange={(e) => setRooms(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} /></Field>
+                  <Field label={t('Check-in')}><input type="date" value={checkIn} min={dateInput(0)} onChange={(e) => setCheckIn(e.target.value)} /></Field>
+                  <Field label={t('Check-out')}><input type="date" value={checkOut} min={checkIn} onChange={(e) => setCheckOut(e.target.value)} /></Field>
+                  <Field label={t('Guests')}><input type="number" min={1} max={100} value={guests} onChange={(e) => setGuests(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} /></Field>
+                  <Field label={t('Rooms')}><input type="number" min={1} max={20} value={rooms} onChange={(e) => setRooms(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} /></Field>
                 </div>
                 {problem && <p className="auth-error" role="alert">{problem}</p>}
-                {checking && <p className="field-hint" role="status">Checking availability…</p>}
+                {checking && <p className="field-hint" role="status">{t('Checking availability…')}</p>}
                 {offer && !checking && (
                   <div className={`inline-notice ${offer.available ? 'success' : 'error'}`} role="status">
                     <Icon name={offer.available ? 'check' : 'bell'} size={16} />
-                    <span>{offer.available ? `${plural(offer.available_rooms, 'room')} left for these nights.` : `${offer.reason || 'Not available'}. Try other dates or more rooms.`}</span>
+                    <span>{offer.available ? t('{plural} left for these nights.', { plural: plural(offer.available_rooms, 'room') }) : t('{v}. Try other dates or more rooms.', { v: offer.reason || t('Not available') })}</span>
                   </div>
                 )}
                 {error && (error.status === 409 || error.code === 'UNAVAILABLE'
-                  ? <div className="inline-notice error" role="alert"><Icon name="bell" size={16} /><span>Those rooms were just taken. Please choose other dates.</span></div>
+                  ? <div className="inline-notice error" role="alert"><Icon name="bell" size={16} /><span>{t('Those rooms were just taken. Please choose other dates.')}</span></div>
                   : <ErrorState error={error} compact />)}
                 <div className="checkout-buttons">
-                  <ActionLink className="outline-button" href={`/hotels/${encodeURIComponent(listing.id)}`}>Other rooms</ActionLink>
-                  <Button className="primary-button" type="submit" busy={booking} disabled={!offer?.available || listing.status !== 'published'}>{booking ? 'Reserving…' : 'Reserve'}<Icon name="calendar" /></Button>
+                  <ActionLink className="outline-button" href={`/hotels/${encodeURIComponent(listing.id)}`}>{t('Other rooms')}</ActionLink>
+                  <Button className="primary-button" type="submit" busy={booking} disabled={!offer?.available || listing.status !== 'published'}>{booking ? t('Reserving…') : t('Reserve')}<Icon name="calendar" /></Button>
                 </div>
               </form>
             )}
           </div>
-          <aside className="checkout-summary" aria-label="Stay summary">
-            <Heading level={3}>Your stay</Heading>
+          <aside className="checkout-summary" aria-label={t('Stay summary')}>
+            <Heading level={3}>{t('Your stay')}</Heading>
             <div className="mini-order"><ListingImage src={listing.media[0]?.url} alt="" type="real_estate" /><div><strong>{listing.title}</strong><span>{plural(nights, 'night')} × {plural(rooms, 'room')} · {plural(guests, 'guest')}</span></div><b>{formatMoney(total, listing.price_currency)}</b></div>
-            <p className="summary-note">{formatMoney(listing.price_amount, listing.price_currency)} per room per night. Pay online after reserving, or at the property. You can cancel from your reservations.</p>
+            <p className="summary-note">{formatMoney(listing.price_amount, listing.price_currency)} {t('per room per night. Pay online after reserving, or at the property. You can cancel from your reservations.')}</p>
           </aside>
         </div>
       </section>

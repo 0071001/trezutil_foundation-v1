@@ -1,0 +1,10 @@
+{
+  "description": "Enables users to find and transact products, services, and local commerce through natural, conversational interactions with seamless voice and text input.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

@@ -119,7 +119,7 @@ func TestHotelIntent_StructuredSearch(t *testing.T) {
 	if q.Vertical != domain.VerticalHotel || q.Place != "Gombe" || q.Text != "" {
 		t.Fatalf("query = %+v", q)
 	}
-	if !strings.Contains(res.Response.Text, "Hotels & accommodation in Gombe · 2 nights · 2 guests — 1 found") {
+	if !strings.Contains(res.Response.Text, "hotels & accommodation in Gombe for 2 nights, 2 guests") {
 		t.Fatalf("reply = %q", res.Response.Text)
 	}
 	cx := contexts.contexts[res.ConversationID]
@@ -150,7 +150,7 @@ func TestHotelIntent_PlaceRelaxedVisibly(t *testing.T) {
 		engine.queries[1].Vertical != domain.VerticalHotel {
 		t.Fatalf("relaxed search = %+v", engine.queries)
 	}
-	if !strings.Contains(res.Response.Text, "Nothing is listed in Gombe yet") {
+	if !strings.Contains(res.Response.Text, "I didn't find anything listed in Gombe yet") {
 		t.Fatalf("the relaxation must be stated: %q", res.Response.Text)
 	}
 }
@@ -186,7 +186,7 @@ func TestKeywordFallback_DetectsVertical(t *testing.T) {
 		}
 		return res.Intent.Parameters
 	}
-	if p := classify("je cherche un hôtel à Gombe"); p["vertical"] != "HOTEL" || p["text"] != "Gombe" {
+	if p := classify("je cherche un hôtel à Gombe"); p["vertical"] != "HOTEL" || p["location"] != "Gombe" || p["text"] != nil {
 		t.Fatalf("hotel: %v", p)
 	}
 	if p := classify("find a restaurant"); p["vertical"] != "RESTAURANT" || p["text"] != nil {

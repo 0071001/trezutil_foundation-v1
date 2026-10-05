@@ -44,6 +44,7 @@ Legend: **REQUIRED** must be set; **OPTIONAL** feature off when unset; **SAFE DE
 | `PAYMENT_PROVIDER_REFRESH_SECONDS` | SAFE DEFAULT (60) | env | yes | |
 | `AI_PROVIDER`, `ANTHROPIC_API_KEY`, `AI_MODEL` and tuning | OPTIONAL | app.env | yes | See section 1. |
 | `VITE_WHATSAPP_NUMBER` | OPTIONAL, public | build arg | yes | Baked into the SPA. |
+| `VITE_PLAY_STORE_URL`, `VITE_APP_STORE_URL` | OPTIONAL, public | build arg | yes | Baked into the SPA; https only (anything else is ignored). The footer names a store only when its address is set. |
 | `GATEWAY_PORT`, `HTTP_PORT`, service URLs, `WEB_ROOT` | SAFE DEFAULT | compose | yes | Only the gateway publishes a port. |
 | Service-to-service authentication | by design | — | accepted | Internal services are not published and each validates the caller's JWT itself with the shared secret; there is no separate service credential. Keep the compose network private. |
 

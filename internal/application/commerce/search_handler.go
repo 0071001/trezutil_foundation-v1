@@ -43,6 +43,8 @@ func (h *SearchHandler) Handle(ctx context.Context, actor domain.CommerceActor, 
 		query.Place = strings.TrimSpace(place)
 	}
 
+	applySearchFilters(&query, parameters)
+
 	if pageStr, ok := parameters["page"].(string); ok && pageStr != "" {
 		query.Pagination.Cursor = pageStr
 	}
@@ -104,6 +106,17 @@ func searchCriteria(query domain.DiscoveryQuery, parameters map[string]interface
 		if n, ok := intParam(parameters, k); ok && n > 0 {
 			c[k] = n
 		}
+	}
+	for _, k := range []string{"price_min", "price_max"} {
+		if f, ok := floatParam(parameters, k); ok && f > 0 {
+			c[k] = f
+		}
+	}
+	if s, ok := parameters["sort"].(string); ok && s != "" && s != "relevance" {
+		c["sort"] = s
+	}
+	if s, ok := parameters["category_id"].(string); ok && s != "" {
+		c["category_id"] = s
 	}
 	return c
 }

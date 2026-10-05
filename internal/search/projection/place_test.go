@@ -27,7 +27,16 @@ func TestBuildPlace(t *testing.T) {
 		"loc-1": {Name: "Gombe", Neighborhood: s("Gombe"), City: s("Kinshasa")},
 	}}
 	got := buildPlace(context.Background(), locs, store, []domain.ListingLocation{{LocationID: "loc-1"}, {LocationID: "missing"}})
-	if got != "12 Avenue du Fleuve, Gombe, Kinshasa, Gombe" {
+	if got != "Gombe, Kinshasa" {
+		t.Fatalf("a listing is found by its own place, not its store's street: %q", got)
+	}
+	// A listing without a location of its own falls back to its store's address.
+	if got := buildPlace(context.Background(), locs, store, nil); got != "12 Avenue du Fleuve, Gombe, Kinshasa" {
+		t.Fatalf("fallback place = %q", got)
+	}
+	// A flat in Limete sold by a store in Gombe is not a Gombe flat.
+	locs.byID["loc-2"] = &domain.Location{Name: "Limete", Neighborhood: s("Limete"), City: s("Kinshasa")}
+	if got := buildPlace(context.Background(), locs, store, []domain.ListingLocation{{LocationID: "loc-2"}}); got != "Limete, Kinshasa" {
 		t.Fatalf("place = %q", got)
 	}
 	if buildPlace(context.Background(), locs, &domain.Store{}, nil) != "" {

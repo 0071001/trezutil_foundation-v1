@@ -13,6 +13,9 @@ const (
 	SearchSortFieldNewest       SearchSortField = "newest"
 	SearchSortFieldOldest       SearchSortField = "oldest"
 	SearchSortFieldAvailability SearchSortField = "availability"
+	// SearchSortFieldDiscount orders by the size of the saving (biggest first);
+	// listings not on promotion come last.
+	SearchSortFieldDiscount SearchSortField = "discount"
 )
 
 // SearchSortDirection represents the sort direction.
@@ -157,6 +160,9 @@ type DiscoveryQuery struct {
 	// Vertical restricts results to one commerce vertical. Callers validate it
 	// against the vertical catalogue; an unknown vertical is an error, never OTHER.
 	Vertical Vertical
+	// OnPromotion restricts results to listings currently on sale (a regular
+	// price above the selling price).
+	OnPromotion bool
 	// Place restricts results to listings whose place (store address, city and
 	// province, listing locations) or title/description contains every word,
 	// e.g. "Gombe". Geo-radius search stays in Location/RadiusMeters.
@@ -184,7 +190,11 @@ type SearchResult struct {
 	Seller             *SearchResultSeller
 	Store              *SearchResultStore
 	PrimaryMediaURL    *string
-	PublishedAt        int64
+	// CompareAtAmount is the regular price a sale replaced; nil when the listing
+	// is not on promotion. DiscountPercent is the saving (0 when none).
+	CompareAtAmount *float64
+	DiscountPercent int
+	PublishedAt     int64
 }
 
 // MatchedAttribute represents an attribute that matched during search.
@@ -197,6 +207,10 @@ type MatchedAttribute struct {
 type SearchResultLocation struct {
 	City         *string
 	Neighborhood *string
+	// Latitude and Longitude place the listing on a map (the primary location's
+	// coordinates); nil when its location has none.
+	Latitude  *float64
+	Longitude *float64
 }
 
 // SearchResultSeller represents seller information in a search result.
@@ -348,7 +362,10 @@ type ListingProjection struct {
 	PublishedAt        int64
 	UpdatedAt          int64
 	FreshnessScore     float64
-	Metadata           map[string]interface{}
+	// CompareAtAmount / DiscountPercent describe an active promotion (see Listing.Promotion).
+	CompareAtAmount *float64
+	DiscountPercent int
+	Metadata        map[string]interface{}
 }
 
 // GeoPoint represents a geographic point.

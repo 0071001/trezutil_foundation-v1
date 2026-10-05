@@ -99,6 +99,9 @@ func additiveMapping() map[string]interface{} {
 		"properties": map[string]interface{}{
 			"vertical": map[string]interface{}{"type": "keyword"},
 			"place":    map[string]interface{}{"type": "text", "analyzer": "standard"},
+			// Promotions (a sale: regular price above the selling price).
+			"compare_at_amount": map[string]interface{}{"type": "scaled_float", "scaling_factor": 100},
+			"discount_percent":  map[string]interface{}{"type": "short"},
 		},
 	}
 }
@@ -249,6 +252,13 @@ func (m *IndexManager) buildMapping() map[string]interface{} {
 			"freshness_score": map[string]interface{}{
 				"type":           "scaled_float",
 				"scaling_factor": 1000,
+			},
+			"compare_at_amount": map[string]interface{}{
+				"type":           "scaled_float",
+				"scaling_factor": 100,
+			},
+			"discount_percent": map[string]interface{}{
+				"type": "short",
 			},
 			"metadata": map[string]interface{}{
 				"type":    "object",

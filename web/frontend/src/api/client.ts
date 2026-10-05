@@ -7,6 +7,7 @@
  * Identity is never sent in bodies: the backend derives it from the token.
  */
 import type { ErrorEnvelope, Session } from '@/types'
+import { t } from '@/lib/i18n'
 
 export const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? '/api/v1'
 
@@ -30,7 +31,7 @@ export class ApiError extends Error {
 
 export function toApiError(err: unknown): ApiError {
   if (err instanceof ApiError) return err
-  return new ApiError(err instanceof Error ? err.message : 'Unexpected error', 0, 'UNKNOWN')
+  return new ApiError(err instanceof Error ? err.message : t('Unexpected error'), 0, 'UNKNOWN')
 }
 
 function storage(): Storage | null {
@@ -85,7 +86,9 @@ const inflightGets = new Map<string, Promise<unknown>>()
 
 async function send<T>(method: string, path: string, body: unknown, options: RequestOptions, retried: boolean): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  // A file upload sets its own multipart boundary; everything else is JSON.
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData
+  if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json'
   const token = tokens.access()
   if (token) headers.Authorization = `Bearer ${token}`
   if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey
@@ -100,15 +103,15 @@ async function send<T>(method: string, path: string, body: unknown, options: Req
     response = await fetch(`${API_BASE}${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
       credentials: 'same-origin',
       signal: timeout.signal,
     })
   } catch {
-    if (options.signal?.aborted) throw new ApiError('Request cancelled', 0, 'ABORTED')
+    if (options.signal?.aborted) throw new ApiError(t('Request cancelled'), 0, 'ABORTED')
     throw new ApiError(
-      timeout.signal.aborted ? 'The server took too long to answer. Please try again.' : 'You appear to be offline. Check your connection and try again.',
-      0, timeout.signal.aborted ? 'TIMEOUT' : 'NETWORK_ERROR')
+      timeout.signal.aborted ? t('The server took too long to answer. Please try again.') : t('You appear to be offline. Check your connection and try again.'),
+      0, timeout.signal.aborted ? 'TIMEOUT' : t('NETWORK_ERROR'))
   } finally {
     clearTimeout(timer)
     options.signal?.removeEventListener('abort', onAbort)
@@ -128,7 +131,7 @@ async function send<T>(method: string, path: string, body: unknown, options: Req
     throw new ApiError(
       envelope.error?.message ?? defaultMessage(response.status),
       response.status,
-      envelope.error?.code ?? `HTTP_${response.status}`,
+      envelope.error?.code ?? t('HTTP_{status}', { status: response.status }),
       data,
     )
   }
@@ -136,12 +139,12 @@ async function send<T>(method: string, path: string, body: unknown, options: Req
 }
 
 function defaultMessage(status: number): string {
-  if (status === 401) return 'Please sign in to continue.'
-  if (status === 403) return 'You do not have access to this.'
-  if (status === 404) return 'We could not find that.'
-  if (status === 429) return 'Too many attempts. Please wait a moment and try again.'
-  if (status >= 500) return 'Something went wrong on our side. Please try again.'
-  return `Request failed (${status})`
+  if (status === 401) return t('Please sign in to continue.')
+  if (status === 403) return t('You do not have access to this.')
+  if (status === 404) return t('We could not find that.')
+  if (status === 429) return t('Too many attempts. Please wait a moment and try again.')
+  if (status >= 500) return t('Something went wrong on our side. Please try again.')
+  return t('Request failed ({status})', { status })
 }
 
 export const http = {
@@ -157,6 +160,15 @@ export const http = {
   },
   post<T>(path: string, body: unknown = {}, options: RequestOptions = {}): Promise<T> {
     return send<T>('POST', path, body, options, false)
+  },
+  put<T>(path: string, body: unknown = {}, options: RequestOptions = {}): Promise<T> {
+    return send<T>('PUT', path, body, options, false)
+  },
+  /** Sends one file as multipart form data. */
+  upload<T>(path: string, field: string, file: File, options: RequestOptions = {}): Promise<T> {
+    const form = new FormData()
+    form.append(field, file)
+    return send<T>('POST', path, form, options, false)
   },
 }
 

@@ -33,6 +33,14 @@ type SearchCriteria struct {
 	Nights    int      `json:"nights,omitempty"`
 	PartySize int      `json:"party_size,omitempty"`
 	StartAt   string   `json:"start_at,omitempty"`
+	// What the person was looking for and how: the search words, a budget, an
+	// ordering and a category. A refinement ("moins cher", "seulement à louer")
+	// starts from these instead of from nothing.
+	Text       string  `json:"text,omitempty"`
+	PriceMin   float64 `json:"price_min,omitempty"`
+	PriceMax   float64 `json:"price_max,omitempty"`
+	Sort       string  `json:"sort,omitempty"`
+	CategoryID string  `json:"category_id,omitempty"`
 }
 
 // IsZero reports whether no criterion is set.

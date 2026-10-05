@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
+import { t } from '@/lib/i18n'
 
 type Tone = 'info' | 'success' | 'error'
 
@@ -26,11 +27,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={value}>
       {children}
       <div className="toast-region" role="status" aria-live="polite">
-        {toasts.map((t) => (
-          <div key={t.id} className={`toast toast-${t.tone}`}>
+        {toasts.map((toast) => (
+          <div key={toast.id} className={`toast toast-${toast.tone}`}>
             <span className="toast-dot" aria-hidden="true" />
-            <span>{t.message}</span>
-            <button type="button" className="toast-close" aria-label="Dismiss" onClick={() => setToasts((list) => list.filter((x) => x.id !== t.id))}>×</button>
+            <span>{toast.message}</span>
+            <button type="button" className="toast-close" aria-label={t('Dismiss')} onClick={() => setToasts((list) => list.filter((x) => x.id !== toast.id))}>×</button>
           </div>
         ))}
       </div>

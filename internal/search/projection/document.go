@@ -33,6 +33,8 @@ type SearchListingDocument struct {
 	PublishedAt        *int64                       `json:"published_at,omitempty"`
 	UpdatedAt          int64                        `json:"updated_at"`
 	FreshnessScore     float64                      `json:"freshness_score"`
+	CompareAtAmount    *float64                     `json:"compare_at_amount,omitempty"`
+	DiscountPercent    int                          `json:"discount_percent,omitempty"`
 	Metadata           map[string]interface{}       `json:"metadata,omitempty"`
 }
 
@@ -76,6 +78,8 @@ func (m *SearchListingDocumentMapper) MapToDocument(projection domain.ListingPro
 		PublishedAt:        &projection.PublishedAt,
 		UpdatedAt:          projection.UpdatedAt,
 		FreshnessScore:     projection.FreshnessScore,
+		CompareAtAmount:    projection.CompareAtAmount,
+		DiscountPercent:    projection.DiscountPercent,
 		Metadata:           projection.Metadata,
 	}
 

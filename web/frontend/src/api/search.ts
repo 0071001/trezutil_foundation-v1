@@ -1,6 +1,20 @@
 import { http, query, type RequestOptions } from '@/api/client'
 import { arr, num, obj, read, str, strOrNull } from '@/api/json'
+import { discountPercent } from '@/lib/promo'
 import type { Category, CustomerFlow, ListingType, SearchRequest, SearchResponse, SearchResult, Suggestion, VerticalInfo } from '@/types'
+
+/** A map coordinate, or null when the listing has none. */
+function coord(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+/** A sale is shown only when it is a real saving, whatever the server sent. */
+function sale(item: Record<string, unknown>): Pick<SearchResult, 'compare_at_amount' | 'discount_percent'> {
+  const compareAt = read(item, 'compare_at_amount', 'CompareAtAmount')
+  const price = num(read(item, 'price_amount', 'PriceAmount'))
+  const percent = typeof compareAt === 'number' ? discountPercent(compareAt, price) : 0
+  return percent > 0 ? { compare_at_amount: compareAt as number, discount_percent: percent } : { compare_at_amount: null, discount_percent: 0 }
+}
 
 export function mapSearchResult(value: unknown): SearchResult {
   const item = obj(value)
@@ -19,6 +33,8 @@ export function mapSearchResult(value: unknown): SearchResult {
     location: location ? {
       city: strOrNull(read(obj(location), 'city', 'City')),
       neighborhood: strOrNull(read(obj(location), 'neighborhood', 'Neighborhood')),
+      latitude: coord(read(obj(location), 'latitude', 'Latitude')),
+      longitude: coord(read(obj(location), 'longitude', 'Longitude')),
     } : null,
     seller: seller ? {
       seller_id: str(read(obj(seller), 'seller_id', 'SellerID')),
@@ -30,6 +46,7 @@ export function mapSearchResult(value: unknown): SearchResult {
       name: str(read(obj(store), 'name', 'Name')),
     } : null,
     primary_media_url: strOrNull(read(item, 'primary_media_url', 'PrimaryMediaURL')),
+    ...sale(item),
     published_at: num(read(item, 'published_at', 'PublishedAt')),
   }
 }

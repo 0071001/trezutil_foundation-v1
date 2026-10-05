@@ -4,9 +4,10 @@ import { searchApi } from '@/api/search'
 import { Button, Icon } from '@/components/ui'
 import { useVoiceInput } from '@/lib/voice'
 import type { Suggestion } from '@/types'
+import { t } from '@/lib/i18n'
 
 /** Figma inline composer with live suggestions (combobox pattern). */
-export function SearchComposer({ initial = '', onSubmit, placeholder = 'Tell Trezutil what you need...' }: { initial?: string; onSubmit?: (q: string) => void; placeholder?: string }) {
+export function SearchComposer({ initial = '', onSubmit, placeholder = t('Tell Trezutil what you need...') }: { initial?: string; onSubmit?: (q: string) => void; placeholder?: string }) {
   const [value, setValue] = useState(initial)
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
   const [open, setOpen] = useState(false)
@@ -53,15 +54,15 @@ export function SearchComposer({ initial = '', onSubmit, placeholder = 'Tell Tre
       <input
         role="combobox" aria-expanded={expanded} aria-controls={listId} aria-autocomplete="list"
         aria-activedescendant={active >= 0 ? `${listId}-${active}` : undefined}
-        aria-label="Search Trezutil" value={value} maxLength={200}
+        aria-label={t('Search Trezutil')} value={value} maxLength={200}
         onChange={(e) => { touched.current = true; setValue(e.target.value) }}
         onKeyDown={onKey} onBlur={() => setTimeout(() => setOpen(false), 150)} onFocus={() => suggestions.length && setOpen(true)}
         placeholder={placeholder}
       />
-      {voice.supported && <Button className={`tool-button ${voice.listening ? 'listening' : ''}`} ariaLabel={voice.listening ? 'Stop listening' : 'Speak your search'} onClick={voice.toggle}><Icon name="mic" /></Button>}
-      <Button className="send-button" type="submit" ariaLabel="Search"><Icon name="arrow" /></Button>
+      {voice.supported && <Button className={`tool-button ${voice.listening ? 'listening' : ''}`} ariaLabel={voice.listening ? t('Stop listening') : t('Speak your search')} onClick={voice.toggle}><Icon name="mic" /></Button>}
+      <Button className="send-button" type="submit" ariaLabel={t('Search')}><Icon name="arrow" /></Button>
       {expanded && (
-        <ul className="suggest-list" id={listId} role="listbox" aria-label="Suggestions">
+        <ul className="suggest-list" id={listId} role="listbox" aria-label={t('Suggestions')}>
           {suggestions.map((s, i) => (
             <li key={s.text} id={`${listId}-${i}`} role="option" aria-selected={i === active} className={i === active ? 'active' : ''} onMouseDown={(e) => { e.preventDefault(); go(s.text) }}>
               <Icon name="search" size={15} /><span>{s.text}</span>

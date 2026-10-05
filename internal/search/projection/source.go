@@ -137,6 +137,14 @@ func (s *PostgresListingProjectionSource) GetListingProjection(ctx context.Conte
 
 	freshnessScore := computeFreshnessScore(publishedAt, now)
 
+	// An active sale is projected so search can filter, sort and badge it; the
+	// listing price above is already the sale price.
+	var compareAt *float64
+	discount := 0
+	if promo := listing.Promotion(); promo != nil {
+		compareAt, discount = &promo.CompareAtAmount, promo.DiscountPercent
+	}
+
 	return domain.ListingProjection{
 		ListingID:          listing.ID,
 		OrganizationID:     listing.OrganizationID,
@@ -167,6 +175,8 @@ func (s *PostgresListingProjectionSource) GetListingProjection(ctx context.Conte
 		PublishedAt:        publishedAt,
 		UpdatedAt:          listing.UpdatedAt,
 		FreshnessScore:     freshnessScore,
+		CompareAtAmount:    compareAt,
+		DiscountPercent:    discount,
 		Metadata:           listing.Metadata,
 	}, nil
 }
@@ -178,9 +188,11 @@ func (s *PostgresListingProjectionSource) GetPublishedListingIDs(ctx context.Con
 	return []string{}, nil
 }
 
-// buildPlace joins the place names a listing can be found by: its store's
-// address, city and province, and the names of its listing locations
-// (duplicates removed, order kept).
+// buildPlace joins the place names a listing can be found by (duplicates
+// removed, order kept). A listing is found by its own locations first: a seller
+// with a store in Gombe who lists a flat in Limete must not be found under
+// Gombe. The store's street address only stands in when the listing has no
+// location of its own; the store's city and province always follow.
 func buildPlace(ctx context.Context, locationRepo domain.LocationRepository, store *domain.Store, listingLocations []domain.ListingLocation) string {
 	var parts []string
 	seen := map[string]bool{}
@@ -194,11 +206,6 @@ func buildPlace(ctx context.Context, locationRepo domain.LocationRepository, sto
 			parts = append(parts, s)
 		}
 	}
-	if store != nil {
-		add(store.Address)
-		add(store.City)
-		add(store.Province)
-	}
 	for _, ll := range listingLocations {
 		loc, err := locationRepo.FindByID(ctx, ll.LocationID)
 		if err != nil || loc == nil {
@@ -209,6 +216,13 @@ func buildPlace(ctx context.Context, locationRepo domain.LocationRepository, sto
 		add(loc.Neighborhood)
 		add(loc.City)
 		add(loc.Province)
+	}
+	if store != nil {
+		if len(parts) == 0 {
+			add(store.Address)
+		}
+		add(store.City)
+		add(store.Province)
 	}
 	return strings.Join(parts, ", ")
 }

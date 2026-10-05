@@ -159,9 +159,8 @@ func (u *ListingUseCases) CreateListing(ctx context.Context, actorID string, lis
 	listing.PublishedAt = nil
 	listing.CreatedAt = now
 	listing.UpdatedAt = now
-	if listing.Metadata == nil {
-		listing.Metadata = make(map[string]interface{})
-	}
+	// A promotion exists only through SetListingPromotion, never from client metadata.
+	listing.Metadata = domain.StripPromotion(listing.Metadata)
 
 	// Create listing
 	err = u.listingRepo.Create(ctx, listing)
@@ -540,9 +539,19 @@ func (u *ListingUseCases) UpdateListing(ctx context.Context, actorID string, lis
 			return nil, fmt.Errorf("%w: price must be positive", domain.ErrInvalidParameter)
 		}
 		listing.PriceAmount = *patch.PriceAmount
+		// A new price at or above the regular price ends the sale; below it, it is
+		// the new sale price.
+		if _, marked := listing.Metadata[domain.PromotionMetadataKey]; marked && listing.Promotion() == nil {
+			delete(listing.Metadata, domain.PromotionMetadataKey)
+		}
 	}
 	if patch.Metadata != nil {
-		listing.Metadata = patch.Metadata
+		// Replaces the seller's own metadata but never creates, edits or removes the promotion.
+		meta := domain.StripPromotion(patch.Metadata)
+		if promo, ok := listing.Metadata[domain.PromotionMetadataKey]; ok {
+			meta[domain.PromotionMetadataKey] = promo
+		}
+		listing.Metadata = meta
 	}
 	listing.UpdatedAt = time.Now().Unix()
 	if err := u.listingRepo.Update(ctx, listing); err != nil {
@@ -550,6 +559,80 @@ func (u *ListingUseCases) UpdateListing(ctx context.Context, actorID string, lis
 	}
 	if u.auditLogger != nil {
 		u.auditLogger.Record(ctx, domain.AuditEntry{ActorID: actorID, Action: "listing.updated", TargetType: "listing", TargetID: listing.ID})
+	}
+	return listing, nil
+}
+
+// canChangePromotion: a sale can be started or ended while a listing is being
+// prepared, live or paused; sold, closed, expired and suspended listings are final.
+func canChangePromotion(status domain.ListingStatus) bool {
+	switch status {
+	case domain.ListingStatusDraft, domain.ListingStatusPendingReview, domain.ListingStatusPublished, domain.ListingStatusPaused:
+		return true
+	}
+	return false
+}
+
+// manageableListing loads a listing and checks the actor may manage it.
+func (u *ListingUseCases) manageableListing(ctx context.Context, actorID, listingID string) (*domain.Listing, error) {
+	if actorID == "" {
+		return nil, domain.ErrInsufficientPermissions
+	}
+	listing, err := u.listingRepo.FindByID(ctx, listingID)
+	if err != nil {
+		return nil, domain.ErrListingNotFound
+	}
+	if !u.canManageListing(ctx, actorID, listing) {
+		return nil, domain.ErrInsufficientPermissions
+	}
+	return listing, nil
+}
+
+// SetListingPromotion puts a listing on sale at salePrice, or changes the sale
+// price of a listing already on sale. Unlike a plain price edit it works on a
+// live listing (no pause needed), because a sale is a short-lived change the
+// seller starts while the listing keeps selling. The listing's price becomes the
+// sale price, so orders and payments charge exactly what customers see; the
+// regular price is remembered so EndListingPromotion can restore it. Existing
+// orders keep their pricing snapshot.
+func (u *ListingUseCases) SetListingPromotion(ctx context.Context, actorID, listingID string, salePrice float64) (*domain.Listing, error) {
+	listing, err := u.manageableListing(ctx, actorID, listingID)
+	if err != nil {
+		return nil, err
+	}
+	if !canChangePromotion(listing.Status) {
+		return nil, domain.ErrInvalidStatusTransition
+	}
+	if err := listing.StartPromotion(salePrice); err != nil {
+		return nil, err
+	}
+	if err := u.listingRepo.Update(ctx, listing); err != nil {
+		return nil, fmt.Errorf("failed to update listing: %w", err)
+	}
+	if u.auditLogger != nil {
+		u.auditLogger.Record(ctx, domain.AuditEntry{ActorID: actorID, Action: "listing.promotion_started", TargetType: "listing", TargetID: listing.ID})
+	}
+	return listing, nil
+}
+
+// EndListingPromotion ends a sale and restores the regular price. Ending a
+// listing's sale when it has none is a no-op.
+func (u *ListingUseCases) EndListingPromotion(ctx context.Context, actorID, listingID string) (*domain.Listing, error) {
+	listing, err := u.manageableListing(ctx, actorID, listingID)
+	if err != nil {
+		return nil, err
+	}
+	if !canChangePromotion(listing.Status) {
+		return nil, domain.ErrInvalidStatusTransition
+	}
+	if !listing.EndPromotion() {
+		return listing, nil
+	}
+	if err := u.listingRepo.Update(ctx, listing); err != nil {
+		return nil, fmt.Errorf("failed to update listing: %w", err)
+	}
+	if u.auditLogger != nil {
+		u.auditLogger.Record(ctx, domain.AuditEntry{ActorID: actorID, Action: "listing.promotion_ended", TargetType: "listing", TargetID: listing.ID})
 	}
 	return listing, nil
 }

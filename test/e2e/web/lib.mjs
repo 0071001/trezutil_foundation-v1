@@ -46,6 +46,7 @@ export async function apiLogin(phone) {
 /** Makes a browser context signed in (tokens in storage, as the app stores them). */
 export async function signInContext(context, tokens) {
   await context.addInitScript(([a, r]) => {
+    localStorage.setItem('trezutil_lang', 'en')
     localStorage.setItem('trezutil_access_token', a)
     localStorage.setItem('trezutil_refresh_token', r)
   }, [tokens.access_token, tokens.refresh_token])

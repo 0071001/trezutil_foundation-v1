@@ -23,6 +23,10 @@ const (
 	DefaultMaxPerPhoneHour  = 5
 	codeDigits              = 6
 	defaultCustomerNameMask = "Trezutil user"
+
+	// Staff password sign-in: consecutive wrong passwords before the account locks, and for how long.
+	DefaultMaxLoginFailures = 5
+	DefaultLockout          = 15 * time.Minute
 )
 
 // Session is the result of a successful sign-in or refresh.
@@ -42,14 +46,19 @@ type Config struct {
 	Challenges domain.OTPChallengeRepository
 	Sender     domain.OTPProvider
 	Tokens     domain.TokenService
+	// Credentials enables staff sign-in with email and password; nil disables it.
+	Credentials domain.CredentialRepository
 	// CodeSecret keys the HMAC used to store OTP codes. It must be secret.
 	CodeSecret     string
 	AccessTokenTTL time.Duration
 	CodeTTL        time.Duration
 	MaxAttempts    int
 	MaxPerHour     int
-	Clock          Clock
-	Logger         zerolog.Logger
+	// MaxLoginFailures and Lockout bound password guessing on staff accounts.
+	MaxLoginFailures int
+	Lockout          time.Duration
+	Clock            Clock
+	Logger           zerolog.Logger
 }
 
 // Service issues and verifies OTP challenges and manages sessions.
@@ -76,6 +85,12 @@ func NewService(cfg Config) (*Service, error) {
 	}
 	if cfg.AccessTokenTTL <= 0 {
 		cfg.AccessTokenTTL = 15 * time.Minute
+	}
+	if cfg.MaxLoginFailures <= 0 {
+		cfg.MaxLoginFailures = DefaultMaxLoginFailures
+	}
+	if cfg.Lockout <= 0 {
+		cfg.Lockout = DefaultLockout
 	}
 	if cfg.Clock == nil {
 		cfg.Clock = func() int64 { return time.Now().Unix() }

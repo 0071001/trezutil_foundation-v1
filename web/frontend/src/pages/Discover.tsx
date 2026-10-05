@@ -7,6 +7,7 @@ import { EmptyState, ErrorState, SkeletonGrid } from '@/components/states'
 import { ActionLink, Heading, Icon, type IconName } from '@/components/ui'
 import { useAsync } from '@/lib/useAsync'
 import type { SearchRequest } from '@/types'
+import { t, tx, tn } from '@/lib/i18n'
 
 const images = {
   city: 'https://images.unsplash.com/photo-1695071622344-75bb5863bc83?auto=format&fit=crop&w=1200&q=80',
@@ -15,12 +16,12 @@ const images = {
 }
 
 const categoryItems: { label: string; icon: IconName; color: string; href: string }[] = [
-  { label: 'Products', icon: 'shop', color: 'blue', href: '/search?vertical=RETAIL' },
-  { label: 'Services', icon: 'service', color: 'navy', href: '/search?vertical=SERVICES' },
-  { label: 'Food', icon: 'food', color: 'coral', href: '/search?vertical=RESTAURANT' },
-  { label: 'Hotels', icon: 'building', color: 'mint', href: '/search?vertical=HOTEL' },
-  { label: 'Real Estate', icon: 'home', color: 'soft', href: '/search?vertical=REAL_ESTATE' },
-  { label: 'Transport', icon: 'car', color: 'line', href: '/search?vertical=TRANSPORT' },
+  { label: tx('Products'), icon: 'shop', color: 'blue', href: '/search?vertical=RETAIL' },
+  { label: tx('Services'), icon: 'service', color: 'navy', href: '/search?vertical=SERVICES' },
+  { label: tx('Food'), icon: 'food', color: 'coral', href: '/search?vertical=RESTAURANT' },
+  { label: tx('Hotels'), icon: 'building', color: 'mint', href: '/search?vertical=HOTEL' },
+  { label: tx('Real Estate'), icon: 'home', color: 'soft', href: '/search?vertical=REAL_ESTATE' },
+  { label: tx('Transport'), icon: 'car', color: 'line', href: '/search?vertical=TRANSPORT' },
 ]
 
 /** Figma Rail bound to a live search. */
@@ -28,10 +29,10 @@ function Rail({ title, copy, request, href }: { title: string; copy: string; req
   const rail = useAsync(() => searchApi.search(request), [JSON.stringify(request)])
   return (
     <section className="app-rail" aria-label={title}>
-      <div className="rail-head"><div><Heading>{title}</Heading><p>{copy}</p></div><ActionLink href={href}>See all <Icon name="arrow" size={17} /></ActionLink></div>
+      <div className="rail-head"><div><Heading>{title}</Heading><p>{copy}</p></div><ActionLink href={href}>{t('See all')} <Icon name="arrow" size={17} /></ActionLink></div>
       {rail.loading && <SkeletonGrid count={4} />}
       {rail.error && <ErrorState error={rail.error} onRetry={rail.reload} compact />}
-      {rail.data && rail.data.items.length === 0 && <p className="rail-empty">Nothing here yet — new listings appear as sellers publish them.</p>}
+      {rail.data && rail.data.items.length === 0 && <p className="rail-empty">{t('Nothing here yet — new listings appear as sellers publish them.')}</p>}
       {rail.data && rail.data.items.length > 0 && <div className="results-grid">{rail.data.items.map((item) => <ResultCard item={item} key={item.listing_id} />)}</div>}
     </section>
   )
@@ -39,22 +40,22 @@ function Rail({ title, copy, request, href }: { title: string; copy: string; req
 
 export default function DiscoverPage() {
   const total = useAsync(() => searchApi.search({ text: '', page_size: 1 }), [])
-  useEffect(() => { document.title = 'Discover — Trezutil' }, [])
+  useEffect(() => { document.title = t('Discover — Trezutil') }, [])
   return (
     <AppShell>
       <section className="discover-hero"><div className="page-section">
-        <div className="discover-copy"><div className="section-eyebrow">Discover around you</div><Heading level={1}>What will you find today?</Heading><p>Useful products, places and people — listed by sellers around Kinshasa.</p><SearchComposer /></div>
-        <div className="discover-collage"><img src={images.city} alt="Street commerce in Kinshasa" loading="eager" /><div><span>Listed on Trezutil</span><strong>{total.data ? `${total.data.total} places to discover` : 'Discover what’s near you'}</strong></div></div>
+        <div className="discover-copy"><div className="section-eyebrow">{t('Discover around you')}</div><Heading level={1}>{t('What will you find today?')}</Heading><p>{t('Useful products, places and people — listed by sellers around Kinshasa.')}</p><SearchComposer /></div>
+        <div className="discover-collage"><img src={images.city} alt={t('Street commerce in Kinshasa')} loading="eager" /><div><span>{t('Listed on Trezutil')}</span><strong>{total.data ? tn(total.data.total, '{n} place to discover', '{n} places to discover') : t('Discover what’s near you')}</strong></div></div>
       </div></section>
       <section className="page-section discover-content">
-        <nav className="category-strip" aria-label="Categories">{categoryItems.map((item) => <ActionLink href={item.href} className={`discover-category ${item.color}`} key={item.label}><Icon name={item.icon} /><strong>{item.label}</strong><Icon name="arrow" size={16} /></ActionLink>)}</nav>
-        <Rail title="New around you" copy="The latest listings from sellers nearby" request={{ text: '', page_size: 4, sort_field: 'newest', sort_direction: 'desc' }} href="/search?sort=newest" />
+        <nav className="category-strip" aria-label={t('Categories')}>{categoryItems.map((item) => <ActionLink href={item.href} className={`discover-category ${item.color}`} key={item.label}><Icon name={item.icon} /><strong>{t(item.label)}</strong><Icon name="arrow" size={16} /></ActionLink>)}</nav>
+        <Rail title={t('New around you')} copy={t('The latest listings from sellers nearby')} request={{ text: '', page_size: 4, sort_field: 'newest', sort_direction: 'desc' }} href="/search?sort=newest" />
         <div className="editorial-row">
-          <ActionLink className="editorial-card food-feature" href="/search?vertical=RESTAURANT"><img src={images.food} alt="" loading="lazy" /><div><span>Eat nearby</span><Heading level={2}>Good food,<br />closer than you think.</Heading><small>Restaurants and delivery</small></div></ActionLink>
-          <ActionLink className="editorial-card service-feature" href="/search?vertical=SERVICES"><img src={images.service} alt="" loading="lazy" /><div><span>Services</span><Heading level={2}>Get it done.</Heading><small>Local professionals you can book</small></div></ActionLink>
+          <ActionLink className="editorial-card food-feature" href="/search?vertical=RESTAURANT"><img src={images.food} alt="" loading="lazy" /><div><span>{t('Eat nearby')}</span><Heading level={2}>{t('Good food,')}<br />{t('closer than you think.')}</Heading><small>{t('Restaurants and delivery')}</small></div></ActionLink>
+          <ActionLink className="editorial-card service-feature" href="/search?vertical=SERVICES"><img src={images.service} alt="" loading="lazy" /><div><span>{t('Services')}</span><Heading level={2}>{t('Get it done.')}</Heading><small>{t('Local professionals you can book')}</small></div></ActionLink>
         </div>
-        <Rail title="Homes & stays" copy="Apartments, houses and places to stay" request={{ text: 'apartment', page_size: 4 }} href="/search?vertical=REAL_ESTATE" />
-        {total.data?.total === 0 && <EmptyState icon="shop" title="The marketplace is just opening" copy="Sellers are adding their first listings. Tell Trezutil what you need and we’ll look as soon as it’s listed." action="Ask Trezutil" href="/conversation" />}
+        <Rail title={t('Homes & stays')} copy={t('Apartments, houses and places to stay')} request={{ text: 'apartment', page_size: 4 }} href="/search?vertical=REAL_ESTATE" />
+        {total.data?.total === 0 && <EmptyState icon="shop" title={t('The marketplace is just opening')} copy={t('Sellers are adding their first listings. Tell Trezutil what you need and we’ll look as soon as it’s listed.')} action={t('Ask Trezutil')} href="/conversation" />}
       </section>
     </AppShell>
   )

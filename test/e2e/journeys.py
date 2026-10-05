@@ -458,7 +458,7 @@ st, conv = call("POST", "/conversations/message", {"channel": "web", "message_te
                 "sender_external_id": hotel_sender, "message_idempotency_key": "h1-" + RUN}, token=customer_token)
 text = (conv.get("response") or {}).get("text", "") if isinstance(conv, dict) else ""
 check("H1: 'a hotel in Gombe for two nights for two people' -> vertical HOTEL, location, nights, party size",
-      st == 200 and "Hotels & accommodation in Gombe · 2 nights · 2 guests" in text and room_title in text, (st, text))
+      st == 200 and "hotels & accommodation in Gombe for 2 nights, 2 guests" in text and room_title in text, (st, text))
 
 # H2 - Hotel availability: property -> dates -> guests -> availability per room type
 st, prop = call("GET", f"/hotels/property?store_id={store}")

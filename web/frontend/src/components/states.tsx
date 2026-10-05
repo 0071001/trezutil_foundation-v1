@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router'
 import type { ApiError } from '@/api/client'
 import { ActionLink, Button, Heading, Icon, type IconName } from '@/components/ui'
+import { t } from '@/lib/i18n'
 
 /** Figma empty state (Pages.tsx EmptyState). */
 export function EmptyState({ icon = 'spark', title, copy, action, href, onAction }: { icon?: IconName; title: string; copy: string; action?: string; href?: string; onAction?: () => void }) {
@@ -22,22 +23,22 @@ export function ErrorState({ error, onRetry, compact = false }: { error: ApiErro
   const err = typeof error === 'string' ? { status: 0, code: 'ERROR', message: error } : error
   if (err.status === 401) {
     const returnTo = encodeURIComponent(`${location.pathname}${location.search}`)
-    return <EmptyState icon="user" title="Please sign in" copy="Your session has ended or this page needs an account. Sign in to continue where you left off." action="Sign in" href={`/login?returnTo=${returnTo}`} />
+    return <EmptyState icon="user" title={t('Please sign in')} copy={t('Your session has ended or this page needs an account. Sign in to continue where you left off.')} action={t('Sign in')} href={`/login?returnTo=${returnTo}`} />
   }
   if (err.status === 403) {
-    return <EmptyState icon="user" title="You don’t have access" copy="This belongs to another account or needs a different role. If you think this is a mistake, ask the owner of the account." action="Back to Trezutil" href="/" />
+    return <EmptyState icon="user" title={t('You don’t have access')} copy={t('This belongs to another account or needs a different role. If you think this is a mistake, ask the owner of the account.')} action={t('Back to Trezutil')} href="/" />
   }
   if (err.status === 404) {
-    return <EmptyState icon="search" title="We couldn’t find that" copy="It may have been removed or is no longer available." action="Discover something else" href="/discover" />
+    return <EmptyState icon="search" title={t('We couldn’t find that')} copy={t('It may have been removed or is no longer available.')} action={t('Discover something else')} href="/discover" />
   }
-  const title = err.status === 0 ? (err.code === 'TIMEOUT' ? 'This is taking too long' : 'You seem to be offline') : err.status >= 500 ? 'Something went wrong on our side' : 'We couldn’t complete that'
+  const title = err.status === 0 ? (err.code === 'TIMEOUT' ? t('This is taking too long') : t('You seem to be offline')) : err.status >= 500 ? t('Something went wrong on our side') : t('We couldn’t complete that')
   return (
     <div className={`message-notice error state-notice ${compact ? 'compact' : ''}`} role="alert">
       <span><Icon name="bell" /></span>
       <div>
         <strong>{title}</strong>
         <p>{err.message}</p>
-        {onRetry && <Button onClick={onRetry}>Try again <Icon name="arrow" size={15} /></Button>}
+        {onRetry && <Button onClick={onRetry}>{t('Try again')} <Icon name="arrow" size={15} /></Button>}
       </div>
     </div>
   )
@@ -57,7 +58,7 @@ export function SkeletonGrid({ count = 4, layout = 'grid' }: { count?: number; l
   )
 }
 
-export function Loading({ label = 'Loading…' }: { label?: string }) {
+export function Loading({ label = t('Loading…') }: { label?: string }) {
   return <div className="page-loading" role="status" aria-live="polite"><span className="thinking"><i /><i /><i /></span><span>{label}</span></div>
 }
 
@@ -72,5 +73,5 @@ export function OfflineBanner() {
     return () => { window.removeEventListener('online', up); window.removeEventListener('offline', down) }
   }, [])
   if (online) return null
-  return <div className="offline-banner" role="status"><span className="status-dot" />You’re offline. We’ll reconnect automatically — anything you were doing is kept.</div>
+  return <div className="offline-banner" role="status"><span className="status-dot" />{t('You’re offline. We’ll reconnect automatically — anything you were doing is kept.')}</div>
 }

@@ -23,10 +23,14 @@ One image carries every binary, the SQL migrations and the built web app (`deplo
 ```sh
 docker build -f deployments/docker/Dockerfile \
   --build-arg VITE_WHATSAPP_NUMBER=<public WhatsApp Business number, digits only, optional> \
+  --build-arg VITE_PLAY_STORE_URL=<public Play Store page of the mobile app (https), only once it is published> \
+  --build-arg VITE_APP_STORE_URL=<public App Store page of the mobile app (https), only once it is published> \
   -t trezutil:<version> .
 ```
 
 The web build type-checks and bundles the SPA. The API base URL defaults to `/api/v1` on the same origin, so no hostname is baked into the bundle.
+
+Leave `VITE_CHANNEL_PLACEHOLDERS` unset in production: it only shows placeholders for channels that are not connected yet (staging), and a production build must mention only the WhatsApp number and the store pages that really exist (see `docs/web/OUR_COMPANY.md`).
 
 ## 3. Configuration
 

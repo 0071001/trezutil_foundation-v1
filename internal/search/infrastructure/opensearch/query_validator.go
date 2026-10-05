@@ -61,6 +61,7 @@ func validateSearchQuery(query domain.DiscoveryQuery) error {
 			domain.SearchSortFieldPriceDesc,
 			domain.SearchSortFieldNewest,
 			domain.SearchSortFieldOldest,
+			domain.SearchSortFieldDiscount,
 			domain.SearchSortFieldAvailability:
 			// valid
 		default:

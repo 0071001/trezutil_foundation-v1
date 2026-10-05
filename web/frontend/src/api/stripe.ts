@@ -1,3 +1,4 @@
+import { t } from '@/lib/i18n'
 /**
  * Minimal Stripe.js loader. Card details are entered in Stripe's own Payment
  * Element (an iframe served by Stripe), so they never touch Trezutil servers;
@@ -43,7 +44,7 @@ function loadScript(): Promise<void> {
       script.onload = () => resolve()
       script.onerror = () => {
         loading = null
-        reject(new Error('Could not load the secure payment form. Check your connection and try again.'))
+        reject(new Error(t('Could not load the secure payment form. Check your connection and try again.')))
       }
       document.head.appendChild(script)
     })
@@ -53,7 +54,7 @@ function loadScript(): Promise<void> {
 
 export async function loadStripe(publishableKey: string): Promise<StripeClient> {
   await loadScript()
-  if (!window.Stripe) throw new Error('The secure payment form is unavailable.')
+  if (!window.Stripe) throw new Error(t('The secure payment form is unavailable.'))
   return window.Stripe(publishableKey)
 }
 

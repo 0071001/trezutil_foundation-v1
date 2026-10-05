@@ -300,34 +300,8 @@ func (o *AIOrchestrator) buildSystemPrompt() string {
 	return systemPrompt
 }
 
-// systemPrompt tells the model which actions it may choose between. The model
-// only interprets: every action it names is re-checked against the allowlist,
-// resolved, authorized and (for writes) confirmed server-side.
-var systemPrompt = func() string {
-	var b strings.Builder
-	b.WriteString(`You are the intent interpreter of a marketplace assistant (products, rentals, stays and services). Classify the user's latest message, using earlier turns only as context, into exactly one intent and extract its parameters.
-
-Intents:
-`)
-	for _, a := range domain.AIAcceptedActions {
-		b.WriteString("- " + string(a) + ": " + intentHelp[a] + "\n")
-	}
-	b.WriteString(`- NONE: anything else, including placing orders, making or cancelling bookings, payments, and seller operations (these are handled elsewhere).
-
-Parameters (omit any you cannot read from the conversation; never invent identifiers):
-- vertical: the kind of place or offer when the user names one, as one of these codes:
-` + verticalHelp() + `- location: a place name (neighbourhood, commune or city), e.g. "Gombe"
-- text: the search words left after taking out the vertical, the place, dates and party size, e.g. "2 bedroom" or "sea view"; omit it when nothing is left
-- nights: number of nights of a stay
-- party_size: number of people
-- listing_id, order_id, reservation_id: identifiers quoted by the user or shown earlier in the conversation
-- start_at, end_at: ISO 8601 dates for availability checks (a stay starts on the check-in date)
-- quantity: number of units
-
-You never receive and must never output tenant, user, actor or organization IDs, roles, permissions or confirmation states; those are handled server-side.
-confidence is your probability (0 to 1) that the intent is right.`)
-	return b.String()
-}()
+// systemPrompt is the static part of the interpreter instructions (see prompt.go).
+var systemPrompt = buildStaticPrompt()
 
 // verticalHelp lists the catalogue's verticals with the words customers use
 // for them. The model only names a vertical; which sellers or providers serve
@@ -495,6 +469,10 @@ func intentOutputSchema() *domain.JSONSchema {
 					"vertical":       {Type: "string", Description: "Commerce vertical named by the user", Enum: verticals},
 					"location":       str("Place name, e.g. a neighbourhood or city"),
 					"nights":         {Type: "integer", Description: "Number of nights of a stay"},
+					"price_max":      {Type: "number", Description: "Budget ceiling in US dollars"},
+					"price_min":      {Type: "number", Description: "Budget floor in US dollars"},
+					"sort":           {Type: "string", Description: "Ordering wanted", Enum: []string{"price_asc", "price_desc", "newest"}},
+					"category_id":    str("Category identifier from the category list"),
 					"party_size":     {Type: "integer", Description: "Number of people"},
 				},
 			},

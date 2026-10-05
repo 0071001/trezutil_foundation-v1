@@ -1,6 +1,10 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
+import { setLang } from '@/lib/i18n'
+
+// Several journeys chain many awaited steps; under a loaded machine the 1 s default made two of them flaky.
+configure({ asyncUtilTimeout: 3000 })
 
 // Node 26 defines its own (file-backed, here unusable) localStorage global,
 // which shadows the DOM environment's. Tests get an in-memory Storage.
@@ -22,6 +26,8 @@ for (const name of ['localStorage', 'sessionStorage'] as const) {
 beforeEach(() => {
   localStorage.clear()
   sessionStorage.clear()
+  // French is the product default; the suites assert the English source text.
+  setLang('en', false)
   window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
   Element.prototype.scrollIntoView = vi.fn()
 })

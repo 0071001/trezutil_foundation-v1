@@ -1,5 +1,6 @@
-// Command identity-service serves phone-OTP sign-in and JWT sessions
-// (/api/v1/auth/*).
+// Command identity-service serves phone-OTP sign-in, staff sign-in with email
+// and password, JWT sessions (/api/v1/auth/*) and the administration console
+// API (/api/v1/admin/*).
 package main
 
 import (
@@ -56,26 +57,31 @@ func main() {
 		}
 	}
 
+	userRepo := postgres.NewUserRepository(db)
 	svc, err := identity.NewService(identity.Config{
-		Users:          postgres.NewUserRepository(db),
+		Users:          userRepo,
 		Challenges:     postgres.NewOTPChallengeRepository(db),
 		Sender:         sender,
 		Tokens:         tokens,
+		Credentials:    userRepo, // staff sign-in with email and password
 		CodeSecret:     codeSecret,
 		AccessTokenTTL: jwtCfg.AccessTokenTTL,
 		MaxPerHour:     common.GetenvInt("OTP_MAX_PER_PHONE_HOUR", identity.DefaultMaxPerPhoneHour),
-		Logger:         logger,
+		// Wrong passwords on a staff account lock it for a while.
+		MaxLoginFailures: common.GetenvInt("STAFF_LOGIN_MAX_FAILURES", identity.DefaultMaxLoginFailures),
+		Lockout:          time.Duration(common.GetenvInt("STAFF_LOGIN_LOCKOUT_MINUTES", int(identity.DefaultLockout/time.Minute))) * time.Minute,
+		Logger:           logger,
 	})
 	if err != nil {
 		log.Fatalf("identity-service: %v", err)
 	}
 
-	h := api.NewIdentityHandlerWithLimit(svc, common.GetenvInt("OTP_MAX_PER_IP_10MIN", 20))
+	h := api.NewIdentityHandlerWithLimit(svc, common.GetenvInt("OTP_MAX_PER_IP_10MIN", 20)).
+		WithStaffLoginLimit(common.GetenvInt("STAFF_LOGIN_MAX_PER_IP_10MIN", 10))
 
 	// Seller onboarding (operator-assisted): platform operators create the
 	// organization and add the seller's account as owner; the owner then
 	// creates the seller profile and stores. Authorization lives in the use cases.
-	userRepo := postgres.NewUserRepository(db)
 	orgRepo := postgres.NewOrganizationRepository(db)
 	orgs := api.NewOrganizationHandler(application.NewOrganizationUseCases(orgRepo, userRepo, nil))
 	sellers := api.NewSellerHandler(application.NewSellerUseCases(postgres.NewSellerRepository(db), orgRepo, userRepo, nil))
@@ -84,6 +90,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/auth/request-otp", h.RequestOTPH)
 	mux.HandleFunc("POST /api/v1/auth/verify-otp", h.VerifyOTPH)
+	mux.HandleFunc("POST /api/v1/auth/staff/login", h.StaffLoginH)
 	mux.HandleFunc("POST /api/v1/auth/refresh", h.RefreshH)
 	mux.HandleFunc("GET /api/v1/auth/users/me", h.MeH)
 	mux.HandleFunc("POST /api/v1/organizations", orgs.CreateOrganizationH)
@@ -98,6 +105,23 @@ func main() {
 	}))
 	mux.HandleFunc("POST /api/v1/stores", stores.CreateStoreH)
 	mux.HandleFunc("GET /api/v1/stores", stores.GetStoreH)
+	// Administration console API: every route checks the caller's role itself.
+	admin := api.NewAdminHandler(postgres.NewAdminRepository(db), userRepo)
+	mux.HandleFunc("GET /api/v1/admin/overview", admin.OverviewH())
+	mux.HandleFunc("GET /api/v1/admin/users", admin.UsersH())
+	// Dashboards: figures computed from the platform's tables. Staff read the whole
+	// platform; owners, admins and managers read their own business.
+	analytics := api.NewAnalyticsHandler(postgres.NewAnalyticsRepository(db), userRepo, orgRepo)
+	mux.HandleFunc("GET /api/v1/admin/analytics", analytics.AdminH())
+	mux.HandleFunc("GET /api/v1/sellers/analytics", analytics.SellerH())
+	// Managed content of the public site (trust strip, partner band, section order).
+	// Reading is public; every change goes through an administrator check.
+	site := api.NewSiteHandler(postgres.NewSiteContentRepository(db), userRepo, logger)
+	mux.HandleFunc("GET /api/v1/site/content", site.PublicContentH())
+	mux.HandleFunc("GET /api/v1/site/assets/{id}", site.AssetH())
+	mux.HandleFunc("GET /api/v1/admin/site/content", site.AdminContentH())
+	mux.HandleFunc("PUT /api/v1/admin/site/content", site.SaveContentH())
+	mux.HandleFunc("POST /api/v1/admin/site/assets", site.UploadAssetH())
 	mux.Handle("GET /metrics", observability.MetricsHandler())
 	mux.HandleFunc("GET /healthz", common.HealthHandler)
 	mux.HandleFunc("GET /readyz", common.ReadyHandler(db))

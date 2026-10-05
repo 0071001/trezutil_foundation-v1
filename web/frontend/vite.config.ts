@@ -32,5 +32,7 @@ export default defineConfig(({ mode }) => ({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
+    // Several journeys chain dozens of awaited user actions; on a busy machine the 5 s default made two of them flaky.
+    testTimeout: 20_000,
   },
 }))

@@ -1,4 +1,4 @@
-# Dispatch: food delivery and ride-hailing
+  # Dispatch: food delivery and ride-hailing
 
 Status: 2026-09-29. **Built and tested:** multi-item orders (`POST /orders` with `items`), and the dispatch core (migration 000022, `internal/domain/dispatch.go`, `infrastructure/postgres/dispatch.go`, `internal/application/dispatch`, 9 PostgreSQL tests including the accept race). **Not built yet:** restaurant settings and delivery fee, the food order flow, dispatch and food HTTP endpoints, cash reconciliation into Payment Core, the web screens, rides, and E2E journeys.
 

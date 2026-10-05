@@ -20,6 +20,14 @@ func mapHitToSearchResult(hit SearchHit) (domain.SearchResult, error) {
 		result.PriceAmount = priceAmount
 	}
 
+	// A sale: the discount is derived from the two prices rather than trusted
+	// from the index, so the badge can never disagree with what is shown.
+	if compareAt, ok := hit.Source["compare_at_amount"].(float64); ok {
+		if percent := domain.DiscountPercent(compareAt, result.PriceAmount); percent > 0 {
+			result.CompareAtAmount, result.DiscountPercent = &compareAt, percent
+		}
+	}
+
 	result.PriceCurrency = getStringField(hit.Source, "price_currency")
 	result.AvailabilityStatus = getStringField(hit.Source, "availability_status")
 	result.PrimaryMediaURL = getOptionalString(hit.Source, "primary_media_url")
@@ -34,6 +42,12 @@ func mapHitToSearchResult(hit SearchHit) (domain.SearchResult, error) {
 		result.Location = &domain.SearchResultLocation{
 			City:         getOptionalStringFromMap(loc, "city"),
 			Neighborhood: getOptionalStringFromMap(loc, "neighborhood"),
+		}
+		// The indexed geo_point is {lat, lon}.
+		lat, latOK := loc["lat"].(float64)
+		lon, lonOK := loc["lon"].(float64)
+		if latOK && lonOK {
+			result.Location.Latitude, result.Location.Longitude = &lat, &lon
 		}
 	}
 

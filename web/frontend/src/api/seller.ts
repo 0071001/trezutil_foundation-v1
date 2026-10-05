@@ -120,6 +120,16 @@ export const sellerApi = {
     return mapListing(await http.post<unknown>(`/listings/update${query({ listing_id: id })}`, patch))
   },
 
+  /** Puts the listing on sale: it sells at salePrice and shows the regular price it replaced. Works on a live listing. */
+  async setPromotion(id: string, salePrice: number): Promise<ListingDetail> {
+    return mapListing(await http.post<unknown>(`/listings/promotion${query({ listing_id: id })}`, { sale_price: salePrice }))
+  },
+
+  /** Ends the sale and restores the regular price. */
+  async endPromotion(id: string): Promise<ListingDetail> {
+    return mapListing(await http.post<unknown>(`/listings/promotion/end${query({ listing_id: id })}`))
+  },
+
   async setListingState(id: string, action: 'publish' | 'pause' | 'resume'): Promise<void> {
     await http.post(`/listings/${action}${query({ listing_id: id })}`)
   },

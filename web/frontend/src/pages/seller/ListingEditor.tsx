@@ -7,22 +7,24 @@ import { ListingImage } from '@/components/cards'
 import { EmptyState, ErrorState, Loading } from '@/components/states'
 import { ActionLink, Button, Field, Heading, Icon, type IconName } from '@/components/ui'
 import { detailPath, formatMoney, safeImage, sentence } from '@/lib/format'
+import { listingSale } from '@/lib/promo'
 import { useToast } from '@/lib/toast'
 import { useAsync } from '@/lib/useAsync'
 import { listingTypeLabel, useVerticals, verticalIcon } from '@/lib/verticals'
 import { useSeller } from '@/pages/seller/SellerShell'
 import type { ListingDetail, ListingType, VerticalInfo } from '@/types'
+import { t, tx } from '@/lib/i18n'
 
 const listingTypes: { value: ListingType; label: string; icon: IconName }[] = [
-  { value: 'physical_product', label: 'Product', icon: 'shop' },
-  { value: 'service', label: 'Service', icon: 'service' },
-  { value: 'food', label: 'Food', icon: 'food' },
-  { value: 'real_estate', label: 'Real estate & stays', icon: 'home' },
-  { value: 'vehicle', label: 'Vehicle', icon: 'car' },
-  { value: 'other', label: 'Other', icon: 'spark' },
+  { value: 'physical_product', label: tx('Product'), icon: 'shop' },
+  { value: 'service', label: tx('Service'), icon: 'service' },
+  { value: 'food', label: tx('Food'), icon: 'food' },
+  { value: 'real_estate', label: tx('Real estate & stays'), icon: 'home' },
+  { value: 'vehicle', label: tx('Vehicle'), icon: 'car' },
+  { value: 'other', label: tx('Other'), icon: 'spark' },
 ]
 
-const steps = ['Basic information', 'Category', 'Price', 'Images', 'Availability', 'Publish'] as const
+const steps = [tx('Basic information'), tx('Category'), tx('Price'), tx('Images'), tx('Availability'), tx('Publish')] as const
 
 interface Draft {
   title: string
@@ -40,15 +42,15 @@ interface Draft {
 }
 
 function validate(step: number, d: Draft, needsVertical: boolean): string | null {
-  if (step === 1 && (!d.title.trim() || d.title.length > 255)) return 'Give your listing a name (up to 255 characters).'
-  if (step === 2 && needsVertical && !d.vertical) return 'Choose the business vertical this listing belongs to.'
-  if (step === 2 && d.vertical === 'HOTEL') return 'Hotel rooms are set up in Hotel rooms, with guests per room, number of rooms and bookable nights.'
-  if (step === 2 && !d.category_id) return 'Choose a category.'
-  if (step === 3 && !(Number(d.price) > 0)) return 'Enter a price greater than zero.'
+  if (step === 1 && (!d.title.trim() || d.title.length > 255)) return t('Give your listing a name (up to 255 characters).')
+  if (step === 2 && needsVertical && !d.vertical) return t('Choose the business vertical this listing belongs to.')
+  if (step === 2 && d.vertical === 'HOTEL') return t('Hotel rooms are set up in Hotel rooms, with guests per room, number of rooms and bookable nights.')
+  if (step === 2 && !d.category_id) return t('Choose a category.')
+  if (step === 3 && !(Number(d.price) > 0)) return t('Enter a price greater than zero.')
   if (step === 4) {
     const urls = d.images.split(/\s+/).filter(Boolean)
-    if (urls.some((u) => !/^https:\/\//i.test(u) || !safeImage(u))) return 'Image links must be public https:// addresses.'
-    if (urls.length > 8) return 'Use up to 8 images.'
+    if (urls.some((u) => !/^https:\/\//i.test(u) || !safeImage(u))) return t('Image links must be public https:// addresses.')
+    if (urls.length > 8) return t('Use up to 8 images.')
   }
   return null
 }
@@ -66,10 +68,10 @@ export function CreateListingPage() {
   const [saving, setSaving] = useState<'draft' | 'publish' | null>(null)
   const [created, setCreated] = useState<ListingDetail | null>(null)
   const idempotencyKey = useMemo(() => crypto.randomUUID(), [])
-  useEffect(() => { document.title = 'Create a listing — Trezutil' }, [])
+  useEffect(() => { document.title = t('Create a listing — Trezutil') }, [])
 
-  if (!canManage) return <EmptyState icon="user" title="View only" copy="Only the business owner, admins and managers can create listings." action="Back to listings" href="/seller/listings" />
-  if (!mine || org.stores.length === 0) return <EmptyState icon="building" title="Setup not finished" copy="A seller profile and a store are needed before creating listings. The Trezutil team completes this during onboarding." action="See business details" href="/seller/business" />
+  if (!canManage) return <EmptyState icon="user" title={t('View only')} copy={t('Only the business owner, admins and managers can create listings.')} action={t('Back to listings')} href="/seller/listings" />
+  if (!mine || org.stores.length === 0) return <EmptyState icon="building" title={t('Setup not finished')} copy={t('A seller profile and a store are needed before creating listings. The Trezutil team completes this during onboarding.')} action={t('See business details')} href="/seller/business" />
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => { setDraft((d) => ({ ...d, [key]: value })); setError(null) }
   const needsVertical = verticals.length > 0
@@ -98,7 +100,7 @@ export function CreateListingPage() {
       }, idempotencyKey)
       if (publish) await sellerApi.setListingState(listing.id, 'publish')
       setCreated({ ...listing, status: publish ? 'published' : listing.status })
-      notify(publish ? 'Your listing is live.' : 'Draft saved.', 'success')
+      notify(publish ? t('Your listing is live.') : t('Draft saved.'), 'success')
     } catch (err) {
       setError(toApiError(err).message)
     } finally {
@@ -109,8 +111,8 @@ export function CreateListingPage() {
   if (created) {
     return (
       <div className="create-success">
-        <EmptyState icon="check" title={created.status === 'published' ? 'Your listing is live' : 'Draft saved'} copy={created.status === 'published' ? `${created.title} can now be discovered in search, on the web and in conversations.` : `${created.title} is saved as a draft. Publish it when you’re ready.`} action={created.status === 'published' ? 'View listing' : 'Open listing'} href={created.status === 'published' ? detailPath(created.id, created.listing_type, created.vertical) : `/seller/listings/${encodeURIComponent(created.id)}`} />
-        <ActionLink href="/seller/listings">Back to listings</ActionLink>
+        <EmptyState icon="check" title={created.status === 'published' ? t('Your listing is live') : t('Draft saved')} copy={created.status === 'published' ? t('{title} can now be discovered in search, on the web and in conversations.', { title: created.title }) : t('{title} is saved as a draft. Publish it when you’re ready.', { title: created.title })} action={created.status === 'published' ? t('View listing') : t('Open listing')} href={created.status === 'published' ? detailPath(created.id, created.listing_type, created.vertical) : `/seller/listings/${encodeURIComponent(created.id)}`} />
+        <ActionLink href="/seller/listings">{t('Back to listings')}</ActionLink>
       </div>
     )
   }
@@ -120,81 +122,81 @@ export function CreateListingPage() {
 
   return (
     <>
-      <div className="create-head"><ActionLink href="/seller/listings">← Back to listings</ActionLink><Heading level={1}>Create a listing</Heading><p>Clear details help Trezutil match your listing with the right people.</p></div>
-      <div className="create-progress" role="list" aria-label="Steps">
-        {steps.map((item, i) => <div role="listitem" className={step >= i + 1 ? 'active' : ''} key={item} aria-current={step === i + 1 ? 'step' : undefined}><span>{i + 1}</span><small>{item}</small></div>)}
+      <div className="create-head"><ActionLink href="/seller/listings">{t('← Back to listings')}</ActionLink><Heading level={1}>{t('Create a listing')}</Heading><p>{t('Clear details help Trezutil match your listing with the right people.')}</p></div>
+      <div className="create-progress" role="list" aria-label={t('Steps')}>
+        {steps.map((item, i) => <div role="listitem" className={step >= i + 1 ? 'active' : ''} key={item} aria-current={step === i + 1 ? 'step' : undefined}><span>{i + 1}</span><small>{t(item)}</small></div>)}
       </div>
       <div className="create-layout">
         <form className="create-form" noValidate onSubmit={(e: FormEvent) => { e.preventDefault(); if (step < steps.length) next() }}>
-          <Heading level={2}>{['Basic information', 'Vertical and category', 'Set your price', 'Add clear images', 'Set availability', 'Ready to publish'][step - 1]}</Heading>
+          <Heading level={2}>{[t('Basic information'), t('Vertical and category'), t('Set your price'), t('Add clear images'), t('Set availability'), t('Ready to publish')][step - 1]}</Heading>
           {step === 1 && <div className="form-stack">
-            <Field label="Listing name"><input value={draft.title} onChange={(e) => set('title', e.target.value)} maxLength={255} placeholder="Samsung Galaxy A55" autoFocus /></Field>
-            <Field label="Description" hint="What makes it useful, its condition and what’s included."><textarea value={draft.description} onChange={(e) => set('description', e.target.value)} maxLength={4000} /></Field>
-            {org.stores.length > 1 && <Field label="Store"><select value={draft.store_id} onChange={(e) => set('store_id', e.target.value)}>{org.stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>}
+            <Field label={t('Listing name')}><input value={draft.title} onChange={(e) => set('title', e.target.value)} maxLength={255} placeholder={t('Samsung Galaxy A55')} autoFocus /></Field>
+            <Field label={t('Description')} hint={t('What makes it useful, its condition and what’s included.')}><textarea value={draft.description} onChange={(e) => set('description', e.target.value)} maxLength={4000} /></Field>
+            {org.stores.length > 1 && <Field label={t('Store')}><select value={draft.store_id} onChange={(e) => set('store_id', e.target.value)}>{org.stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></Field>}
           </div>}
           {step === 2 && <>
             {needsVertical ? <>
-              <p className="choice-legend" id="vertical-legend">Choose business vertical</p>
+              <p className="choice-legend" id="vertical-legend">{t('Choose business vertical')}</p>
               <fieldset className="category-choice" aria-labelledby="vertical-legend">
                 {verticals.map((v) => <label key={v.code}><input type="radio" name="vertical" checked={draft.vertical === v.code} onChange={() => chooseVertical(v)} /><span><Icon name={verticalIcon(v.code)} /><strong>{v.name}</strong></span></label>)}
               </fieldset>
               {draft.vertical === 'HOTEL' && (
-                <p className="inline-notice info" role="note"><Icon name="building" size={16} /><span>Hotel rooms have their own setup: guests per room, number of rooms and the nights guests can book. <ActionLink href="/seller/hotel">Set up hotel rooms</ActionLink></span></p>
+                <p className="inline-notice info" role="note"><Icon name="building" size={16} /><span>{t('Hotel rooms have their own setup: guests per room, number of rooms and the nights guests can book.')} <ActionLink href="/seller/hotel">{t('Set up hotel rooms')}</ActionLink></span></p>
               )}
               {chosen && draft.vertical !== 'HOTEL' && chosen.listing_types.length > 1 && (
-                <Field label="Kind of listing"><select value={draft.listing_type} onChange={(e) => set('listing_type', e.target.value as ListingType)}>{chosen.listing_types.map((t) => <option key={t} value={t}>{listingTypeLabel[t] ?? sentence(t)}</option>)}</select></Field>
+                <Field label={t('Kind of listing')}><select value={draft.listing_type} onChange={(e) => set('listing_type', e.target.value as ListingType)}>{chosen.listing_types.map((lt) => <option key={lt} value={lt}>{listingTypeLabel[lt] ? t(listingTypeLabel[lt]) : sentence(lt)}</option>)}</select></Field>
               )}
             </> : (
-              <fieldset className="category-choice" aria-label="Listing type">
-                {listingTypes.map((t) => <label key={t.value}><input type="radio" name="type" checked={draft.listing_type === t.value} onChange={() => set('listing_type', t.value)} /><span><Icon name={t.icon} /><strong>{t.label}</strong></span></label>)}
+              <fieldset className="category-choice" aria-label={t('Listing type')}>
+                {listingTypes.map((lt) => <label key={lt.value}><input type="radio" name="type" checked={draft.listing_type === lt.value} onChange={() => set('listing_type', lt.value)} /><span><Icon name={lt.icon} /><strong>{t(lt.label)}</strong></span></label>)}
               </fieldset>
             )}
-            <Field label="Category">
-              {categories.loading ? <select disabled><option>Loading…</option></select> : (
+            <Field label={t('Category')}>
+              {categories.loading ? <select disabled><option>{t('Loading…')}</option></select> : (
                 <select value={draft.category_id} onChange={(e) => set('category_id', e.target.value)}>
-                  <option value="">Choose a category</option>
+                  <option value="">{t('Choose a category')}</option>
                   {(categories.data ?? []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               )}
             </Field>
-            {categories.data?.length === 0 && <p className="field-hint">No categories are configured yet — ask the Trezutil team to add one.</p>}
+            {categories.data?.length === 0 && <p className="field-hint">{t('No categories are configured yet — ask the Trezutil team to add one.')}</p>}
           </>}
           {step === 3 && <div className="form-grid">
-            <Field label="Currency"><select value={draft.currency} onChange={(e) => set('currency', e.target.value)}><option value="USD">USD ($)</option><option value="CDF">CDF (FC)</option></select></Field>
-            <Field label="Price"><input type="number" inputMode="decimal" min="0.01" step="0.01" value={draft.price} onChange={(e) => set('price', e.target.value)} placeholder="349" /></Field>
-            <Field label="Price type"><select value={draft.pricing_model} onChange={(e) => set('pricing_model', e.target.value)}><option value="fixed">Fixed price</option><option value="negotiable">Negotiable</option></select></Field>
+            <Field label={t('Currency')}><select value={draft.currency} onChange={(e) => set('currency', e.target.value)}><option value="USD">{t('USD ($)')}</option><option value="CDF">{t('CDF (FC)')}</option></select></Field>
+            <Field label={t('Price')}><input type="number" inputMode="decimal" min="0.01" step="0.01" value={draft.price} onChange={(e) => set('price', e.target.value)} placeholder="349" /></Field>
+            <Field label={t('Price type')}><select value={draft.pricing_model} onChange={(e) => set('pricing_model', e.target.value)}><option value="fixed">{t('Fixed price')}</option><option value="negotiable">{t('Negotiable')}</option></select></Field>
           </div>}
           {step === 4 && <div className="form-stack">
-            <div className="image-upload"><Icon name="shop" size={30} /><strong>Add image links</strong><span>Paste public https:// image addresses, one per line. The first is the cover. Up to 8.</span></div>
-            <Field label="Image links" hint="Direct photo upload isn’t available yet — use links to images you host."><textarea value={draft.images} onChange={(e) => set('images', e.target.value)} placeholder="https://…/photo.jpg" /></Field>
-            {images.length > 0 && <div className="image-previews">{images.slice(0, 8).map((u) => <div key={u}><ListingImage src={u} alt="Preview" type={draft.listing_type} /></div>)}</div>}
+            <div className="image-upload"><Icon name="shop" size={30} /><strong>{t('Add image links')}</strong><span>{t('Paste public https:// image addresses, one per line. The first is the cover. Up to 8.')}</span></div>
+            <Field label={t('Image links')} hint={t('Direct photo upload isn’t available yet — use links to images you host.')}><textarea value={draft.images} onChange={(e) => set('images', e.target.value)} placeholder={t('https://…/photo.jpg')} /></Field>
+            {images.length > 0 && <div className="image-previews">{images.slice(0, 8).map((u) => <div key={u}><ListingImage src={u} alt={t('Preview')} type={draft.listing_type} /></div>)}</div>}
           </div>}
           {step === 5 && <div className="form-stack">
-            <label className="choice-card"><input type="radio" name="availability" checked={draft.availability === 'available'} onChange={() => set('availability', 'available')} /><span><strong>Available now</strong><small>Customers can order or book immediately</small></span></label>
-            <label className="choice-card"><input type="radio" name="availability" checked={draft.availability === 'on_request'} onChange={() => set('availability', 'on_request')} /><span><strong>Available on request</strong><small>Confirm availability before the customer acts</small></span></label>
-            <p className="field-hint">Stock limits for multi-unit listings are set up with the Trezutil team; bookings of a single place or service are protected from double booking automatically.</p>
+            <label className="choice-card"><input type="radio" name="availability" checked={draft.availability === 'available'} onChange={() => set('availability', 'available')} /><span><strong>{t('Available now')}</strong><small>{t('Customers can order or book immediately')}</small></span></label>
+            <label className="choice-card"><input type="radio" name="availability" checked={draft.availability === 'on_request'} onChange={() => set('availability', 'on_request')} /><span><strong>{t('Available on request')}</strong><small>{t('Confirm availability before the customer acts')}</small></span></label>
+            <p className="field-hint">{t('Stock limits for multi-unit listings are set up with the Trezutil team; bookings of a single place or service are protected from double booking automatically.')}</p>
           </div>}
           {step === 6 && <div className="publish-review">
             <span className="empty-mark"><Icon name="spark" /></span>
-            <strong>Everything looks ready.</strong>
-            <p>Publish now to be visible in search, discovery and relevant conversations — or save a draft and publish later.</p>
-            <div className="info-rows"><div><span>Name</span><strong>{draft.title}</strong></div>{chosen && <div><span>Vertical</span><strong>{chosen.name}</strong></div>}<div><span>Type</span><strong>{listingTypeLabel[draft.listing_type] ?? sentence(draft.listing_type)}{categoryName ? ` · ${categoryName}` : ''}</strong></div><div><span>Price</span><strong>{formatMoney(Number(draft.price), draft.currency)}{draft.pricing_model === 'negotiable' ? ' (negotiable)' : ''}</strong></div><div><span>Images</span><strong>{images.length}</strong></div></div>
+            <strong>{t('Everything looks ready.')}</strong>
+            <p>{t('Publish now to be visible in search, discovery and relevant conversations — or save a draft and publish later.')}</p>
+            <div className="info-rows"><div><span>{t('Name')}</span><strong>{draft.title}</strong></div>{chosen && <div><span>{t('Vertical')}</span><strong>{chosen.name}</strong></div>}<div><span>{t('Type')}</span><strong>{listingTypeLabel[draft.listing_type] ? t(listingTypeLabel[draft.listing_type]) : sentence(draft.listing_type)}{categoryName ? ` · ${categoryName}` : ''}</strong></div><div><span>{t('Price')}</span><strong>{formatMoney(Number(draft.price), draft.currency)}{draft.pricing_model === 'negotiable' ? t(' (negotiable)') : ''}</strong></div><div><span>{t('Images')}</span><strong>{images.length}</strong></div></div>
           </div>}
           {error && <p className="auth-error" role="alert">{error}</p>}
           <div className="checkout-buttons">
-            {step > 1 && <Button className="outline-button" onClick={() => { setError(null); setStep(step - 1) }}>Back</Button>}
-            {step < steps.length && <Button className="primary-button" type="submit">Save and continue<Icon name="arrow" /></Button>}
+            {step > 1 && <Button className="outline-button" onClick={() => { setError(null); setStep(step - 1) }}>{t('Back')}</Button>}
+            {step < steps.length && <Button className="primary-button" type="submit">{t('Save and continue')}<Icon name="arrow" /></Button>}
             {step === steps.length && <>
-              <Button className="outline-button" busy={saving === 'draft'} disabled={!!saving} onClick={() => void save(false)}>Save as draft</Button>
-              <Button className="primary-button" busy={saving === 'publish'} disabled={!!saving} onClick={() => void save(true)}>Publish listing<Icon name="arrow" /></Button>
+              <Button className="outline-button" busy={saving === 'draft'} disabled={!!saving} onClick={() => void save(false)}>{t('Save as draft')}</Button>
+              <Button className="primary-button" busy={saving === 'publish'} disabled={!!saving} onClick={() => void save(true)}>{t('Publish listing')}<Icon name="arrow" /></Button>
             </>}
           </div>
         </form>
-        <aside className="listing-preview" aria-label="Live preview">
-          <span>Live preview</span>
+        <aside className="listing-preview" aria-label={t('Live preview')}>
+          <span>{t('Live preview')}</span>
           <article className="result-card result-grid">
-            <div className="result-image"><ListingImage src={images[0]} alt="" type={draft.listing_type} /><span className="availability"><span />{draft.availability === 'available' ? 'Available now' : 'On request'}</span></div>
-            <div className="result-body"><div className="product-meta">{org.display_name}</div><Heading level={3}>{draft.title || 'Your listing name'}</Heading><strong className="price">{Number(draft.price) > 0 ? formatMoney(Number(draft.price), draft.currency) : '—'}</strong></div>
+            <div className="result-image"><ListingImage src={images[0]} alt="" type={draft.listing_type} /><span className="availability"><span />{draft.availability === 'available' ? t('Available now') : t('On request')}</span></div>
+            <div className="result-body"><div className="product-meta">{org.display_name}</div><Heading level={3}>{draft.title || t('Your listing name')}</Heading><strong className="price">{Number(draft.price) > 0 ? formatMoney(Number(draft.price), draft.currency) : '—'}</strong></div>
           </article>
         </aside>
       </div>
@@ -218,26 +220,26 @@ export function EditListingPage() {
     if (l) setForm({ title: l.title, description: l.description ?? '', price: String(l.price_amount) })
   }, [listing.data])
 
-  if (!canManage) return <EmptyState icon="user" title="View only" copy="Only the business owner, admins and managers can edit listings." action="Back to listings" href="/seller/listings" />
-  if (listing.loading || (listing.data && !form)) return <Loading label="Loading listing…" />
+  if (!canManage) return <EmptyState icon="user" title={t('View only')} copy={t('Only the business owner, admins and managers can edit listings.')} action={t('Back to listings')} href="/seller/listings" />
+  if (listing.loading || (listing.data && !form)) return <Loading label={t('Loading listing…')} />
   if (listing.error) return <ErrorState error={listing.error} onRetry={listing.reload} />
   const l = listing.data
-  if (!l || !form) return <EmptyState icon="search" title="Listing not found" copy="It doesn’t belong to this business or was removed." action="Back to listings" href="/seller/listings" />
+  if (!l || !form) return <EmptyState icon="search" title={t('Listing not found')} copy={t('It doesn’t belong to this business or was removed.')} action={t('Back to listings')} href="/seller/listings" />
   const editable = ['draft', 'pending_review', 'paused'].includes(l.status)
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     const price = Number(form.price)
-    if (!form.title.trim()) { setError('A title is required.'); return }
-    if (!(price > 0)) { setError('Enter a price greater than zero.'); return }
+    if (!form.title.trim()) { setError(t('A title is required.')); return }
+    if (!(price > 0)) { setError(t('Enter a price greater than zero.')); return }
     setSaving(true); setError(null)
     try {
       await sellerApi.updateListing(l.id, { title: form.title.trim(), description: form.description, price_amount: price })
-      notify('Changes saved.', 'success')
+      notify(t('Changes saved.'), 'success')
       navigate(`/seller/listings/${encodeURIComponent(l.id)}`)
     } catch (err) {
       const apiErr = toApiError(err)
-      setError(apiErr.code === 'LISTING_NOT_EDITABLE' ? 'Pause this listing before editing it.' : apiErr)
+      setError(apiErr.code === 'LISTING_NOT_EDITABLE' ? t('Pause this listing before editing it.') : apiErr)
     } finally {
       setSaving(false)
     }
@@ -245,14 +247,14 @@ export function EditListingPage() {
 
   return (
     <>
-      <div className="create-head"><ActionLink href={`/seller/listings/${encodeURIComponent(l.id)}`}>← Back to listing</ActionLink><Heading level={1}>Edit listing</Heading><p>Existing orders keep the price the customer agreed to.</p></div>
-      {!editable && <p className="inline-notice info" role="note"><Icon name="bell" size={16} /><span>This listing is live. Pause it from the listings page before editing.</span></p>}
+      <div className="create-head"><ActionLink href={`/seller/listings/${encodeURIComponent(l.id)}`}>{t('← Back to listing')}</ActionLink><Heading level={1}>{t('Edit listing')}</Heading><p>{t('Existing orders keep the price the customer agreed to.')}</p></div>
+      {!editable && <p className="inline-notice info" role="note"><Icon name="bell" size={16} /><span>{t('This listing is live. Pause it from the listings page before editing.')}</span></p>}
       <form className="create-form edit-form" noValidate onSubmit={submit}>
-        <Field label="Listing name"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} maxLength={255} disabled={!editable} /></Field>
-        <Field label="Description"><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} maxLength={4000} disabled={!editable} /></Field>
-        <Field label={`Price (${l.price_currency})`}><input type="number" min="0.01" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} disabled={!editable} /></Field>
+        <Field label={t('Listing name')}><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} maxLength={255} disabled={!editable} /></Field>
+        <Field label={t('Description')}><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} maxLength={4000} disabled={!editable} /></Field>
+        <Field label={t('Price ({price_currency})', { price_currency: l.price_currency })} hint={listingSale(l) ? t('This listing is on promotion. A price at or above {regular} ends the promotion.', { regular: formatMoney(listingSale(l)!.compareAt, l.price_currency) }) : undefined}><input type="number" min="0.01" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} disabled={!editable} /></Field>
         {error && (typeof error === 'string' ? <p className="auth-error" role="alert">{error}</p> : <ErrorState error={error} compact />)}
-        <div className="checkout-buttons"><ActionLink className="outline-button" href={`/seller/listings/${encodeURIComponent(l.id)}`}>Cancel</ActionLink><Button className="primary-button" type="submit" busy={saving} disabled={!editable}>Save changes<Icon name="arrow" /></Button></div>
+        <div className="checkout-buttons"><ActionLink className="outline-button" href={`/seller/listings/${encodeURIComponent(l.id)}`}>{t('Cancel')}</ActionLink><Button className="primary-button" type="submit" busy={saving} disabled={!editable}>{t('Save changes')}<Icon name="arrow" /></Button></div>
       </form>
     </>
   )

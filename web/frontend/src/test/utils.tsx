@@ -2,6 +2,7 @@ import { render } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { vi } from 'vitest'
 import { AppRoutes } from '@/App'
+import { I18nProvider } from '@/lib/i18n'
 import { PrefsProvider } from '@/lib/prefs'
 import { SessionProvider } from '@/lib/session'
 import { ToastProvider } from '@/lib/toast'
@@ -20,7 +21,10 @@ export function mockApi(routes: Record<string, Handler>) {
     const method = (init?.method ?? 'GET').toUpperCase()
     const path = url.pathname.replace(/^\/api\/v1/, '')
     const headers = Object.fromEntries(Object.entries((init?.headers ?? {}) as Record<string, string>))
-    const call = { method, path: `${path}${url.search}`, body: init?.body ? JSON.parse(String(init.body)) : undefined, headers }
+    // JSON bodies arrive parsed; a file upload arrives as its form fields (the file itself under its field name).
+    const raw = init?.body
+    const requestBody = raw instanceof FormData ? Object.fromEntries(raw.entries()) : raw ? JSON.parse(String(raw)) : undefined
+    const call = { method, path: `${path}${url.search}`, body: requestBody, headers }
     calls.push(call)
     const handler = routes[`${method} ${path}`]
     if (!handler) return new Response(JSON.stringify({ error: { code: 'UNMOCKED', message: `${method} ${path}` } }), { status: 599 })
@@ -44,7 +48,7 @@ export function renderAt(path: string) {
       <PrefsProvider>
         <ToastProvider>
           <SessionProvider>
-            <AppRoutes />
+            <I18nProvider><AppRoutes /></I18nProvider>
           </SessionProvider>
         </ToastProvider>
       </PrefsProvider>

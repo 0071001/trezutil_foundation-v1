@@ -164,6 +164,11 @@ func (v *DefaultParameterValidator) normalizeStructured(actionType domain.Commer
 			p["location"] = s
 		}
 	}
+	if actionType == domain.ActionSearchListings {
+		if err := normalizeSearchFilters(p); err != nil {
+			return err
+		}
+	}
 	for param, max := range map[string]int{"nights": maxNights, "party_size": maxPartySize} {
 		if raw, ok := p[param]; ok && raw != nil {
 			if s, isString := raw.(string); isString && strings.TrimSpace(s) == "" {

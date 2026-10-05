@@ -75,9 +75,11 @@ type apiRoute struct {
 func (g *Gateway) routes() []apiRoute {
 	return []apiRoute{
 		{"/api/v1/auth", "identity"},
+		{"/api/v1/admin", "identity"},
 		{"/api/v1/organizations", "identity"},
 		{"/api/v1/sellers", "identity"},
 		{"/api/v1/stores", "identity"},
+		{"/api/v1/site", "identity"},
 		{"/api/v1/categories", "search"},
 		{"/api/v1/verticals", "search"},
 		{"/api/v1/conversations", "conversation"},
@@ -387,7 +389,7 @@ func (g *Gateway) cors(next http.Handler) http.Handler {
 		}
 		w.Header().Add("Vary", "Origin")
 		if r.Method == http.MethodOptions && (allowAll || allowed[origin]) {
-			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PATCH,DELETE,OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization,Content-Type,Idempotency-Key,X-Requested-With")
 			w.Header().Set("Access-Control-Max-Age", "600")
 			w.WriteHeader(http.StatusNoContent)

@@ -104,6 +104,27 @@ describe('conversational commerce', () => {
     expect(sent).toEqual(['Find me a furnished apartment in Gombe under $800', 'Show me the second one', 'Buy it'])
   })
 
+  it('offers the assistant quick replies and sends the one that is tapped', async () => {
+    const sent: string[] = []
+    mockApi({
+      'POST /conversations/message': (c) => {
+        const text = (c.body as { message_text: string }).message_text
+        sent.push(text)
+        if (text.startsWith('A hotel in Gombe')) return { body: { conversation_id: 'c1', response: { text: 'Good news — I found 2 options.', metadata: { action_type: 'SEARCH_LISTINGS', suggestions: ['Show the cheapest first', 'Book the first one for 2 nights'], result_data: { items: [searchItem('l1', 'Riverside apartment'), searchItem('l2', 'City loft')] } } } } }
+        return { body: { conversation_id: 'c1', response: { text: 'Here is the cheapest.' } } }
+      },
+    })
+    renderAt('/conversation')
+    expect(await screen.findByRole('heading', { name: /what do you need today/i })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /A hotel in Gombe this weekend/ }))
+    // The canned follow-ups are replaced by the assistant's own suggestions.
+    expect(screen.queryByRole('button', { name: 'Open the second one' })).not.toBeInTheDocument()
+    const group = await screen.findByRole('group', { name: /suggested replies/i })
+    await userEvent.click(within(group).getByRole('button', { name: 'Show the cheapest first' }))
+    expect(await screen.findByText('Here is the cheapest.')).toBeInTheDocument()
+    expect(sent[sent.length - 1]).toBe('Show the cheapest first')
+  })
+
   it('retries a failed message with the same idempotency key', async () => {
     const keys: string[] = []
     let fail = true

@@ -3,6 +3,7 @@ import { searchApi } from '@/api/search'
 import { isBookable } from '@/lib/format'
 import type { IconName } from '@/components/ui'
 import type { CustomerFlow, ListingType, VerticalInfo } from '@/types'
+import { t, tx } from '@/lib/i18n'
 
 /**
  * The vertical catalogue from the backend (GET /verticals) decides whether a
@@ -34,7 +35,8 @@ export function useVerticals(): { verticals: VerticalInfo[]; byCode: Record<stri
     loadVerticals().then((v) => { if (live) { setItems(v); setReady(true) } }).catch(() => { if (live) setReady(true) })
     return () => { live = false }
   }, [])
-  const list = items ?? []
+  // The catalogue comes from the backend in English; show it in the interface language.
+  const list = (items ?? []).map((v) => ({ ...v, name: t(v.name), description: t(v.description) }))
   return { verticals: list, byCode: Object.fromEntries(list.map((v) => [v.code, v])), ready }
 }
 
@@ -60,5 +62,5 @@ export function verticalIcon(code: string): IconName {
 
 /** Seller-facing names of listing kinds. */
 export const listingTypeLabel: Record<ListingType, string> = {
-  physical_product: 'Product', service: 'Service', food: 'Food & drink', real_estate: 'Property or stay', vehicle: 'Vehicle', other: 'Other',
+  physical_product: tx('Product'), service: tx('Service'), food: tx('Food & drink'), real_estate: tx('Property or stay'), vehicle: tx('Vehicle'), other: tx('Other'),
 }

@@ -4,6 +4,7 @@ import { ordersApi, paymentsApi, type OrderSummary } from '@/api/commerce'
 import { isStripeAction, loadStripe, type ClientAction, type StripeClient, type StripeElements } from '@/api/stripe'
 import { Button, Icon } from '@/components/ui'
 import { Loading } from '@/components/states'
+import { t } from '@/lib/i18n'
 
 /**
  * Pays an order. Card details are entered in Stripe's Payment Element (served
@@ -37,7 +38,7 @@ function StripeForm({ action, onDone }: { action: ClientAction; onDone: (message
         stripeRef.current = { stripe, elements }
         setReady(true)
       })
-      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'The payment form could not be loaded.'))
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : t('The payment form could not be loaded.')))
     return () => { cancelled = true; element?.destroy() }
   }, [action.client_secret, action.publishable_key])
 
@@ -50,17 +51,17 @@ function StripeForm({ action, onDone }: { action: ClientAction; onDone: (message
     // Methods that need a bank page redirect back to this page with ?redirect_status=.
     const result = await stripe.confirmPayment({ elements, confirmParams: { return_url: window.location.href.split('?')[0] }, redirect: 'if_required' })
     setBusy(false)
-    if (result.error) { setError(result.error.message ?? 'The payment was not completed.'); return }
-    onDone(result.paymentIntent?.status === 'processing' ? 'Payment processing — we’ll update your order shortly.' : 'Payment received — confirming your order…')
+    if (result.error) { setError(result.error.message ?? t('The payment was not completed.')); return }
+    onDone(result.paymentIntent?.status === 'processing' ? t('Payment processing — we’ll update your order shortly.') : t('Payment received — confirming your order…'))
   }
 
   return (
     <form className="form-stack payment-form" onSubmit={submit}>
-      <div ref={mountRef} className="stripe-element" aria-label="Card details" />
-      {!ready && !error && <Loading label="Loading secure payment form…" />}
+      <div ref={mountRef} className="stripe-element" aria-label={t('Card details')} />
+      {!ready && !error && <Loading label={t('Loading secure payment form…')} />}
       {error && <p className="auth-error" role="alert">{error}</p>}
-      <Button className="primary-button full-button" type="submit" disabled={!ready} busy={busy}>{busy ? 'Paying…' : 'Pay now'} <Icon name="arrow" /></Button>
-      <p className="payment-note"><Icon name="check" size={14} />Card details are handled by Stripe and never stored by Trezutil.</p>
+      <Button className="primary-button full-button" type="submit" disabled={!ready} busy={busy}>{busy ? t('Paying…') : t('Pay now')} <Icon name="arrow" /></Button>
+      <p className="payment-note"><Icon name="check" size={14} />{t('Card details are handled by Stripe and never stored by Trezutil.')}</p>
     </form>
   )
 }
@@ -76,8 +77,8 @@ export function PaymentPanel({ order, onUpdated }: { order: OrderSummary; onUpda
     const status = new URLSearchParams(window.location.search).get('redirect_status')
     if (!status) return
     window.history.replaceState(null, '', window.location.pathname)
-    if (status === 'succeeded') { setNotice({ tone: 'info', text: 'Payment received — confirming your order…' }); setPolling(true) }
-    else setNotice({ tone: 'error', text: 'The payment was not completed. You can try again.' })
+    if (status === 'succeeded') { setNotice({ tone: 'info', text: t('Payment received — confirming your order…') }); setPolling(true) }
+    else setNotice({ tone: 'error', text: t('The payment was not completed. You can try again.') })
   }, [])
 
   useEffect(() => {
@@ -91,7 +92,7 @@ export function PaymentPanel({ order, onUpdated }: { order: OrderSummary; onUpda
           window.clearInterval(timer)
           setPolling(false)
           onUpdated(o)
-          setNotice(done ? null : { tone: 'info', text: 'Your payment is still being confirmed. Refresh this page in a moment.' })
+          setNotice(done ? null : { tone: 'info', text: t('Your payment is still being confirmed. Refresh this page in a moment.') })
         }
       }).catch(() => undefined)
     }, 2000)
@@ -104,14 +105,14 @@ export function PaymentPanel({ order, onUpdated }: { order: OrderSummary; onUpda
     try {
       const payment = await paymentsApi.payOrder(order)
       if (isStripeAction(payment.client_action)) setAction(payment.client_action)
-      else if (payment.status === 'failed') setNotice({ tone: 'error', text: 'The payment was declined. Please try another card.' })
-      else { setPolling(true); setNotice({ tone: 'info', text: 'Confirming your payment…' }) }
+      else if (payment.status === 'failed') setNotice({ tone: 'error', text: t('The payment was declined. Please try another card.') })
+      else { setPolling(true); setNotice({ tone: 'info', text: t('Confirming your payment…') }) }
     } catch (err) {
       const e = toApiError(err)
       setNotice({
         tone: e.code === 'PAYMENT_PROVIDER_UNAVAILABLE' ? 'info' : 'error',
         text: e.code === 'PAYMENT_PROVIDER_UNAVAILABLE'
-          ? 'Online payment isn’t enabled for this seller yet. Your order is saved — the seller will contact you to arrange payment.'
+          ? t('Online payment isn’t enabled for this seller yet. Your order is saved — the seller will contact you to arrange payment.')
           : e.message,
       })
     } finally {
@@ -123,9 +124,9 @@ export function PaymentPanel({ order, onUpdated }: { order: OrderSummary; onUpda
   return (
     <div className="payment-panel">
       {notice && <div className={`inline-notice ${notice.tone}`} role={notice.tone === 'error' ? 'alert' : 'status'}><Icon name="bell" size={16} /><span>{notice.text}</span></div>}
-      {polling && <Loading label="Confirming payment…" />}
+      {polling && <Loading label={t('Confirming payment…')} />}
       {!polling && action && <StripeForm action={action} onDone={(text) => { setAction(null); setNotice({ tone: 'info', text }); setPolling(true) }} />}
-      {!polling && !action && <Button className="primary-button full-button" onClick={() => void start()} busy={busy}>{busy ? 'Starting secure payment…' : 'Pay securely'} <Icon name="arrow" /></Button>}
+      {!polling && !action && <Button className="primary-button full-button" onClick={() => void start()} busy={busy}>{busy ? t('Starting secure payment…') : t('Pay securely')} <Icon name="arrow" /></Button>}
     </div>
   )
 }

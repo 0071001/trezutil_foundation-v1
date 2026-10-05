@@ -498,6 +498,9 @@ func TestRouteMappingFinalizationUpstreams(t *testing.T) {
 
 	cases := map[string]string{
 		"/api/v1/auth/request-otp":             "identity",
+		"/api/v1/auth/staff/login":             "identity",
+		"/api/v1/admin/overview":               "identity",
+		"/api/v1/admin/users":                  "identity",
 		"/api/v1/orders/o-1":                   "commerce",
 		"/api/v1/reservations":                 "commerce",
 		"/api/v1/availability":                 "commerce",

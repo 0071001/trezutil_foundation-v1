@@ -68,6 +68,15 @@ func buildSearchQuery(query domain.DiscoveryQuery) map[string]interface{} {
 		})
 	}
 
+	// Promotion filter: only listings currently on sale (a projected discount).
+	if query.OnPromotion {
+		boolQuery["filter"] = append(boolQuery["filter"].([]interface{}), map[string]interface{}{
+			"range": map[string]interface{}{
+				"discount_percent": map[string]interface{}{"gte": 1},
+			},
+		})
+	}
+
 	// Place filter: every word must appear in the place names or the listing text.
 	if query.Place != "" {
 		boolQuery["filter"] = append(boolQuery["filter"].([]interface{}), map[string]interface{}{
@@ -344,6 +353,16 @@ func buildSort(query domain.DiscoveryQuery) []interface{} {
 					},
 				},
 			}
+		}
+	case domain.SearchSortFieldDiscount:
+		// Biggest saving first; listings without a promotion sort last, newest first.
+		return []interface{}{
+			map[string]interface{}{
+				"discount_percent": map[string]interface{}{"order": "desc", "missing": "_last"},
+			},
+			map[string]interface{}{
+				"published_at": map[string]interface{}{"order": "desc"},
+			},
 		}
 	case domain.SearchSortFieldPriceAsc:
 		return []interface{}{

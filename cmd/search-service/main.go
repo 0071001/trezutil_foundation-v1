@@ -120,6 +120,8 @@ func main() {
 	mux.HandleFunc("POST /v1/listings/pause", listingHandler.PauseListingH)
 	mux.HandleFunc("POST /v1/listings/resume", listingHandler.ResumeListingH)
 	mux.HandleFunc("POST /v1/listings/update", api.UpdateListingH(listingUseCases))
+	mux.HandleFunc("POST /v1/listings/promotion", api.SetPromotionH(listingUseCases))
+	mux.HandleFunc("POST /v1/listings/promotion/end", api.EndPromotionH(listingUseCases))
 	mux.HandleFunc("GET /v1/listings/manage", organizationMemberOnly(postgres.NewOrganizationRepository(db), postgres.NewUserRepository(db), api.ManageListingsH(listingRepo)))
 	mux.HandleFunc("GET /v1/categories", api.ListCategoriesH(categoryRepo))
 	mux.HandleFunc("GET /v1/verticals", api.ListVerticalsH(vertical.DefaultCatalog()))

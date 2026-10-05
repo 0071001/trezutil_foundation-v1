@@ -49,6 +49,8 @@ type SearchRequest struct {
 	Location string   `json:"location"`
 	PriceMin *float64 `json:"price_min"`
 	PriceMax *float64 `json:"price_max"`
+	// OnPromotion restricts results to listings currently on sale.
+	OnPromotion bool `json:"on_promotion"`
 }
 
 // SearchResponse represents a search response DTO.
@@ -163,6 +165,7 @@ func (h *SearchHandler) applyFilters(req *SearchRequest, query *domain.Discovery
 		}
 		query.Place = place
 	}
+	query.OnPromotion = req.OnPromotion
 	if req.PriceMin != nil || req.PriceMax != nil {
 		if (req.PriceMin != nil && *req.PriceMin < 0) || (req.PriceMax != nil && *req.PriceMax < 0) ||
 			(req.PriceMin != nil && req.PriceMax != nil && *req.PriceMin > *req.PriceMax) {

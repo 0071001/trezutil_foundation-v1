@@ -1,4 +1,5 @@
 import { http } from '@/api/client'
+import { getLang } from '@/lib/i18n'
 import { arr, num, obj, read, str } from '@/api/json'
 
 export interface ConversationCard {
@@ -23,6 +24,8 @@ export interface ConversationReply {
   missing_params: { name: string; prompt: string }[]
   /** Search result rows (with images) when the reply is a search. */
   result_items: Record<string, unknown>[]
+  /** Short follow-ups the person is likely to want next (tappable quick replies). */
+  suggestions: string[]
   /** Entities created or opened by the action (links in the thread). */
   refs: { order_id: string; reservation_id: string; listing_id: string }
 }
@@ -64,6 +67,7 @@ export function mapReply(value: unknown): ConversationReply {
       return { name: str(read(param, 'name', 'Name')), prompt: str(read(param, 'description', 'Description')) }
     }),
     result_items: arr(read(resultData, 'items', 'Items')).map(obj),
+    suggestions: arr(metadata.suggestions).map(String).map((x) => x.trim()).filter(Boolean).slice(0, 4),
     refs: {
       order_id: str(resultData.order_id) || (str(metadata.action_type) === 'CREATE_ORDER' ? str(read(resultData, 'id', 'ID')) : ''),
       reservation_id: str(resultData.reservation_id) || (str(metadata.action_type) === 'CREATE_RESERVATION' ? str(read(resultData, 'id', 'ID')) : ''),
@@ -100,7 +104,7 @@ export const conversationsApi = {
       channel: 'web',
       sender_external_id: senderExternalID(),
       message_idempotency_key: idempotencyKey,
-      locale: navigator.language || 'en',
+      locale: getLang(),
     }))
   },
 

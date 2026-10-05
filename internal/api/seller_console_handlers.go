@@ -146,6 +146,68 @@ func UpdateListingH(updater ListingUpdater) http.HandlerFunc {
 	}
 }
 
+// ListingPromoter starts and ends sales on listings.
+type ListingPromoter interface {
+	SetListingPromotion(ctx context.Context, actorID, listingID string, salePrice float64) (*domain.Listing, error)
+	EndListingPromotion(ctx context.Context, actorID, listingID string) (*domain.Listing, error)
+}
+
+// writePromotionError maps a promotion use-case failure to its HTTP response.
+func writePromotionError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, domain.ErrListingNotFound):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_NOT_FOUND", Message: "Listing not found"}}, http.StatusNotFound)
+	case errors.Is(err, domain.ErrInsufficientPermissions):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
+	case errors.Is(err, domain.ErrInvalidStatusTransition):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "LISTING_NOT_EDITABLE", Message: "A sold, closed, expired or suspended listing cannot be put on sale"}}, http.StatusConflict)
+	case errors.Is(err, domain.ErrInvalidParameter):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_PARAMETER", Message: err.Error()}}, http.StatusBadRequest)
+	default:
+		writeJSON(w, ErrorResponse{Error: Error{Code: "PROMOTION_FAILED", Message: "Could not update the promotion"}}, http.StatusInternalServerError)
+	}
+}
+
+// SetPromotionH handles POST /v1/listings/promotion?listing_id= with {"sale_price": n}:
+// the listing now sells at sale_price and shows the price it replaced.
+func SetPromotionH(promoter ListingPromoter) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := auth.RequireUser(w, r)
+		if !ok {
+			return
+		}
+		var req struct {
+			SalePrice *float64 `json:"sale_price"`
+		}
+		if err := readJSONBody(r, &req); err != nil || req.SalePrice == nil {
+			writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "sale_price is required"}}, http.StatusBadRequest)
+			return
+		}
+		listing, err := promoter.SetListingPromotion(r.Context(), userID, r.URL.Query().Get("listing_id"), *req.SalePrice)
+		if err != nil {
+			writePromotionError(w, err)
+			return
+		}
+		writeJSON(w, listing, http.StatusOK)
+	}
+}
+
+// EndPromotionH handles POST /v1/listings/promotion/end?listing_id=: the regular price returns.
+func EndPromotionH(promoter ListingPromoter) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := auth.RequireUser(w, r)
+		if !ok {
+			return
+		}
+		listing, err := promoter.EndListingPromotion(r.Context(), userID, r.URL.Query().Get("listing_id"))
+		if err != nil {
+			writePromotionError(w, err)
+			return
+		}
+		writeJSON(w, listing, http.StatusOK)
+	}
+}
+
 // OrganizationOrderLister lists an organization's orders.
 type OrganizationOrderLister interface {
 	FindByOrganizationID(ctx context.Context, organizationID string, limit, offset int) ([]*domain.Order, error)

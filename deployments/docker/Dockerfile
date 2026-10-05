@@ -12,6 +12,17 @@ RUN corepack enable
 # Public build-time value (digits only); empty hides WhatsApp calls-to-action.
 ARG VITE_WHATSAPP_NUMBER=""
 ENV VITE_WHATSAPP_NUMBER=$VITE_WHATSAPP_NUMBER
+# Public pages of the mobile app on the stores (https), once it is published; empty means it is not mentioned.
+ARG VITE_PLAY_STORE_URL=""
+ENV VITE_PLAY_STORE_URL=$VITE_PLAY_STORE_URL
+ARG VITE_APP_STORE_URL=""
+ENV VITE_APP_STORE_URL=$VITE_APP_STORE_URL
+# "true" shows placeholders for the channels not connected yet (staging only; leave empty in production).
+ARG VITE_CHANNEL_PLACEHOLDERS=""
+ENV VITE_CHANNEL_PLACEHOLDERS=$VITE_CHANNEL_PLACEHOLDERS
+# Environment label shown in the administration header ("staging"); empty or "production" shows none.
+ARG VITE_APP_ENV=""
+ENV VITE_APP_ENV=$VITE_APP_ENV
 COPY web/frontend/package.json web/frontend/pnpm-lock.yaml web/frontend/pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 COPY web/frontend/ ./

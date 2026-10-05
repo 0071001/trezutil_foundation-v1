@@ -8,6 +8,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -24,6 +25,8 @@ import (
 	whatsappapp "github.com/trezutil/trezutil/internal/application/whatsapp"
 	"github.com/trezutil/trezutil/internal/domain"
 	anthropicai "github.com/trezutil/trezutil/internal/infrastructure/ai/anthropic"
+	failoverai "github.com/trezutil/trezutil/internal/infrastructure/ai/failover"
+	geminiai "github.com/trezutil/trezutil/internal/infrastructure/ai/gemini"
 	"github.com/trezutil/trezutil/internal/infrastructure/audit"
 	whatsappinfra "github.com/trezutil/trezutil/internal/infrastructure/whatsapp"
 	searchapp "github.com/trezutil/trezutil/internal/search/application"
@@ -140,11 +143,15 @@ func main() {
 		ContextStore:      postgres.NewConversationContextStore(db),
 		MessageStore:      postgres.NewMessageStore(db),
 		WebhookEventStore: postgres.NewWebhookEventStore(db),
-		IntentClassifier:  buildIntentClassifier(logger, usageSvc),
+		IntentClassifier:  buildIntentClassifier(logger, usageSvc, categoryRepo),
 		ActionResolver:    conversation.NewActionResolver(conversation.NewDefaultIntentValidator()),
 		Runtime:           runtime,
 		PackResolver:      packResolver,
 	})
+
+	// Replies follow the locale sent with each message; this answers the channels
+	// that carry none (WhatsApp). French is the platform's primary language.
+	conversation.DefaultLanguage = common.Getenv("DEFAULT_LANGUAGE", "fr")
 
 	convHandler := api.NewConversationHandler(conversation.NewProcessorService(processor), logger)
 	packHandler := api.NewVerticalPackHandler(api.NewVerticalPackService(packRegistry, packResolver, policyEngine))
@@ -221,48 +228,33 @@ func buildSearch(logger zerolog.Logger) commerce.SearchUseCases {
 		nil, searchapp.NewNoopCursorCodec(), searchapp.NewSystemClock())
 }
 
-// buildIntentClassifier wires the configured model provider behind the AI
+// buildIntentClassifier wires the configured model provider(s) behind the AI
 // gateway (router, capability checks, allowlist, confidence threshold, usage
-// metering). Without AI_PROVIDER, or when the provider is not configured, it
-// returns the deterministic keyword classifier; the processor also falls back
-// to keywords whenever the model is unsure or unavailable.
-func buildIntentClassifier(logger zerolog.Logger, usage domain.UsageService) conversation.IntentClassifier {
-	var provider domain.AIProvider
-	switch name := common.Getenv("AI_PROVIDER", ""); name {
-	case "":
+// metering). AI_PROVIDER is one provider ("anthropic", "gemini") or a
+// comma-separated priority list ("gemini,anthropic"): a call goes to the first
+// provider and, if it fails (no credit, rate limit, outage), to the next.
+// Without AI_PROVIDER, or when no provider is configured, it returns the
+// deterministic keyword classifier; the processor also falls back to keywords
+// whenever the model is unsure or unavailable.
+func buildIntentClassifier(logger zerolog.Logger, usage domain.UsageService, categories domain.CategoryRepository) conversation.IntentClassifier {
+	names := splitProviders(common.Getenv("AI_PROVIDER", ""))
+	if len(names) == 0 {
 		logger.Info().Msg("AI_PROVIDER not set; using keyword classification")
 		return &conversation.KeywordClassifier{}
-	case anthropicai.ProviderID:
-		p, err := anthropicai.New(anthropicai.Config{
-			APIKey:         common.Getenv("ANTHROPIC_API_KEY", ""),
-			Model:          common.Getenv("AI_MODEL", anthropicai.DefaultModel),
-			BaseURL:        common.Getenv("AI_BASE_URL", ""),
-			Effort:         common.Getenv("AI_EFFORT", "low"),
-			RequestTimeout: time.Duration(common.GetenvInt("AI_REQUEST_TIMEOUT_SECONDS", 15)) * time.Second,
-			MaxRetries:     common.GetenvInt("AI_MAX_RETRIES", 2),
-		})
-		if errors.Is(err, anthropicai.ErrInvalidModel) {
-			// A wrong AI_MODEL is a deployment mistake, not a reason to silently degrade.
-			logger.Fatal().Err(err).Msg("invalid AI_MODEL")
+	}
+	var providers []domain.AIProvider
+	for _, name := range names {
+		if p := buildProvider(logger, name, len(names) == 1); p != nil {
+			providers = append(providers, p)
 		}
-		if err != nil {
-			logger.Warn().Err(err).Msg("AI provider not configured; using keyword classification")
-			return &conversation.KeywordClassifier{}
-		}
-		if common.Getenv("AI_VERIFY_ON_START", "true") != "false" {
-			vctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
-			verr := p.Verify(vctx)
-			cancel()
-			switch {
-			case errors.Is(verr, anthropicai.ErrInvalidModel), errors.Is(verr, anthropicai.ErrKeyRejected):
-				logger.Fatal().Err(verr).Msg("AI provider configuration rejected by the API")
-			case verr != nil:
-				logger.Warn().Err(verr).Msg("AI provider could not be verified at startup; continuing (keyword fallback covers outages)")
-			}
-		}
-		provider = p
-	default:
-		logger.Warn().Str("ai_provider", name).Msg("unknown AI_PROVIDER; using keyword classification")
+	}
+	if len(providers) == 0 {
+		logger.Warn().Msg("no AI provider is usable; using keyword classification")
+		return &conversation.KeywordClassifier{}
+	}
+	provider, err := failoverai.New(logger, providers...)
+	if err != nil {
+		logger.Warn().Err(err).Msg("AI providers not composed; using keyword classification")
 		return &conversation.KeywordClassifier{}
 	}
 
@@ -278,8 +270,121 @@ func buildIntentClassifier(logger zerolog.Logger, usage domain.UsageService) con
 		Gateway:      gateway,
 		UsageService: usage,
 	})
-	logger.Info().Str("ai_provider", provider.ID()).Str("model", provider.Models()[0].ModelID).Msg("AI intent classification enabled")
-	return aiapp.NewIntentClassifierAdapter(orchestrator)
+	order := make([]string, 0, len(providers))
+	for _, p := range providers {
+		order = append(order, p.ID()+"/"+p.Models()[0].ModelID)
+	}
+	logger.Info().Strs("ai_providers", order).Msg("AI intent classification enabled")
+	// The interpreter is told which categories exist, so it can name the one a person means.
+	lister := func(ctx context.Context) ([]aiapp.CategoryOption, error) {
+		active, err := categories.FindActive(ctx)
+		if err != nil {
+			return nil, err
+		}
+		names := make(map[string]string, len(active))
+		for _, c := range active {
+			names[c.ID] = c.Name
+		}
+		out := make([]aiapp.CategoryOption, 0, len(active))
+		for _, c := range active {
+			o := aiapp.CategoryOption{ID: c.ID, Name: c.Name}
+			if c.ParentID != nil {
+				o.Parent = names[*c.ParentID]
+			}
+			out = append(out, o)
+		}
+		return out, nil
+	}
+	return aiapp.NewIntentClassifierAdapter(orchestrator, aiapp.WithCategories(lister))
+}
+
+func splitProviders(list string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, n := range strings.Split(list, ",") {
+		n = strings.ToLower(strings.TrimSpace(n))
+		if n != "" && !seen[n] {
+			seen[n] = true
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+// buildProvider builds and verifies one provider. A provider whose model or key
+// the API definitely rejects is fatal when it is the only one configured (a
+// deployment mistake that must not degrade silently) and is skipped, with an
+// error log, when a fallback exists. It returns nil for a provider that is not
+// configured.
+func buildProvider(logger zerolog.Logger, name string, only bool) domain.AIProvider {
+	reject := func(err error, msg string) {
+		if only {
+			logger.Fatal().Err(err).Msg(msg)
+		}
+		logger.Error().Err(err).Str("ai_provider", name).Msg(msg + "; skipping this provider")
+	}
+	verify := func(fn func(context.Context) error) error {
+		if common.Getenv("AI_VERIFY_ON_START", "true") == "false" {
+			return nil
+		}
+		vctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+		defer cancel()
+		return fn(vctx)
+	}
+	timeout := time.Duration(common.GetenvInt("AI_REQUEST_TIMEOUT_SECONDS", 15)) * time.Second
+
+	switch name {
+	case anthropicai.ProviderID:
+		p, err := anthropicai.New(anthropicai.Config{
+			APIKey:         common.Getenv("ANTHROPIC_API_KEY", ""),
+			Model:          common.Getenv("AI_MODEL", anthropicai.DefaultModel),
+			BaseURL:        common.Getenv("AI_BASE_URL", ""),
+			Effort:         common.Getenv("AI_EFFORT", "low"),
+			RequestTimeout: timeout,
+			MaxRetries:     common.GetenvInt("AI_MAX_RETRIES", 2),
+		})
+		if errors.Is(err, anthropicai.ErrInvalidModel) {
+			reject(err, "invalid AI_MODEL")
+			return nil
+		}
+		if err != nil {
+			logger.Warn().Err(err).Str("ai_provider", name).Msg("AI provider not configured")
+			return nil
+		}
+		switch verr := verify(p.Verify); {
+		case errors.Is(verr, anthropicai.ErrInvalidModel), errors.Is(verr, anthropicai.ErrKeyRejected):
+			reject(verr, "AI provider configuration rejected by the API")
+			return nil
+		case verr != nil:
+			logger.Warn().Err(verr).Str("ai_provider", name).Msg("AI provider could not be verified at startup; continuing (fallbacks cover outages)")
+		}
+		return p
+	case geminiai.ProviderID:
+		p, err := geminiai.New(geminiai.Config{
+			APIKey:         common.Getenv("GEMINI_API_KEY", ""),
+			Model:          common.Getenv("GEMINI_MODEL", geminiai.DefaultModel),
+			BaseURL:        common.Getenv("GEMINI_BASE_URL", ""),
+			RequestTimeout: timeout,
+		})
+		if errors.Is(err, geminiai.ErrInvalidModel) {
+			reject(err, "invalid GEMINI_MODEL")
+			return nil
+		}
+		if err != nil {
+			logger.Warn().Err(err).Str("ai_provider", name).Msg("AI provider not configured")
+			return nil
+		}
+		switch verr := verify(p.Verify); {
+		case errors.Is(verr, geminiai.ErrInvalidModel), errors.Is(verr, geminiai.ErrKeyRejected):
+			reject(verr, "AI provider configuration rejected by the API")
+			return nil
+		case verr != nil:
+			logger.Warn().Err(verr).Str("ai_provider", name).Msg("AI provider could not be verified at startup; continuing (fallbacks cover outages)")
+		}
+		return p
+	}
+	logger.Warn().Str("ai_provider", name).Msg("unknown AI provider; ignoring it")
+	return nil
 }
 
 // requireOperatorForWrites lets anyone read the pack catalogue but restricts

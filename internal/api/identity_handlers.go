@@ -20,10 +20,17 @@ type IdentityUseCases interface {
 	Me(ctx context.Context, userID string) (*domain.User, error)
 }
 
+// StaffAuthenticator is implemented by identity.Service when staff sign-in with
+// email and password is enabled.
+type StaffAuthenticator interface {
+	StaffLogin(ctx context.Context, email, password string) (*identity.Session, error)
+}
+
 // IdentityHandler serves /api/v1/auth/*.
 type IdentityHandler struct {
-	useCases  IdentityUseCases
-	ipLimiter *common.WindowLimiter
+	useCases     IdentityUseCases
+	ipLimiter    *common.WindowLimiter
+	staffLimiter *common.WindowLimiter
 }
 
 // NewIdentityHandler creates an IdentityHandler. OTP requests are limited per
@@ -37,7 +44,20 @@ func NewIdentityHandlerWithLimit(useCases IdentityUseCases, perIPPer10Min int) *
 	if perIPPer10Min <= 0 {
 		perIPPer10Min = 20
 	}
-	return &IdentityHandler{useCases: useCases, ipLimiter: common.NewWindowLimiter(perIPPer10Min, 10*time.Minute)}
+	return &IdentityHandler{
+		useCases:     useCases,
+		ipLimiter:    common.NewWindowLimiter(perIPPer10Min, 10*time.Minute),
+		staffLimiter: common.NewWindowLimiter(10, 10*time.Minute),
+	}
+}
+
+// WithStaffLoginLimit sets how many staff sign-in attempts one client IP may
+// make per 10 minutes (default 10), on top of the per-account lockout.
+func (h *IdentityHandler) WithStaffLoginLimit(perIPPer10Min int) *IdentityHandler {
+	if perIPPer10Min > 0 {
+		h.staffLimiter = common.NewWindowLimiter(perIPPer10Min, 10*time.Minute)
+	}
+	return h
 }
 
 type userJSON struct {
@@ -127,6 +147,39 @@ func (h *IdentityHandler) VerifyOTPH(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, sessionJSON(session), http.StatusOK)
+}
+
+// StaffLoginH handles POST /api/v1/auth/staff/login: platform staff (admin,
+// operator, moderator) sign in with an email address and a password. Every
+// failure answers the same 401, so the response never says which part was wrong.
+func (h *IdentityHandler) StaffLoginH(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	staff, ok := h.useCases.(StaffAuthenticator)
+	if !ok {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "NOT_FOUND", Message: "Staff sign-in is not available"}}, http.StatusNotFound)
+		return
+	}
+	if !h.staffLimiter.Allow(common.ClientIP(r)) {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "RATE_LIMITED", Message: "Too many sign-in attempts; try again later"}}, http.StatusTooManyRequests)
+		return
+	}
+	var req struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+	if err := readJSONBody(r, &req); err != nil || req.Email == "" || req.Password == "" {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "email and password are required"}}, http.StatusBadRequest)
+		return
+	}
+	session, err := staff.StaffLogin(r.Context(), req.Email, req.Password)
+	switch {
+	case err == nil:
+		writeJSON(w, sessionJSON(session), http.StatusOK)
+	case errors.Is(err, domain.ErrInvalidCredentials):
+		auth.WriteUnauthorized(w, "INVALID_CREDENTIALS", "Email or password is incorrect")
+	default:
+		writeJSON(w, ErrorResponse{Error: Error{Code: "AUTH_FAILED", Message: "Sign-in failed"}}, http.StatusInternalServerError)
+	}
 }
 
 // RefreshH handles POST /api/v1/auth/refresh

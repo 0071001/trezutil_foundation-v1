@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/trezutil/trezutil/internal/application/vertical"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/trezutil/trezutil/internal/application/commerce"
-	"github.com/trezutil/trezutil/internal/application/vertical"
 	"github.com/trezutil/trezutil/internal/domain"
 )
 
@@ -30,6 +30,9 @@ type IntentClassificationRequest struct {
 	Messages       []domain.Message
 	Locale         string
 	Channel        domain.Channel
+	// Context summarises the conversation so far (last search, numbered results,
+	// the listing in focus, today's date) for the interpreter.
+	Context string
 }
 
 // IntentClassificationResult is the result of intent classification.
@@ -191,10 +194,8 @@ func (p *ConversationProcessor) dispatch(ctx context.Context, conv *domain.Conve
 	}
 	if cx.Language == "" {
 		cx.Language = conv.Language
-		if cx.Language == "" {
-			cx.Language = "en"
-		}
 	}
+	cx.Language = resolveLanguage(req.Locale, cx.Language)
 
 	// 4. Check for pending confirmation (expired confirmations are dropped)
 	if cx.HasPendingConfirmation() {
@@ -218,7 +219,7 @@ func (p *ConversationProcessor) dispatch(ctx context.Context, conv *domain.Conve
 
 // replayReply returns the reply stored for an already-processed message.
 func (p *ConversationProcessor) replayReply(ctx context.Context, conv *domain.Conversation, messageKey string) *ProcessResult {
-	text := "I already received that message."
+	text := tr(resolveLanguage("", conv.Language), "I've already got that one — no need to send it twice.", "Je l’ai déjà reçu — inutile de l’envoyer deux fois.")
 	if p.messageStore != nil {
 		if history, err := p.messageStore.FindByConversationID(ctx, conv.ID); err == nil {
 			for _, m := range history {
@@ -228,7 +229,7 @@ func (p *ConversationProcessor) replayReply(ctx context.Context, conv *domain.Co
 			}
 		}
 	}
-	resp := domain.NewConversationResponse(text, conv.Language)
+	resp := domain.NewConversationResponse(text, resolveLanguage("", conv.Language))
 	resp.Metadata["duplicate"] = true
 	return &ProcessResult{ConversationID: conv.ID, Response: resp}
 }
@@ -329,14 +330,14 @@ func (p *ConversationProcessor) handlePendingConfirmation(
 		cx.PendingAction = nil
 		_ = p.saveContext(ctx, conv.ID, cx)
 
-		resp := domain.NewConversationResponse("I've cancelled that action.", cx.Language)
+		resp := domain.NewConversationResponse(tr(cx.Language, "No problem — I've cancelled that. Nothing was changed.", "Pas de souci — j’ai annulé. Rien n’a été modifié."), cx.Language)
 		return &ProcessResult{
 			ConversationID: conv.ID,
 			Response:       resp,
 		}, nil
 
 	default:
-		resp := domain.NewConversationResponse("Please reply with yes or no to confirm or cancel this action.", cx.Language)
+		resp := domain.NewConversationResponse(tr(cx.Language, "Just a quick yes or no, please — shall I go ahead?", "Juste un oui ou un non, s’il vous plaît — je continue ?"), cx.Language)
 		resp.SetConfirmation(domain.ConversationConfirmation{
 			ActionID: flow.ActionID,
 			Summary:  flow.Summary,
@@ -364,6 +365,14 @@ func (p *ConversationProcessor) handleMissingParameterReply(
 	}
 
 	param := missing[0]
+	// The person changed the subject instead of answering: drop the pending
+	// question and read the message as a new request.
+	if !answersMissingParam(param.Name, req.MessageText) {
+		cx.MissingParameters = nil
+		cx.PendingAction = nil
+		_ = p.saveContext(ctx, conv.ID, cx)
+		return p.handleNewMessage(ctx, conv, cx, req)
+	}
 	resolvedValue := strings.TrimSpace(req.MessageText)
 	if strings.HasSuffix(param.Name, "_id") {
 		// "the second one" -> the ID of the second listed result.
@@ -411,11 +420,12 @@ func (p *ConversationProcessor) handleNewMessage(
 	// Interpret via AI
 	intent, err := p.interpretIntent(ctx, conv, cx, req, messages)
 	if err != nil {
-		resp := domain.NewConversationResponse("I'm having trouble understanding your request. Could you rephrase?", cx.Language)
+		resp := domain.NewConversationResponse(tr(cx.Language, "Sorry, I didn't quite catch that. Could you say it another way? For example: “a hotel in Gombe this weekend”.", "Désolé, je n’ai pas bien compris. Pouvez-vous le dire autrement ? Par exemple : « un hôtel à Gombe ce week-end »."), cx.Language)
 		return &ProcessResult{ConversationID: conv.ID, Response: resp}, nil
 	}
 	if intent == nil {
-		resp := domain.NewConversationResponse("I can help you search for listings, check availability, and view your orders and reservations.", cx.Language)
+		resp := domain.NewConversationResponse(tr(cx.Language, "Happy to help! I can find products, services, restaurants, places to stay and homes — then book or order them with you. What are you looking for?", "Avec plaisir ! Je peux trouver des produits, des services, des restaurants, des hébergements et des logements — puis les réserver ou les commander avec vous. Que cherchez-vous ?"), cx.Language)
+		resp.Metadata["suggestions"] = welcomeSuggestions(cx.Language)
 		return &ProcessResult{ConversationID: conv.ID, Response: resp}, nil
 	}
 
@@ -445,7 +455,7 @@ func (p *ConversationProcessor) handleNewMessage(
 		}
 	}
 	if action.IdempotencyKey == "" {
-		action.IdempotencyKey = fmt.Sprintf("action_%s_%d", conv.ID, time.Now().UnixNano())
+		action.IdempotencyKey = fmt.Sprintf("action_%s_%s", conv.ID, domain.NewID())
 	}
 
 	return p.executeAction(ctx, conv, cx, action, req.Actor)
@@ -480,6 +490,7 @@ func (p *ConversationProcessor) interpretIntent(
 			Messages:       messages,
 			Locale:         req.Locale,
 			Channel:        req.Channel,
+			Context:        classifierContext(cx, req.Actor.IsAuthenticated(), cx.Language, time.Now()),
 		}
 
 		classResult, err := p.classifier.ClassifyIntent(ctx, classReq)
@@ -489,7 +500,11 @@ func (p *ConversationProcessor) interpretIntent(
 			if err != nil {
 				p.logger.Warn().Err(err).Msg("AI classification failed; using keyword routing")
 			}
-			return keywordIntent(p, ctx, conv, req), nil
+			return keywordIntent(p, ctx, conv, cx, req), nil
+		}
+
+		if classResult.Intent.Intent == domain.ActionSearchListings {
+			classResult.Intent.Parameters = enrichSearchParams(classResult.Intent.Parameters, req.MessageText, cx.SearchCriteria)
 		}
 
 		// Resolve specialist and pack
@@ -514,13 +529,34 @@ func (p *ConversationProcessor) interpretIntent(
 	}
 
 	// Fall back to keyword-based resolution
-	return keywordIntent(p, ctx, conv, req), nil
+	return keywordIntent(p, ctx, conv, cx, req), nil
 }
 
 // keywordIntent is the deterministic, AI-free intent resolver. For searches
 // the user's own words are the query text.
-func keywordIntent(p *ConversationProcessor, ctx context.Context, conv *domain.Conversation, req *ProcessRequest) *domain.ConversationIntent {
+func keywordIntent(p *ConversationProcessor, ctx context.Context, conv *domain.Conversation, cx *domain.ConversationContext, req *ProcessRequest) *domain.ConversationIntent {
+	// A follow-up that only adjusts the last search ("moins cher", "et à Limete").
+	if cx != nil {
+		if merged, ok := refineSearch(cx.SearchCriteria, req.MessageText); ok {
+			intent := &domain.ConversationIntent{
+				Name:        "KEYWORD_REFINEMENT",
+				Confidence:  1.0,
+				Source:      "SYSTEM",
+				ActionType:  domain.ActionSearchListings,
+				Specialist:  p.resolveSpecialist(domain.ActionSearchListings),
+				Entities:    domain.EntitiesFromParams(merged),
+				Explanation: "refines the previous search",
+			}
+			intent.VerticalPack, _ = p.resolvePack(ctx, conv.OrganizationID, domain.ActionSearchListings)
+			return intent
+		}
+	}
 	actionType := resolveActionTypeKeyword(req.MessageText)
+	// Naming a kind of place or offer ("un plombier disponible aujourd'hui",
+	// "un resto à Limete") is a search, whatever other keyword is in the text.
+	if v, _ := vertical.DefaultCatalog().DetectVertical(req.MessageText); v != "" && (actionType == "" || actionType == domain.ActionCheckAvailability) {
+		actionType = domain.ActionSearchListings
+	}
 	if actionType == "" {
 		return nil
 	}
@@ -538,7 +574,10 @@ func keywordIntent(p *ConversationProcessor, ctx context.Context, conv *domain.C
 		RequiresConfirmation: domain.AIActionRequiresConfirmation(actionType),
 	}
 	if actionType == domain.ActionSearchListings {
-		intent.Entities = []domain.ConversationEntity{{Name: "text", Value: req.MessageText, NormalizedValue: req.MessageText, Source: "USER"}}
+		intent.Entities = domain.EntitiesFromParams(keywordSearchParams(req.MessageText))
+		if len(intent.Entities) == 0 {
+			intent.Entities = []domain.ConversationEntity{{Name: "text", Value: req.MessageText, NormalizedValue: req.MessageText, Source: "USER"}}
+		}
 	}
 	return intent
 }
@@ -565,7 +604,7 @@ func (p *ConversationProcessor) executeAction(
 	actor domain.CommerceActor,
 ) (*ProcessResult, error) {
 	if !actor.IsAuthenticated() && !guestAllowedActions[action.ActionType] {
-		resp := domain.NewConversationResponse("Please sign in with your phone number to continue — browsing is open to everyone, but orders, bookings and payments need an account.", cx.Language)
+		resp := domain.NewConversationResponse(tr(cx.Language, "To go ahead I'll need you signed in — it only takes your phone number. Browsing is open to everyone, but orders, bookings and payments need an account.", "Pour continuer, il faut que vous soyez connecté — il suffit de votre numéro de téléphone. Naviguer est ouvert à tous, mais les commandes, réservations et paiements nécessitent un compte."), cx.Language)
 		resp.Metadata["requires_authentication"] = true
 		resp.Metadata["action_type"] = string(action.ActionType)
 		_ = p.saveContext(ctx, conv.ID, cx)
@@ -621,17 +660,17 @@ func (p *ConversationProcessor) executeAction(
 		cx.PendingAction = action
 
 	case domain.ActionResultUnauthorized:
-		result.Response = domain.NewConversationResponse("You don't have permission to perform this action.", cx.Language)
+		result.Response = domain.NewConversationResponse(tr(cx.Language, "I'm sorry, you don't have permission to do that.", "Désolé, vous n’avez pas la permission de faire cela."), cx.Language)
 
 	case domain.ActionResultNotFound:
-		result.Response = domain.NewConversationResponse("I couldn't find what you're looking for. Please check the details and try again.", cx.Language)
+		result.Response = domain.NewConversationResponse(tr(cx.Language, "I couldn't find that one. It may have been removed — could you check the details, or tell me what you're after and I'll search again?", "Je n’ai pas trouvé celui-ci. Il a peut-être été supprimé — pouvez-vous vérifier les détails, ou me dire ce que vous cherchez pour que je relance la recherche ?"), cx.Language)
 
 	case domain.ActionResultNotImplemented:
-		result.Response = domain.NewConversationResponse("I can't do that from the chat yet. You can do it from the listing page in the Trezutil app.", cx.Language)
+		result.Response = domain.NewConversationResponse(tr(cx.Language, "I can't do that from the chat just yet, but you can do it from the listing page in the Trezutil app.", "Je ne peux pas encore faire cela depuis la conversation, mais vous pouvez le faire depuis la page de l’annonce dans l’application Trezutil."), cx.Language)
 		cx.PendingAction = nil
 
 	default:
-		result.Response = domain.NewConversationResponse("Something went wrong processing your request. Please try again.", cx.Language)
+		result.Response = domain.NewConversationResponse(tr(cx.Language, "Hmm, something went wrong on my side. Could you try that again in a moment?", "Hmm, quelque chose s’est mal passé de mon côté. Pouvez-vous réessayer dans un instant ?"), cx.Language)
 	}
 
 	_ = p.saveContext(ctx, conv.ID, cx)
@@ -669,7 +708,7 @@ func (p *ConversationProcessor) executePendingAction(
 		result.Response = p.buildSuccessResponse(action, execResult, cx.Language)
 		p.updateContextFromResult(ctx, conv, cx, action, execResult)
 	} else {
-		result.Response = domain.NewConversationResponse("I wasn't able to complete that action. Please try again.", cx.Language)
+		result.Response = domain.NewConversationResponse(tr(cx.Language, "I wasn't able to finish that. Could you try again in a moment?", "Je n’ai pas pu terminer. Pouvez-vous réessayer dans un instant ?"), cx.Language)
 	}
 
 	cx.ConfirmationState = domain.ConfirmationFlowState{}
@@ -685,12 +724,15 @@ func (p *ConversationProcessor) buildSuccessResponse(
 	language string,
 ) *domain.ConversationResponse {
 	data := result.Data["data"]
-	resp := domain.NewConversationResponse(successText(action.ActionType, data), language)
+	resp := domain.NewConversationResponse(successText(language, action.ActionType, data), language)
 	resp.Metadata["action_type"] = string(action.ActionType)
 	resp.Metadata["source"] = "conversation_processor"
 	resp.Metadata["action_id"] = action.ActionID
 	if data != nil {
 		resp.Metadata["result_data"] = data
+	}
+	if sugg := suggestionsFor(language, action.ActionType, data); len(sugg) > 0 {
+		resp.Metadata["suggestions"] = sugg
 	}
 	for _, item := range extractResultItems(data) {
 		if len(resp.Cards) >= 10 {
@@ -711,73 +753,36 @@ func (p *ConversationProcessor) buildSuccessResponse(
 }
 
 // successText renders a channel-neutral, human reply (WhatsApp shows only text).
-func successText(actionType domain.CommerceActionType, data interface{}) string {
+func successText(lang string, actionType domain.CommerceActionType, data interface{}) string {
 	switch actionType {
 	case domain.ActionSearchListings:
-		items := extractResultItems(data)
-		if len(items) == 0 {
-			return "I couldn't find anything matching that yet. Try other words, a neighbourhood, or a category."
-		}
-		var b strings.Builder
-		heading := ""
-		if m, ok := data.(map[string]interface{}); ok {
-			if _, relaxed := m["relaxed"]; relaxed {
-				if c, ok := m["criteria"].(map[string]interface{}); ok && c["location"] != nil {
-					fmt.Fprintf(&b, "Nothing is listed in %v yet, so here are the closest matches.\n", c["location"])
-				}
-			}
-			heading = criteriaHeading(m["criteria"])
-		}
-		if heading != "" {
-			fmt.Fprintf(&b, "%s — %d found:", heading, len(items))
-		} else {
-			fmt.Fprintf(&b, "Here is what I found (%d):", len(items))
-		}
-		for i, it := range items {
-			if i == 5 {
-				b.WriteString("\n…and more.")
-				break
-			}
-			fmt.Fprintf(&b, "\n%d. %s", i+1, it.Title)
-			if it.Subtitle != "" {
-				fmt.Fprintf(&b, " — %s", it.Subtitle)
-			}
-		}
-		b.WriteString("\nReply with the number of the one you like.")
-		return b.String()
+		return searchText(lang, data, extractResultItems(data))
 	case domain.ActionGetListing:
 		if l, ok := data.(*domain.Listing); ok && l != nil {
-			text := l.Title
-			if price := formatPrice(l.PriceAmount, l.PriceCurrency); price != "" {
-				text += " — " + price
-			}
-			if l.Description != nil && *l.Description != "" {
-				text += "\n" + *l.Description
-			}
-			return text + "\nSay \"book it\" to reserve dates or \"buy it\" to order."
+			return listingText(lang, l)
 		}
 	case domain.ActionPauseListing:
-		return "Done — the listing is paused and hidden from search."
+		return tr(lang, "Done — the listing is paused and hidden from search. You can bring it back whenever you like.", "C’est fait — l’annonce est en pause et masquée de la recherche. Vous pouvez la remettre en ligne quand vous voulez.")
 	case domain.ActionResumeListing, domain.ActionPublishListing:
-		return "Done — the listing is live and searchable."
+		return tr(lang, "Done — the listing is live and searchable again.", "C’est fait — l’annonce est de nouveau en ligne et consultable.")
 	case domain.ActionCreateOrder:
 		if m, ok := data.(map[string]interface{}); ok {
-			return fmt.Sprintf("Your order is created (ref %v). You can pay for it now.", m["order_id"])
+			return fmt.Sprintf(tr(lang, "All set! Your order is created (ref %v). You can pay for it whenever you're ready.", "C’est bon ! Votre commande est créée (réf. %v). Vous pourrez la payer quand vous serez prêt."), m["order_id"])
 		}
-		return "Your order is created."
+		return tr(lang, "All set! Your order is created. You can pay for it whenever you're ready.", "C’est bon ! Votre commande est créée. Vous pourrez la payer quand vous serez prêt.")
 	case domain.ActionCreateReservation:
-		return "You're booked! Your reservation is confirmed."
+		return tr(lang, "You're all set — your booking is confirmed, and I've saved it to your reservations.", "Tout est bon — votre réservation est confirmée, et je l’ai enregistrée dans vos réservations.")
 	case domain.ActionCancelReservation, domain.ActionCancelOrder:
-		return "Done — it's cancelled."
+		return tr(lang, "Done — that's cancelled. Anything else I can help with?", "C’est fait — c’est annulé. Puis-je vous aider avec autre chose ?")
 	case domain.ActionCheckAvailability:
 		if m, ok := data.(map[string]interface{}); ok {
 			if avail, _ := m["available"].(bool); avail {
-				return "Good news: it's available for those dates."
+				return tr(lang, "Good news — it's available for those dates. Want me to book it?", "Bonne nouvelle — c’est disponible à ces dates. Voulez-vous que je le réserve ?")
 			}
-			return "Sorry, it's not available for those dates."
+			return tr(lang, "Sorry, it's not available for those dates. Would you like to try other dates, or see something similar?", "Désolé, ce n’est pas disponible à ces dates. Voulez-vous essayer d’autres dates, ou voir quelque chose de similaire ?")
 		}
 	}
-	return "I've completed that for you."
+	return tr(lang, "Done — that's taken care of.", "C’est fait — c’est réglé.")
 }
 
 func (p *ConversationProcessor) buildConfirmationResponse(
@@ -785,7 +790,7 @@ func (p *ConversationProcessor) buildConfirmationResponse(
 	result *commerce.ExecuteResult,
 	language string,
 ) *domain.ConversationResponse {
-	resp := domain.NewConversationResponse("I need your confirmation before I proceed.", language)
+	resp := domain.NewConversationResponse(tr(language, "Almost there — I just need your go-ahead before I do this.", "Presque terminé — il me faut juste votre accord avant de continuer."), language)
 	resp.Metadata["action_type"] = string(action.ActionType)
 	resp.Metadata["source"] = "confirmation_requested"
 	resp.SetConfirmation(domain.ConversationConfirmation{
@@ -802,17 +807,20 @@ func (p *ConversationProcessor) buildClarificationResponse(
 	action *domain.CommerceAction,
 ) *domain.ConversationResponse {
 	if len(missing) == 0 {
-		return domain.NewConversationResponse("Could you provide more details?", language)
+		return domain.NewConversationResponse(tr(language, "Could you tell me a little more about what you need?", "Pouvez-vous m’en dire un peu plus sur ce dont vous avez besoin ?"), language)
 	}
 
 	param := missing[0]
-	resp := domain.NewConversationResponse(p.missingParamPrompt(param), language)
+	resp := domain.NewConversationResponse(p.missingParamPrompt(language, param), language)
 	resp.Metadata["source"] = "clarification_requested"
 	resp.Metadata["missing_param"] = param.Name
 	resp.Metadata["missing_param_description"] = param.Description
 
 	if len(param.Examples) > 0 {
 		resp.Metadata["examples"] = param.Examples
+	}
+	if sugg := clarificationSuggestions(language, param.Name); len(sugg) > 0 {
+		resp.Metadata["suggestions"] = sugg
 	}
 
 	if action != nil {
@@ -822,11 +830,16 @@ func (p *ConversationProcessor) buildClarificationResponse(
 	return resp
 }
 
-func (p *ConversationProcessor) missingParamPrompt(param domain.MissingParameter) string {
+func (p *ConversationProcessor) missingParamPrompt(lang string, param domain.MissingParameter) string {
+	if isFrench(lang) {
+		if prompt, ok := friendlyParamPromptsFR[param.Name]; ok {
+			return prompt
+		}
+	}
 	if prompt, ok := friendlyParamPrompts[param.Name]; ok {
 		return prompt
 	}
-	prompt := fmt.Sprintf("I need a bit more information: %s. What would you like to use?", param.Description)
+	prompt := fmt.Sprintf("Just one more thing — %s. What would you like to use?", lowerFirst(strings.TrimSuffix(strings.TrimSpace(param.Description), ".")))
 	if len(param.Examples) > 0 && len(param.Examples) <= 3 {
 		prompt += fmt.Sprintf(" (e.g., %s)", strings.Join(param.Examples, ", "))
 	}
@@ -834,17 +847,17 @@ func (p *ConversationProcessor) missingParamPrompt(param domain.MissingParameter
 }
 
 var friendlyParamPrompts = map[string]string{
-	"text":           "What are you looking for? (e.g. \"a hotel in Gombe\" or \"iPhone 13\")",
-	"listing_id":     "Which one? You can reply with its number from the list (e.g. \"2\" or \"the second one\").",
-	"start_at":       "When should it start? (e.g. 2026-10-01 14:00)",
-	"end_at":         "And when should it end? (e.g. 2026-10-03 11:00)",
+	"text":           "Sure — what are you looking for? You can say things like “a hotel in Gombe” or “an iPhone 13”.",
+	"listing_id":     "Which one do you mean? Reply with its number from the list (like “2” or “the second one”).",
+	"start_at":       "When would you like it to start? (for example 2026-10-01 14:00)",
+	"end_at":         "And when should it end? (for example 2026-10-03 11:00)",
 	"quantity":       "How many would you like?",
-	"vertical":       "What kind of place are you looking for? (e.g. a hotel, a restaurant, an apartment)",
-	"location":       "Where? (e.g. Gombe)",
+	"vertical":       "What kind of place are you after — a hotel, a restaurant, an apartment?",
+	"location":       "Which area should I look in? (for example Gombe)",
 	"nights":         "For how many nights?",
-	"party_size":     "For how many people?",
-	"order_id":       "Which order? Please share its reference.",
-	"reservation_id": "Which reservation? Please share its reference.",
+	"party_size":     "How many people will it be?",
+	"order_id":       "Which order do you mean? Please share its reference.",
+	"reservation_id": "Which reservation do you mean? Please share its reference.",
 }
 
 func (p *ConversationProcessor) extractMissingParams(result *commerce.ExecuteResult) []domain.MissingParameter {
@@ -1056,7 +1069,7 @@ func (p *ConversationProcessor) RejectAction(ctx context.Context, convID string,
 	cx.PendingAction = nil
 	_ = p.saveContext(ctx, convID, cx)
 
-	resp := domain.NewConversationResponse("I've cancelled that action.", cx.Language)
+	resp := domain.NewConversationResponse(tr(cx.Language, "I've cancelled that action.", "J’ai annulé cette action."), cx.Language)
 	return &ProcessResult{ConversationID: convID, Response: resp}, nil
 }
 
@@ -1081,33 +1094,6 @@ func (p *ConversationProcessor) loadOwnedPendingConfirmation(ctx context.Context
 
 // listingScopedActions act on one listing; "book it", "buy it" or "pause this
 // listing" refer to the listing the user is currently looking at.
-// criteriaHeading states the structured criteria of a search:
-// "Hotels & accommodation in Gombe · 2 nights · 2 guests".
-func criteriaHeading(raw interface{}) string {
-	c, ok := raw.(map[string]interface{})
-	if !ok || len(c) == 0 {
-		return ""
-	}
-	var parts []string
-	head := "Results"
-	if v, ok := c["vertical"].(string); ok {
-		if def, found := vertical.DefaultCatalog().Get(domain.Vertical(v)); found {
-			head = def.Name
-		}
-	}
-	if loc, ok := c["location"].(string); ok && loc != "" {
-		head += " in " + loc
-	}
-	parts = append(parts, head)
-	if n := toInt(c["nights"]); n > 0 {
-		parts = append(parts, pluralize(n, "night"))
-	}
-	if n := toInt(c["party_size"]); n > 0 {
-		parts = append(parts, pluralize(n, "guest"))
-	}
-	return strings.Join(parts, " · ")
-}
-
 func toInt(v interface{}) int {
 	switch n := v.(type) {
 	case int:
@@ -1147,12 +1133,17 @@ func applySearchCriteria(cx *domain.ConversationContext, action *domain.Commerce
 	switch action.ActionType {
 	case domain.ActionSearchListings:
 		c := domain.SearchCriteria{
-			Vertical:  domain.NormalizeVertical(str("vertical")),
-			Location:  str("location"),
-			Nights:    num("nights"),
-			PartySize: num("party_size"),
-			StartAt:   str("start_at"),
+			Vertical:   domain.NormalizeVertical(str("vertical")),
+			Location:   str("location"),
+			Nights:     num("nights"),
+			PartySize:  num("party_size"),
+			StartAt:    str("start_at"),
+			Text:       str("text"),
+			Sort:       str("sort"),
+			CategoryID: str("category_id"),
 		}
+		c.PriceMin, _ = strconv.ParseFloat(str("price_min"), 64)
+		c.PriceMax, _ = strconv.ParseFloat(str("price_max"), 64)
 		if c.IsZero() {
 			cx.SearchCriteria = nil
 		} else {
@@ -1203,6 +1194,8 @@ var guestAllowedActions = map[domain.CommerceActionType]bool{
 	domain.ActionGetListing:      true,
 	domain.ActionSuggest:         true,
 	domain.ActionCompareListings: true,
+	// Asking whether something is free is browsing; booking it still needs an account.
+	domain.ActionCheckAvailability: true,
 }
 
 func resolveActionTypeKeyword(text string) domain.CommerceActionType {
@@ -1220,6 +1213,7 @@ func resolveActionTypeKeyword(text string) domain.CommerceActionType {
 	}
 
 	if strings.Contains(lower, "search") || strings.Contains(lower, "find") || strings.Contains(lower, "cherch") ||
+		strings.Contains(lower, "trouv") || strings.Contains(lower, "montre") || strings.Contains(lower, "affich") || strings.Contains(lower, "recommand") ||
 		strings.Contains(lower, "look") || strings.Contains(lower, "browse") ||
 		strings.Contains(lower, "catalog") || strings.Contains(lower, "list") ||
 		strings.Contains(lower, "suggest") || strings.Contains(lower, "recommend") ||
@@ -1227,12 +1221,12 @@ func resolveActionTypeKeyword(text string) domain.CommerceActionType {
 		return domain.ActionSearchListings
 	}
 
-	if strings.Contains(lower, "available") || strings.Contains(lower, "check") ||
+	if strings.Contains(lower, "available") || strings.Contains(lower, "check") || strings.Contains(lower, "disponib") ||
 		strings.Contains(lower, "availability") {
 		return domain.ActionCheckAvailability
 	}
 
-	if strings.Contains(lower, "reserve") || strings.Contains(lower, "book") {
+	if strings.Contains(lower, "reserve") || strings.Contains(lower, "book") || strings.Contains(lower, "réserv") {
 		return domain.ActionCreateReservation
 	}
 
@@ -1244,7 +1238,7 @@ func resolveActionTypeKeyword(text string) domain.CommerceActionType {
 		return domain.ActionCancelReservation
 	}
 
-	if strings.Contains(lower, "buy") || strings.Contains(lower, "order") ||
+	if strings.Contains(lower, "buy") || strings.Contains(lower, "order") || strings.Contains(lower, "achet") || strings.Contains(lower, "achèt") || strings.Contains(lower, "achat") || strings.Contains(lower, "command") || strings.Contains(lower, "payer") ||
 		strings.Contains(lower, "purchase") || strings.Contains(lower, "cart") ||
 		strings.Contains(lower, "checkout") || strings.Contains(lower, "pay") {
 		return domain.ActionCreateOrder

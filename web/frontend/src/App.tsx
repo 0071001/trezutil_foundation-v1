@@ -2,13 +2,18 @@ import { lazy, Suspense, useEffect } from 'react'
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from 'react-router'
 import { SESSION_EXPIRED_EVENT } from '@/api/client'
 import { Loading } from '@/components/states'
+import { I18nProvider } from '@/lib/i18n'
 import { PrefsProvider } from '@/lib/prefs'
 import { SessionProvider, useSession } from '@/lib/session'
+import { PortalsProvider } from '@/portal/PortalsProvider'
+import { adminModules, sellerModules } from '@/portal/modules'
 import { ToastProvider, useToast } from '@/lib/toast'
 import { ErrorBoundary, ForbiddenPage, NotFoundPage } from '@/pages/Errors'
 import HomePage from '@/pages/Home'
+import { t } from '@/lib/i18n'
 
 // Routes other than the homepage load on demand.
+const AboutPage = lazy(() => import('@/pages/About'))
 const SearchPage = lazy(() => import('@/pages/Search'))
 const DiscoverPage = lazy(() => import('@/pages/Discover'))
 const ConversationPage = lazy(() => import('@/pages/Conversation'))
@@ -34,14 +39,22 @@ const SellerOrdersPage = lazy(() => import('@/pages/seller/SellerOperations').th
 const SellerReservationsPage = lazy(() => import('@/pages/seller/SellerOperations').then((m) => ({ default: m.SellerReservationsPage })))
 const SellerInventoryPage = lazy(() => import('@/pages/seller/SellerOperations').then((m) => ({ default: m.SellerInventoryPage })))
 const SellerBusinessPage = lazy(() => import('@/pages/seller/SellerOperations').then((m) => ({ default: m.SellerBusinessPage })))
+const SellerAnalyticsPage = lazy(() => import('@/pages/seller/SellerAnalytics').then((m) => ({ default: m.SellerAnalyticsPage })))
 const SellerHotelPage = lazy(() => import('@/pages/seller/SellerHotel').then((m) => ({ default: m.SellerHotelPage })))
+const AdminLoginPage = lazy(() => import('@/pages/admin/AdminLogin'))
+const AdminLayout = lazy(() => import('@/pages/admin/AdminShell').then((m) => ({ default: m.AdminLayout })))
+const AdminModulePage = lazy(() => import('@/pages/admin/AdminShell').then((m) => ({ default: m.AdminModulePage })))
+const SellerModulePage = lazy(() => import('@/pages/seller/SellerShell').then((m) => ({ default: m.SellerModulePage })))
+const AdminOverviewPage = lazy(() => import('@/pages/admin/AdminOverview'))
+const AdminSiteContentPage = lazy(() => import('@/pages/admin/AdminSiteContent'))
+const AdminUsersPage = lazy(() => import('@/pages/admin/AdminUsers'))
 const SellerOnboardingRoute = lazy(() => import('@/pages/seller/SellerOnboarding').then((m) => ({ default: m.SellerOnboardingRoute })))
 
 /** Protected routes send guests to sign-in and bring them back afterwards. */
 function RequireSession() {
   const { user, signedOut } = useSession()
   const location = useLocation()
-  if (user === undefined) return <Loading label="Checking your session…" />
+  if (user === undefined) return <Loading label={t('Checking your session…')} />
   if (!user && signedOut) return <Navigate to="/" replace />
   if (!user) {
     const returnTo = `${location.pathname}${location.search}`
@@ -58,7 +71,7 @@ function SessionExpiryWatcher() {
   useEffect(() => {
     const onExpired = () => {
       if (location.pathname === '/login') return
-      notify('Your session has ended. Please sign in again.', 'info')
+      notify(t('Your session has ended. Please sign in again.'), 'info')
       navigate(`/login?returnTo=${encodeURIComponent(`${location.pathname}${location.search}`)}&expired=1`, { replace: true })
     }
     window.addEventListener(SESSION_EXPIRED_EVENT, onExpired)
@@ -67,14 +80,31 @@ function SessionExpiryWatcher() {
   return null
 }
 
-/** New page: scroll to top and move focus to the main region for screen readers. */
-function RouteFocus() {
-  const { pathname } = useLocation()
+/**
+ * New page: scroll to top and move focus to the main region for screen readers.
+ * A link to a place on a page ("/about#how") scrolls there instead, once the
+ * page has drawn it (pages load on demand, so it may take a moment).
+ */
+export function RouteFocus() {
+  const { pathname, hash } = useLocation()
   useEffect(() => {
-    window.scrollTo(0, 0)
-    const main = document.getElementById('main')
-    main?.focus({ preventScroll: true })
-  }, [pathname])
+    const id = decodeURIComponent(hash.slice(1))
+    if (!id) {
+      window.scrollTo(0, 0)
+      document.getElementById('main')?.focus({ preventScroll: true })
+      return
+    }
+    let tries = 0
+    let timer: number | undefined
+    const reveal = () => {
+      const target = document.getElementById(id)
+      if (target) { target.scrollIntoView({ block: 'start' }); return }
+      if (++tries < 20) timer = window.setTimeout(reveal, 50)
+      else window.scrollTo(0, 0) // the place does not exist (any more): start at the top
+    }
+    reveal()
+    return () => window.clearTimeout(timer)
+  }, [pathname, hash])
   return null
 }
 
@@ -83,12 +113,17 @@ function LegacyDetail({ to }: { to: string }) {
   return <Navigate to={`${to}/${encodeURIComponent(id)}`} replace />
 }
 
+/** Module routes that have no screen yet (planned or unavailable), declared from the module list so navigation and routes cannot drift apart. */
+const modulePath = (to: string, prefix: string) => to.slice(prefix.length)
+
 export function AppRoutes() {
   return (
-    <Suspense fallback={<Loading label="Loading…" />}>
+    <PortalsProvider>
+    <Suspense fallback={<Loading label={t('Loading…')} />}>
       <Routes>
         <Route index element={<HomePage />} />
         <Route path="/home" element={<Navigate to="/" replace />} />
+        <Route path="/about" element={<AboutPage />} />
         <Route path="/discover" element={<DiscoverPage />} />
         <Route path="/nearby" element={<Navigate to="/discover" replace />} />
         <Route path="/search" element={<SearchPage />} />
@@ -100,6 +135,15 @@ export function AppRoutes() {
         <Route path="/register" element={<AuthPage mode="register" />} />
         <Route path="/seller/onboarding" element={<SellerOnboardingRoute />} />
         <Route path="/403" element={<ForbiddenPage />} />
+
+        {/* Platform administration: staff sign in with email and password; the layout guards the role. */}
+        <Route path="/admin/login" element={<AdminLoginPage />} />
+        <Route path="/admin" element={<AdminLayout />}>
+          <Route index element={<AdminOverviewPage />} />
+          <Route path="users" element={<AdminUsersPage />} />
+          <Route path="site" element={<AdminSiteContentPage />} />
+          {adminModules.filter((m) => m.status.kind !== 'ready').map((m) => <Route key={m.id} path={modulePath(m.to, '/admin/')} element={<AdminModulePage id={m.id} />} />)}
+        </Route>
 
         <Route element={<RequireSession />}>
           <Route path="/checkout" element={<CheckoutPage />} />
@@ -121,6 +165,8 @@ export function AppRoutes() {
             <Route path="inventory" element={<SellerInventoryPage />} />
             <Route path="hotel" element={<SellerHotelPage />} />
             <Route path="business" element={<SellerBusinessPage />} />
+            <Route path="analytics" element={<SellerAnalyticsPage />} />
+            {sellerModules.filter((m) => m.status.kind !== 'ready').map((m) => <Route key={m.id} path={modulePath(m.to, '/seller/')} element={<SellerModulePage id={m.id} />} />)}
           </Route>
         </Route>
 
@@ -133,6 +179,7 @@ export function AppRoutes() {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
     </Suspense>
+    </PortalsProvider>
   )
 }
 
@@ -143,9 +190,13 @@ export default function App() {
         <PrefsProvider>
           <ToastProvider>
             <SessionProvider>
-              <SessionExpiryWatcher />
-              <RouteFocus />
-              <AppRoutes />
+              <I18nProvider>
+                {/* The floating "Ask Trezutil" chat (components/ChatWidget.tsx) is not mounted: removed at the owner's request, 2026-10-05.
+                    Without its provider the "Ask Trezutil anything about this page" bars simply link to the conversation page. */}
+                <SessionExpiryWatcher />
+                <RouteFocus />
+                <AppRoutes />
+              </I18nProvider>
             </SessionProvider>
           </ToastProvider>
         </PrefsProvider>

@@ -12,11 +12,24 @@ import (
 // This bridges the AI gateway's intent classification to the ConversationProcessor.
 type IntentClassifierAdapter struct {
 	orchestrator *AIOrchestrator
+	categories   *categoryCache
+}
+
+// AdapterOption configures an IntentClassifierAdapter.
+type AdapterOption func(*IntentClassifierAdapter)
+
+// WithCategories lets the interpreter name the category a person means.
+func WithCategories(list CategoryLister) AdapterOption {
+	return func(a *IntentClassifierAdapter) { a.categories = newCategoryCache(list) }
 }
 
 // NewIntentClassifierAdapter creates an adapter wrapping the AIOrchestrator.
-func NewIntentClassifierAdapter(orch *AIOrchestrator) *IntentClassifierAdapter {
-	return &IntentClassifierAdapter{orchestrator: orch}
+func NewIntentClassifierAdapter(orch *AIOrchestrator, opts ...AdapterOption) *IntentClassifierAdapter {
+	a := &IntentClassifierAdapter{orchestrator: orch}
+	for _, opt := range opts {
+		opt(a)
+	}
+	return a
 }
 
 // ClassifyIntent performs AI-only intent classification without executing the action.
@@ -50,7 +63,7 @@ func (a *IntentClassifierAdapter) ClassifyIntent(ctx context.Context, req *conve
 	aiReq2 := domain.AIRequest{
 		Task:             domain.AITaskIntentClassification,
 		Messages:         sanitized.messages,
-		SystemPrompt:     a.orchestrator.buildSystemPrompt(),
+		SystemPrompt:     a.requestPrompt(ctx, req.Context),
 		StructuredOutput: true,
 		OutputSchema:     intentOutputSchema(),
 		RequestID:        requestID,

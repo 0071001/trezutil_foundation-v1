@@ -68,6 +68,16 @@ services:
     build:
       context: ../..
       dockerfile: deployments/docker/Dockerfile
+      args:
+        # Public WhatsApp Business number (digits only) behind the site's WhatsApp button; empty hides the button.
+        VITE_WHATSAPP_NUMBER: ${VITE_WHATSAPP_NUMBER:-}
+        # Public store pages of the mobile app (https), once it is published; empty means the store is not mentioned.
+        VITE_PLAY_STORE_URL: ${VITE_PLAY_STORE_URL:-}
+        VITE_APP_STORE_URL: ${VITE_APP_STORE_URL:-}
+        # "true" shows placeholders for the channels that are not connected yet (staging only; empty in production).
+        VITE_CHANNEL_PLACEHOLDERS: ${VITE_CHANNEL_PLACEHOLDERS:-}
+        # Label in the administration header so staff never mistake staging for production; empty or "production" shows none.
+        VITE_APP_ENV: ${VITE_APP_ENV:-}
     command: ["/app/bin/migrate"]
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=${POSTGRES_SSLMODE:-disable}
@@ -106,6 +116,7 @@ services:
     environment:
       <<: *service-env
       HTTP_PORT: "8091"
+      DEFAULT_LANGUAGE: ${DEFAULT_LANGUAGE:-fr}
       WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
       WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN:-}
       WHATSAPP_API_BASE_URL: ${WHATSAPP_API_BASE_URL:-https://graph.facebook.com/v20.0}
@@ -114,6 +125,8 @@ services:
       # Model-assisted intent classification (keyword routing when unset).
       AI_PROVIDER: ${AI_PROVIDER:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-}
       AI_MODEL: ${AI_MODEL:-}
       AI_EFFORT: ${AI_EFFORT:-low}
       AI_TIMEOUT_SECONDS: ${AI_TIMEOUT_SECONDS:-30}

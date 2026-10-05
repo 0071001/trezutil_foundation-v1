@@ -44,10 +44,14 @@ export interface SearchResult {
   price_currency: string
   availability_status: string
   distance_meters: number | null
-  location: { city: string | null; neighborhood: string | null } | null
+  location: { city: string | null; neighborhood: string | null; latitude: number | null; longitude: number | null } | null
   seller: { seller_id: string; display_name: string; trust_level: number } | null
   store: { store_id: string; name: string } | null
   primary_media_url: string | null
+  /** The regular price a sale replaced; null when the listing is not on promotion. */
+  compare_at_amount: number | null
+  /** The saving off compare_at_amount as a whole percentage (0 when not on promotion). */
+  discount_percent: number
   published_at: number
 }
 
@@ -58,7 +62,7 @@ export interface SearchResponse {
   next_cursor: string | null
 }
 
-export type SortField = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'availability' | 'distance'
+export type SortField = 'relevance' | 'price_asc' | 'price_desc' | 'newest' | 'availability' | 'distance' | 'discount'
 
 export interface SearchRequest {
   text: string
@@ -69,6 +73,8 @@ export interface SearchRequest {
   location?: string
   price_min?: number
   price_max?: number
+  /** Only listings currently on sale. */
+  on_promotion?: boolean
   page_size?: number
   cursor?: string
   sort_field?: SortField

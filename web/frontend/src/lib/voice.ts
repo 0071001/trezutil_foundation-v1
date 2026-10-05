@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { getLang } from '@/lib/i18n'
 
 interface Recognition {
   lang: string
@@ -32,7 +33,7 @@ export function useVoiceInput(onText: (text: string) => void) {
     if (!Ctor) return
     if (listening) { recognition.current?.stop(); return }
     const r = new Ctor()
-    r.lang = navigator.language || 'fr-FR'
+    r.lang = getLang() === 'fr' ? 'fr-FR' : 'en-US'
     r.interimResults = true
     r.onresult = (e) => {
       const text = Array.from(e.results).map((res) => res[0]?.transcript ?? '').join(' ')
