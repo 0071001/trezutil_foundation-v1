@@ -14,9 +14,12 @@ import { t } from '@/lib/i18n'
 
 // Routes other than the homepage load on demand.
 const AboutPage = lazy(() => import('@/pages/About'))
+const LegalPage = lazy(() => import('@/pages/Legal'))
 const SearchPage = lazy(() => import('@/pages/Search'))
 const DiscoverPage = lazy(() => import('@/pages/Discover'))
 const ConversationPage = lazy(() => import('@/pages/Conversation'))
+const OrganizePage = lazy(() => import('@/pages/Organize'))
+const MissionPage = lazy(() => import('@/pages/Organize').then((m) => ({ default: m.MissionPage })))
 const DetailPage = lazy(() => import('@/pages/Detail'))
 const AuthPage = lazy(() => import('@/pages/Auth'))
 const CheckoutPage = lazy(() => import('@/pages/Checkout'))
@@ -48,6 +51,33 @@ const SellerModulePage = lazy(() => import('@/pages/seller/SellerShell').then((m
 const AdminOverviewPage = lazy(() => import('@/pages/admin/AdminOverview'))
 const AdminSiteContentPage = lazy(() => import('@/pages/admin/AdminSiteContent'))
 const AdminUsersPage = lazy(() => import('@/pages/admin/AdminUsers'))
+const AdminAuditPage = lazy(() => import('@/pages/admin/AdminAudit'))
+const AdminOrdersPage = lazy(() => import('@/pages/admin/AdminCommerce').then((m) => ({ default: m.AdminOrdersPage })))
+const AdminReservationsPage = lazy(() => import('@/pages/admin/AdminCommerce').then((m) => ({ default: m.AdminReservationsPage })))
+const AdminOrganizationsPage = lazy(() => import('@/pages/admin/AdminCommerce').then((m) => ({ default: m.AdminOrganizationsPage })))
+const sellerConsole = () => import('@/pages/seller/SellerConsole')
+const SellerFinancePage = lazy(() => sellerConsole().then((m) => ({ default: m.SellerFinancePage })))
+const SellerCustomersPage = lazy(() => sellerConsole().then((m) => ({ default: m.SellerCustomersPage })))
+const SellerFulfilmentPage = lazy(() => sellerConsole().then((m) => ({ default: m.SellerFulfilmentPage })))
+const SellerAvailabilityPage = lazy(() => sellerConsole().then((m) => ({ default: m.SellerAvailabilityPage })))
+const SellerUsagePage = lazy(() => sellerConsole().then((m) => ({ default: m.SellerUsagePage })))
+const SellerIntegrationsPage = lazy(() => sellerConsole().then((m) => ({ default: m.SellerIntegrationsPage })))
+const SellerTeamPage = lazy(() => sellerConsole().then((m) => ({ default: m.SellerTeamPage })))
+const SellerSettingsPage = lazy(() => sellerConsole().then((m) => ({ default: m.SellerSettingsPage })))
+const SellerVerticalsPage = lazy(() => sellerConsole().then((m) => ({ default: m.SellerVerticalsPage })))
+const adminConsole = () => import('@/pages/admin/AdminConsole')
+const AdminListingsPage = lazy(() => adminConsole().then((m) => ({ default: m.AdminListingsPage })))
+const AdminPaymentsPage = lazy(() => adminConsole().then((m) => ({ default: m.AdminPaymentsPage })))
+const AdminOperationsPage = lazy(() => adminConsole().then((m) => ({ default: m.AdminOperationsPage })))
+const AdminProvidersPage = lazy(() => adminConsole().then((m) => ({ default: m.AdminProvidersPage })))
+const AdminChannelsPage = lazy(() => adminConsole().then((m) => ({ default: m.AdminChannelsPage })))
+const AdminSecurityPage = lazy(() => adminConsole().then((m) => ({ default: m.AdminSecurityPage })))
+const AdminAIPage = lazy(() => adminConsole().then((m) => ({ default: m.AdminAIPage })))
+const AdminMonetizationPage = lazy(() => adminConsole().then((m) => ({ default: m.AdminMonetizationPage })))
+const AdminHealthPage = lazy(() => adminConsole().then((m) => ({ default: m.AdminHealthPage })))
+const AdminSearchPage = lazy(() => adminConsole().then((m) => ({ default: m.AdminSearchPage })))
+const AdminVerticalsPage = lazy(() => adminConsole().then((m) => ({ default: m.AdminVerticalsPage })))
+const AdminCategoriesPage = lazy(() => adminConsole().then((m) => ({ default: m.AdminCategoriesPage })))
 const SellerOnboardingRoute = lazy(() => import('@/pages/seller/SellerOnboarding').then((m) => ({ default: m.SellerOnboardingRoute })))
 
 /** Protected routes send guests to sign-in and bring them back afterwards. */
@@ -124,10 +154,14 @@ export function AppRoutes() {
         <Route index element={<HomePage />} />
         <Route path="/home" element={<Navigate to="/" replace />} />
         <Route path="/about" element={<AboutPage />} />
+        <Route path="/legal" element={<Navigate to="/legal/terms" replace />} />
+        <Route path="/legal/:doc" element={<LegalPage />} />
         <Route path="/discover" element={<DiscoverPage />} />
         <Route path="/nearby" element={<Navigate to="/discover" replace />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/conversation" element={<ConversationPage />} />
+        <Route path="/organize" element={<OrganizePage />} />
+        <Route path="/organise" element={<Navigate to="/organize" replace />} />
         {['/products/:id', '/services/:id', '/restaurants/:id', '/hotels/:id', '/properties/:id', '/real-estate/:id', '/listings/:id'].map((path) => <Route key={path} path={path} element={<DetailPage />} />)}
         <Route path="/cart" element={<CartPage />} />
         <Route path="/wishlist" element={<WishlistPage />} />
@@ -141,11 +175,28 @@ export function AppRoutes() {
         <Route path="/admin" element={<AdminLayout />}>
           <Route index element={<AdminOverviewPage />} />
           <Route path="users" element={<AdminUsersPage />} />
+          <Route path="audit" element={<AdminAuditPage />} />
+          <Route path="orders" element={<AdminOrdersPage />} />
+          <Route path="reservations" element={<AdminReservationsPage />} />
+          <Route path="organizations" element={<AdminOrganizationsPage />} />
           <Route path="site" element={<AdminSiteContentPage />} />
+          <Route path="listings" element={<AdminListingsPage />} />
+          <Route path="payments" element={<AdminPaymentsPage />} />
+          <Route path="operations" element={<AdminOperationsPage />} />
+          <Route path="providers" element={<AdminProvidersPage />} />
+          <Route path="channels" element={<AdminChannelsPage />} />
+          <Route path="security" element={<AdminSecurityPage />} />
+          <Route path="ai" element={<AdminAIPage />} />
+          <Route path="monetization" element={<AdminMonetizationPage />} />
+          <Route path="health" element={<AdminHealthPage />} />
+          <Route path="search" element={<AdminSearchPage />} />
+          <Route path="verticals" element={<AdminVerticalsPage />} />
+          <Route path="categories" element={<AdminCategoriesPage />} />
           {adminModules.filter((m) => m.status.kind !== 'ready').map((m) => <Route key={m.id} path={modulePath(m.to, '/admin/')} element={<AdminModulePage id={m.id} />} />)}
         </Route>
 
         <Route element={<RequireSession />}>
+          <Route path="/organize/:id" element={<MissionPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
           <Route path="/book/:id" element={<BookPage />} />
           <Route path="/orders" element={<OrdersPage />} />
@@ -166,6 +217,15 @@ export function AppRoutes() {
             <Route path="hotel" element={<SellerHotelPage />} />
             <Route path="business" element={<SellerBusinessPage />} />
             <Route path="analytics" element={<SellerAnalyticsPage />} />
+            <Route path="finance" element={<SellerFinancePage />} />
+            <Route path="customers" element={<SellerCustomersPage />} />
+            <Route path="fulfilment" element={<SellerFulfilmentPage />} />
+            <Route path="availability" element={<SellerAvailabilityPage />} />
+            <Route path="usage" element={<SellerUsagePage />} />
+            <Route path="integrations" element={<SellerIntegrationsPage />} />
+            <Route path="team" element={<SellerTeamPage />} />
+            <Route path="settings" element={<SellerSettingsPage />} />
+            <Route path="verticals" element={<SellerVerticalsPage />} />
             {sellerModules.filter((m) => m.status.kind !== 'ready').map((m) => <Route key={m.id} path={modulePath(m.to, '/seller/')} element={<SellerModulePage id={m.id} />} />)}
           </Route>
         </Route>
@@ -192,7 +252,7 @@ export default function App() {
             <SessionProvider>
               <I18nProvider>
                 {/* The floating "Ask Trezutil" chat (components/ChatWidget.tsx) is not mounted: removed at the owner's request, 2026-10-05.
-                    Without its provider the "Ask Trezutil anything about this page" bars simply link to the conversation page. */}
+                    Without its provider the pages simply have no floating assistant (the header's request button still opens the conversation). */}
                 <SessionExpiryWatcher />
                 <RouteFocus />
                 <AppRoutes />

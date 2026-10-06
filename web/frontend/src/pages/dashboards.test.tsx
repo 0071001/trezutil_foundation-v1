@@ -31,6 +31,11 @@ const adminApis = (user: unknown = admin, analytics: () => { status?: number; bo
 
 const kpi = (label: string) => screen.getByText(label, { selector: 'small' }).closest('.tzc-kpi') as HTMLElement
 const card = (name: string) => screen.getByRole('region', { name })
+const hasCard = (name: string) => screen.queryByRole('region', { name }) !== null
+/** What a tile's comparison says, as one sentence. */
+const said = (tile: HTMLElement) => tile.querySelector('.tzc-delta')?.textContent?.replace(/\s+/g, ' ').trim()
+/** The key figures are tiles: pick one and its chart takes the panel under the board. */
+const open = (label: string) => userEvent.click(kpi(label))
 
 describe('administration dashboard', () => {
   it('shows what the platform holds today and what happened over the period', async () => {
@@ -57,8 +62,8 @@ describe('administration dashboard', () => {
     mockApi(adminApis())
     renderAt('/admin')
     await screen.findByText('Orders placed')
-    expect(within(kpi('Orders placed')).getByText(/\+150 % vs the previous 3 days/)).toBeInTheDocument() // 5 against 2
-    expect(within(kpi('Bookings')).getByText(/\+200 % vs the previous 3 days/)).toBeInTheDocument() // 3 against 1
+    expect(said(kpi('Orders placed'))).toBe('▲ +150 % vs the previous 3 days') // 5 against 2
+    expect(said(kpi('Bookings'))).toBe('▲ +200 % vs the previous 3 days') // 3 against 1
     expect(kpi('Orders placed').querySelector('.tzc-delta')).toHaveClass('good')
   })
 
@@ -67,7 +72,7 @@ describe('administration dashboard', () => {
     mockApi(adminApis(admin, () => ({ body: analyticsBody(true, { previous: { orders: 0, reservations: 0, conversations: 0, new_users: 0, new_listings: 0, customers: 0, returning_customers: 0, revenue: {} } }) })))
     renderAt('/admin')
     await screen.findByText('Orders placed')
-    expect(within(kpi('Orders placed')).getByText(/5 more than the previous 3 days \(none then\)/)).toBeInTheDocument()
+    expect(said(kpi('Orders placed'))).toBe('▲ +5 more than the previous 3 days (none then)')
     expect(kpi('Orders placed').textContent).not.toMatch(/Infinity|NaN/)
   })
 
@@ -84,19 +89,80 @@ describe('administration dashboard', () => {
     expect(screen.getByRole('button', { name: '90 days' })).toHaveAttribute('aria-pressed', 'true')
   })
 
-  it('draws a chart per measure and lets each be read as a table of the same numbers', async () => {
+  it('opens one chart at a time, the one of the figure picked, and lets it be read as a table of the same numbers', async () => {
     signIn()
     mockApi(adminApis())
     renderAt('/admin')
     await screen.findByText('Orders placed')
-    for (const title of ['Revenue per day', 'Orders per day', 'Bookings per day', 'New accounts per day', 'Conversations per day', 'New listings per day']) {
+    // Revenue leads: its chart is the one under the board, and it is the selected tile.
+    expect(hasCard('Revenue per day')).toBe(true)
+    expect(kpi('Revenue')).toHaveAttribute('aria-pressed', 'true')
+    expect(hasCard('Orders per day')).toBe(false)
+
+    for (const [figure, title] of [['Orders placed', 'Orders per day'], ['Bookings', 'Bookings per day'], ['New accounts', 'New accounts per day'], ['Conversations', 'Conversations per day'], ['New listings', 'New listings per day']] as const) {
+      await open(figure)
+      expect(kpi(figure)).toHaveAttribute('aria-pressed', 'true')
       expect(card(title)).toBeInTheDocument()
+      expect(screen.getAllByRole('region').filter((r) => /per day$/.test(r.getAttribute('aria-labelledby') ? r.querySelector('h2')?.textContent ?? '' : ''))).toHaveLength(1) // never two at once
     }
+    expect(kpi('Revenue')).toHaveAttribute('aria-pressed', 'false')
+
+    await open('Orders placed')
     const orders = card('Orders per day')
     expect(within(orders).getByRole('group')).toHaveAccessibleName(/Orders per day\. From Oct 2 to Oct 4\. Orders: total 5, highest on Oct 4 \(4\)/)
     await userEvent.click(within(orders).getByRole('button', { name: 'View as a table' }))
     const rows = within(within(orders).getByRole('table')).getAllByRole('row').slice(1).map((r) => within(r).getAllByRole('cell').map((c) => c.textContent))
     expect(rows).toEqual([[expect.stringMatching(/Oct 2, 2026/), '0'], [expect.stringMatching(/Oct 3, 2026/), '1'], [expect.stringMatching(/Oct 4, 2026/), '4']])
+  })
+
+  it('keeps the figure picked when the period changes', async () => {
+    signIn()
+    mockApi(adminApis())
+    renderAt('/admin')
+    await screen.findByText('Orders placed')
+    await open('Bookings')
+    await userEvent.click(screen.getByRole('button', { name: '7 days' }))
+    await waitFor(() => expect(screen.getByRole('button', { name: '7 days' })).toHaveAttribute('aria-pressed', 'true'))
+    await screen.findByText('Orders placed')
+    expect(kpi('Bookings')).toHaveAttribute('aria-pressed', 'true')
+    expect(card('Bookings per day')).toBeInTheDocument()
+  })
+
+  it('leaves a figure with no daily series (buyers) as a plain figure, not a button', async () => {
+    signIn()
+    mockApi(adminApis())
+    renderAt('/admin')
+    await screen.findByText('Orders placed')
+    expect(kpi('Buyers').tagName).toBe('DIV')
+    expect(kpi('Orders placed').tagName).toBe('BUTTON')
+    expect(kpi('Orders placed')).toHaveAttribute('aria-controls')
+  })
+
+  it('exports the figures on screen as a CSV file, and only once there are figures', async () => {
+    signIn()
+    mockApi(adminApis())
+    const urls: Blob[] = []
+    const url = URL as unknown as { createObjectURL?: (b: Blob) => string; revokeObjectURL?: (u: string) => void }
+    const [create, revoke] = [url.createObjectURL, url.revokeObjectURL]
+    url.createObjectURL = (b: Blob) => { urls.push(b); return 'blob:csv' }
+    url.revokeObjectURL = () => {}
+    const clicked: string[] = []
+    const real = HTMLAnchorElement.prototype.click
+    HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) { clicked.push(this.download) }
+    try {
+      renderAt('/admin')
+      await screen.findByText('Orders placed')
+      await userEvent.click(screen.getByRole('button', { name: 'Export' }))
+      expect(clicked).toEqual(['trezutil-platform-2026-10-02-to-2026-10-04.csv'])
+      const text = await urls[0]!.text()
+      expect(text).toContain('Day,Orders,Bookings,New listings,New accounts,Conversations,Revenue (USD),Revenue (CDF)')
+      expect(text).toContain('2026-10-04,4,2,0,2,4,4734.00,50000.00')
+      expect(text).toContain('Total,5,3,1,2,9,4734.00,50000.00') // the server's own totals
+    } finally {
+      HTMLAnchorElement.prototype.click = real
+      url.createObjectURL = create
+      url.revokeObjectURL = revoke
+    }
   })
 
   it('keeps each currency on its own: a switch, never a sum', async () => {
@@ -156,10 +222,11 @@ describe('administration dashboard', () => {
     await screen.findByText('Orders placed')
     expect(within(kpi('Orders placed')).getByText('0')).toBeInTheDocument()
     expect(within(kpi('Orders placed')).getByText('No activity in either period')).toBeInTheDocument()
-    expect(within(card('Orders per day')).getByText('Nothing in this period.')).toBeInTheDocument()
     expect(within(card('Revenue per day')).getByText('No revenue in this period.')).toBeInTheDocument()
     expect(within(card('Top businesses')).getByText('No orders in this period.')).toBeInTheDocument()
     expect(within(card('Orders by status')).getByText('Nothing to show for this period.')).toBeInTheDocument()
+    await open('Orders placed')
+    expect(within(card('Orders per day')).getByText('Nothing in this period.')).toBeInTheDocument()
     expect(within(card('Orders per day')).queryByRole('group')).not.toBeInTheDocument() // no chart drawn for nothing
     expect(within(card('Orders per day')).queryByRole('button', { name: 'View as a table' })).not.toBeInTheDocument()
   })
@@ -318,7 +385,11 @@ describe('seller analytics module', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Analytics' })).toBeInTheDocument()
     expect(await screen.findByText('Orders placed')).toBeInTheDocument()
     expect(calls.find((c) => c.path.startsWith('/sellers/analytics'))!.path).toBe('/sellers/analytics?organization_id=org1&days=30')
-    for (const title of ['Revenue per day', 'Orders per day', 'Bookings per day', 'New listings per day', 'Orders by status', 'Best sellers', 'Bookings by status', 'Listings by status', 'Live listings by sector']) {
+    for (const title of ['Revenue per day', 'Orders by status', 'Best sellers', 'Bookings by status', 'Listings by status', 'Live listings by sector']) {
+      expect(card(title)).toBeInTheDocument()
+    }
+    for (const [figure, title] of [['Orders placed', 'Orders per day'], ['Bookings', 'Bookings per day'], ['New listings', 'New listings per day']] as const) {
+      await open(figure)
       expect(card(title)).toBeInTheDocument()
     }
     expect(within(kpi('New listings')).getByText('1')).toBeInTheDocument()

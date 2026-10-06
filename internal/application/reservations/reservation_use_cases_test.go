@@ -132,6 +132,13 @@ func createTestUser(t *testing.T, db *sql.DB, orgID string, role domain.Role) st
 	return user.ID
 }
 
+// grantPlatformRole gives the user a platform role (createTestUser only fills the struct: roles are not stored by Create).
+func grantPlatformRole(t *testing.T, db *sql.DB, userID string, role domain.Role) string {
+	t.Helper()
+	require.NoError(t, postgres.NewUserRepository(db).AssignRole(context.Background(), userID, role))
+	return userID
+}
+
 func createTestSeller(t *testing.T, db *sql.DB, orgID, userID string) string {
 	sellerRepo := postgres.NewSellerRepository(db)
 	seller := &domain.SellerProfile{
@@ -624,3 +631,65 @@ func (f *fakeFulfillmentRepo) Update(ctx context.Context, fulfillment *domain.Fu
 type fakeAuditLogger struct{}
 
 func (f *fakeAuditLogger) Record(ctx context.Context, entry domain.AuditEntry) error { return nil }
+
+// Finding S-5: platform staff could read any order but not the reservation behind it.
+func TestReservationUseCases_PlatformStaffCanReadAndCancelAnyReservation(t *testing.T) {
+	db := setupReservationTestDB(t)
+	defer db.Close()
+
+	orgID := createTestOrg(t, db)
+	customerID := createTestUser(t, db, orgID, domain.RoleCustomer)
+	sellerUser := createTestUser(t, db, orgID, domain.RoleSeller)
+	sellerID := createTestSeller(t, db, orgID, sellerUser)
+	listingID := createTestListing(t, db, orgID, sellerID, createTestStore(t, db, orgID), createTestCategory(t, db))
+	operator := grantPlatformRole(t, db, createTestUser(t, db, orgID, domain.RoleCustomer), domain.RoleOperator)
+	admin := grantPlatformRole(t, db, createTestUser(t, db, orgID, domain.RoleCustomer), domain.RoleAdmin)
+	stranger := createTestUser(t, db, orgID, domain.RoleCustomer)
+
+	uc := newTestUseCases(db)
+	ctx := context.Background()
+	start, end := time.Now().Add(24*time.Hour).Unix(), time.Now().Add(48*time.Hour).Unix()
+	booked, err := uc.CreateReservation(ctx, customerID, listingID, start, end, 1, 2, "")
+	require.NoError(t, err)
+
+	// a customer who is not the booker still cannot see it
+	_, err = uc.GetReservation(ctx, stranger, booked.ID)
+	assert.ErrorIs(t, err, domain.ErrInsufficientPermissions)
+	assert.ErrorIs(t, uc.CancelReservation(ctx, stranger, booked.ID), domain.ErrInsufficientPermissions)
+
+	// support can read it, whatever kind of staff it is
+	for name, staff := range map[string]string{"operator": operator, "admin": admin} {
+		got, err := uc.GetReservation(ctx, staff, booked.ID)
+		require.NoError(t, err, name)
+		assert.Equal(t, booked.ID, got.ID, name)
+	}
+
+	// and cancel it, once
+	require.NoError(t, uc.CancelReservation(ctx, operator, booked.ID))
+	got, err := uc.GetReservation(ctx, admin, booked.ID)
+	require.NoError(t, err)
+	assert.Equal(t, domain.ReservationStatusCancelled, got.Status)
+	assert.ErrorIs(t, uc.CancelReservation(ctx, admin, booked.ID), domain.ErrReservationCannotBeCancelled)
+}
+
+func TestReservationUseCases_ASuspendedStaffAccountReadsNothing(t *testing.T) {
+	db := setupReservationTestDB(t)
+	defer db.Close()
+
+	orgID := createTestOrg(t, db)
+	customerID := createTestUser(t, db, orgID, domain.RoleCustomer)
+	sellerID := createTestSeller(t, db, orgID, createTestUser(t, db, orgID, domain.RoleSeller))
+	listingID := createTestListing(t, db, orgID, sellerID, createTestStore(t, db, orgID), createTestCategory(t, db))
+	staff := grantPlatformRole(t, db, createTestUser(t, db, orgID, domain.RoleCustomer), domain.RoleOperator)
+
+	uc := newTestUseCases(db)
+	ctx := context.Background()
+	booked, err := uc.CreateReservation(ctx, customerID, listingID, time.Now().Add(24*time.Hour).Unix(), time.Now().Add(48*time.Hour).Unix(), 1, 2, "")
+	require.NoError(t, err)
+
+	_, err = db.Exec(`UPDATE users SET status = 'suspended' WHERE id = $1`, staff)
+	require.NoError(t, err)
+	_, err = uc.GetReservation(ctx, staff, booked.ID)
+	assert.ErrorIs(t, err, domain.ErrInsufficientPermissions)
+	assert.ErrorIs(t, uc.CancelReservation(ctx, staff, booked.ID), domain.ErrInsufficientPermissions)
+}

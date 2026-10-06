@@ -654,3 +654,98 @@ func (u *ListingUseCases) canManageListing(ctx context.Context, actorID string, 
 	}
 	return false
 }
+
+// CloseListing takes a listing off sale for good (the seller's "archive"): from published, paused or in
+// review to closed, which search drops and nothing reopens. The seller side may do it, or platform staff.
+func (u *ListingUseCases) CloseListing(ctx context.Context, actorID string, listingID string) error {
+	listing, err := u.listingRepo.FindByID(ctx, listingID)
+	if err != nil {
+		return domain.ErrListingNotFound
+	}
+	if !u.canManageListing(ctx, actorID, listing) {
+		return domain.ErrInsufficientPermissions
+	}
+	if listing.Status == domain.ListingStatusClosed {
+		return domain.ErrInvalidStatusTransition
+	}
+	if err := listing.ValidateTransition(domain.ListingStatusClosed); err != nil {
+		return err
+	}
+	listing.MarkAsClosed()
+	if err := u.listingRepo.Update(ctx, listing); err != nil {
+		return fmt.Errorf("failed to close listing: %w", err)
+	}
+	u.record(ctx, actorID, "listing.closed", listing.ID, nil)
+	return nil
+}
+
+// SuspendListing takes a listing off the platform (moderation): platform administrators and operators only,
+// always with a reason, which goes to the audit trail. Published, paused and in-review listings can be
+// suspended; the seller cannot lift it.
+func (u *ListingUseCases) SuspendListing(ctx context.Context, actorID string, listingID string, reason string) error {
+	reason = strings.TrimSpace(reason)
+	if len(reason) < 3 || len(reason) > domain.MaxModerationReason {
+		return domain.ErrReasonRequired
+	}
+	if !u.isPlatformStaff(ctx, actorID) {
+		return domain.ErrInsufficientPermissions
+	}
+	listing, err := u.listingRepo.FindByID(ctx, listingID)
+	if err != nil {
+		return domain.ErrListingNotFound
+	}
+	if listing.Status == domain.ListingStatusSuspended {
+		return domain.ErrInvalidStatusTransition
+	}
+	if err := listing.ValidateTransition(domain.ListingStatusSuspended); err != nil {
+		return err
+	}
+	from := listing.Status
+	listing.Suspend()
+	if err := u.listingRepo.Update(ctx, listing); err != nil {
+		return fmt.Errorf("failed to suspend listing: %w", err)
+	}
+	u.record(ctx, actorID, "listing.suspended", listing.ID, map[string]interface{}{"reason": reason, "from": string(from), "organization_id": listing.OrganizationID})
+	return nil
+}
+
+// ReinstateListing lifts a suspension: platform administrators and operators only. The listing comes back
+// paused and its seller decides when it goes live again.
+func (u *ListingUseCases) ReinstateListing(ctx context.Context, actorID string, listingID string, reason string) error {
+	reason = strings.TrimSpace(reason)
+	if len(reason) > domain.MaxModerationReason {
+		return domain.ErrReasonRequired
+	}
+	if !u.isPlatformStaff(ctx, actorID) {
+		return domain.ErrInsufficientPermissions
+	}
+	listing, err := u.listingRepo.FindByID(ctx, listingID)
+	if err != nil {
+		return domain.ErrListingNotFound
+	}
+	if err := listing.Reinstate(); err != nil {
+		return err
+	}
+	if err := u.listingRepo.Update(ctx, listing); err != nil {
+		return fmt.Errorf("failed to reinstate listing: %w", err)
+	}
+	meta := map[string]interface{}{"organization_id": listing.OrganizationID}
+	if reason != "" {
+		meta["reason"] = reason
+	}
+	u.record(ctx, actorID, "listing.reinstated", listing.ID, meta)
+	return nil
+}
+
+// isPlatformStaff: an active platform administrator or operator.
+func (u *ListingUseCases) isPlatformStaff(ctx context.Context, actorID string) bool {
+	actor, err := u.userRepo.FindByID(ctx, actorID)
+	return err == nil && actor.Status == domain.UserStatusActive && actor.HasAnyRole(domain.RoleAdmin, domain.RoleOperator)
+}
+
+func (u *ListingUseCases) record(ctx context.Context, actorID, action, listingID string, meta map[string]interface{}) {
+	if u.auditLogger == nil {
+		return
+	}
+	u.auditLogger.Record(ctx, domain.AuditEntry{ActorID: actorID, Action: action, TargetType: "listing", TargetID: listingID, Metadata: meta})
+}

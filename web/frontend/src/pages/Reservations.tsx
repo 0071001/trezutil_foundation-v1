@@ -87,7 +87,7 @@ export function ReservationDetailPage() {
   }
 
   return (
-    <AppShell dockPrompt={t('I have a question about my reservation {slice}', { slice: r.id.slice(0, 8) })}>
+    <AppShell>
       <section className="page-section narrow-page">
         <div className="back-link"><ActionLink href="/reservations">{t('← Back to reservations')}</ActionLink></div>
         <div className="reservation-detail-hero">

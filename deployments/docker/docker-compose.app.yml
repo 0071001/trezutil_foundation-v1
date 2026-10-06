@@ -97,6 +97,13 @@ services:
       WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
       WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
       WHATSAPP_OTP_TEMPLATE: ${WHATSAPP_OTP_TEMPLATE:-}
+      # The console's health and channel pages say which integrations are configured: only "true" or empty
+      # reaches this service, never a key.
+      STRIPE_CONFIGURED: ${STRIPE_SECRET_KEY:+true}
+      AI_CONFIGURED: ${AI_PROVIDER:+true}
+      METRICS_CONFIGURED: ${METRICS_TOKEN:+true}
+      # Services probed by GET /api/v1/admin/health (name=url, comma-separated); the default fits this file.
+      HEALTH_TARGETS: ${HEALTH_TARGETS:-gateway=http://api-gateway:8080/healthz,search=http://search-service:8081/readyz,conversation=http://conversation-service:8091/readyz,commerce=http://order-service:8085/readyz,payment=http://payment-service:8083/readyz}
 
   search-service:
     <<: *service
@@ -163,6 +170,8 @@ services:
       GATEWAY_PORT: ":8080"
       # Bearer token for GET /metrics on this internet-facing gateway (unset = not served).
       METRICS_TOKEN: ${METRICS_TOKEN:-}
+      # Content-Security-Policy: report-only (default: reports go to /csp-report and the logs), enforce, or off.
+      CSP_MODE: ${CSP_MODE:-report-only}
       WEB_ROOT: /app/web
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required (public origin of the web app)}
       IDENTITY_SERVICE_URL: http://identity-service:8086

@@ -157,8 +157,9 @@ describe('portal security: seller scope', () => {
     const { calls } = mockApi(sellerSession([org('org1', 'Gombe Stays', 'staff')]))
     renderAt('/seller/finance')
     expect(await screen.findByRole('heading', { level: 1, name: 'Finance' })).toBeInTheDocument()
-    expect(screen.getByText(/only its owner, admins and managers can make changes/i)).toBeInTheDocument()
-    expect(within(await sellerNav()).getByRole('link', { name: 'Finance, not available yet, managers only' })).toBeInTheDocument()
+    expect(screen.getByText(/this page is for the owner, admins and managers of this business/i)).toBeInTheDocument()
+    expect(within(await sellerNav()).getByRole('link', { name: 'Finance, managers only' })).toBeInTheDocument()
+    expect(calls.some((c) => c.path.startsWith('/console/payments') || c.path.includes('finance'))).toBe(false) // nor do they ask for money data
     expect(calls.some((c) => c.path.startsWith('/orders/incoming'))).toBe(false) // staff never ask for manager data
   })
 
@@ -341,11 +342,11 @@ describe('portal shell', () => {
     mockApi(sellerSession())
     renderAt('/seller')
     const nav = await sellerNav()
-    expect(within(nav).getByRole('link', { name: 'Team, coming soon' })).toBeInTheDocument()
-    expect(within(nav).getByRole('link', { name: 'Finance, not available yet' })).toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: 'Marketing, not available yet' })).toBeInTheDocument()
+    expect(within(nav).getByRole('link', { name: 'Inbox, not available yet' })).toBeInTheDocument()
     expect(within(nav).getByRole('link', { name: 'Orders' })).toBeInTheDocument() // a built module has no suffix
-    await userEvent.click(within(nav).getByRole('link', { name: 'Finance, not available yet' }))
-    expect(await screen.findByRole('heading', { level: 1, name: 'Finance' })).toBeInTheDocument()
+    await userEvent.click(within(nav).getByRole('link', { name: 'Inbox, not available yet' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Inbox' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Not available yet' })).toBeInTheDocument()
   })
 
@@ -549,10 +550,10 @@ describe('module skeletons: every module has a route', () => {
   it('shows no sample data on a module the platform cannot serve', async () => {
     signIn()
     mockApi(adminSession(admin))
-    renderAt('/admin/audit')
+    renderAt('/admin/settings')
     const state = await screen.findByRole('region', { name: 'Not available yet' })
-    expect(within(state).getByText(/Audit trail/)).toBeInTheDocument()
-    expect(within(state).getByText(/rather than invent them/)).toBeInTheDocument()
+    expect(within(state).getByText(/Platform settings/)).toBeInTheDocument()
+    expect(within(state).getByText(/no platform settings or feature flags/i)).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /export|download|refund|delete/i })).not.toBeInTheDocument()
   })

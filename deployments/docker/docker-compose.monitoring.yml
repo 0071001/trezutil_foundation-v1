@@ -1,13 +1,13 @@
-# Optional monitoring overlay: Prometheus with the Trezutil alert rules.
+# Optional monitoring overlay: Prometheus with the Trezutil alert rules, and Alertmanager to send them to people.
 #
 #   docker compose -f deployments/docker/docker-compose.app.yml \
 #                  -f deployments/docker/docker-compose.monitoring.yml \
 #                  --env-file deployments/docker/app.env up -d
 #
-# Requires METRICS_TOKEN (the same value the gateway serves /metrics with) in
-# app.env. Prometheus publishes no port; reach it through the host's private
-# network or an SSH tunnel, and route alerts with Alertmanager or a hosted
-# alerting service (see docs/finalization/PRODUCTION_DEPLOYMENT.md, "Alerts").
+# Requires, in app.env: METRICS_TOKEN (the same value the gateway serves /metrics with) and
+# ALERT_WEBHOOK_PAGE_URL / ALERT_WEBHOOK_TICKET_URL (where urgent alerts and day-time alerts are
+# posted: a chat bridge, an incident service). Prometheus and Alertmanager publish no port; reach
+# them through the host's private network or an SSH tunnel (docs/finalization/RUNBOOK.md).
 services:
   prometheus-init:
     image: alpine:3.20
@@ -18,12 +18,36 @@ services:
     volumes: [prometheus_token:/out]
     networks: [internal]
 
+  alertmanager-init:
+    image: alpine:3.20
+    # Writes the webhook addresses to files Alertmanager reads (they carry tokens: never committed).
+    command: ["sh", "-c", "printf '%s' \"$$ALERT_WEBHOOK_PAGE_URL\" > /out/page_url && printf '%s' \"$$ALERT_WEBHOOK_TICKET_URL\" > /out/ticket_url"]
+    environment:
+      ALERT_WEBHOOK_PAGE_URL: "${ALERT_WEBHOOK_PAGE_URL:?ALERT_WEBHOOK_PAGE_URL is required (where urgent alerts are posted)}"
+      ALERT_WEBHOOK_TICKET_URL: "${ALERT_WEBHOOK_TICKET_URL:?ALERT_WEBHOOK_TICKET_URL is required (where day-time alerts are posted)}"
+    volumes: [alertmanager_secrets:/out]
+    networks: [internal]
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    restart: unless-stopped
+    depends_on:
+      alertmanager-init:
+        condition: service_completed_successfully
+    volumes:
+      - ../../infrastructure/prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_secrets:/etc/alertmanager/secrets:ro
+      - alertmanager_data:/alertmanager
+    networks: [internal]
+
   prometheus:
     image: prom/prometheus:v2.55.1
     restart: unless-stopped
     depends_on:
       prometheus-init:
         condition: service_completed_successfully
+      alertmanager:
+        condition: service_started
     volumes:
       - ../../infrastructure/prometheus/prometheus.app.yml:/etc/prometheus/prometheus.yml:ro
       - ../../infrastructure/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
@@ -34,3 +58,5 @@ services:
 volumes:
   prometheus_token:
   prometheus_data:
+  alertmanager_secrets:
+  alertmanager_data:

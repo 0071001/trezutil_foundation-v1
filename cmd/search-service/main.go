@@ -15,6 +15,7 @@ import (
 	"github.com/trezutil/trezutil/internal/application"
 	"github.com/trezutil/trezutil/internal/application/vertical"
 	"github.com/trezutil/trezutil/internal/domain"
+	"github.com/trezutil/trezutil/internal/infrastructure/audit"
 	searchapp "github.com/trezutil/trezutil/internal/search/application"
 	"github.com/trezutil/trezutil/internal/search/infrastructure/opensearch"
 	"github.com/trezutil/trezutil/internal/search/projection"
@@ -57,7 +58,9 @@ func main() {
 		listingRepo, categoryRepo, attributeDefRepo, attributeValRepo, mediaRepo,
 		availabilityRepo, locationRepo, listingLocationRepo,
 		postgres.NewOrganizationRepository(db), sellerRepo, storeRepo,
-		postgres.NewUserRepository(db), nil,
+		postgres.NewUserRepository(db),
+		// Listing actions (publish, pause, close, suspension) leave an audit line and a stored audit event.
+		audit.NewLogger(logger).WithStore(postgres.NewAuditRepository(db)),
 	).WithVerticals(vertical.DefaultCatalog())
 
 	// OpenSearch read projection
@@ -119,6 +122,9 @@ func main() {
 	mux.HandleFunc("POST /v1/listings/publish", listingHandler.PublishListingH)
 	mux.HandleFunc("POST /v1/listings/pause", listingHandler.PauseListingH)
 	mux.HandleFunc("POST /v1/listings/resume", listingHandler.ResumeListingH)
+	mux.HandleFunc("POST /v1/listings/close", api.CloseListingH(listingUseCases))
+	mux.HandleFunc("POST /v1/listings/suspend", api.SuspendListingH(listingUseCases))
+	mux.HandleFunc("POST /v1/listings/reinstate", api.ReinstateListingH(listingUseCases))
 	mux.HandleFunc("POST /v1/listings/update", api.UpdateListingH(listingUseCases))
 	mux.HandleFunc("POST /v1/listings/promotion", api.SetPromotionH(listingUseCases))
 	mux.HandleFunc("POST /v1/listings/promotion/end", api.EndPromotionH(listingUseCases))

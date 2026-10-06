@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { useParams } from 'react-router'
 import { toApiError } from '@/api/client'
+import { consoleApi } from '@/api/console'
 import { sellerApi } from '@/api/seller'
+import { ConfirmationDialog } from '@/components/portal/ConfirmationDialog'
 import { ListingImage, PriceTag } from '@/components/cards'
 import { EmptyState, ErrorState, Loading, SkeletonGrid } from '@/components/states'
 import { ActionLink, Button, Field, Heading, Icon, StatusBadge, Tabs } from '@/components/ui'
@@ -37,10 +39,19 @@ function useListingActions(reload: () => void) {
   return { busy, change }
 }
 
-function ListingActions({ l, canManage, busy, change }: { l: ListingDetail; canManage: boolean; busy: boolean; change: (l: ListingDetail, a: 'publish' | 'pause' | 'resume') => void }) {
+function ListingActions({ l, canManage, busy, change, onClosed }: { l: ListingDetail; canManage: boolean; busy: boolean; change: (l: ListingDetail, a: 'publish' | 'pause' | 'resume') => void; onClosed?: () => void }) {
+  const notify = useToast()
+  const [closing, setClosing] = useState(false)
   if (!canManage) return null
   return (
     <div className="row-actions">
+      <ConfirmationDialog open={closing} tone="danger" title={t('Close “{title}” for good?', { title: l.title })} confirmLabel={t('Close listing')}
+        onConfirm={async () => { await consoleApi.closeListing(l.id); notify(t('“{title}” is closed.', { title: l.title }), 'success'); onClosed?.() }}
+        onClose={() => setClosing(false)}>
+        <p>{t('It leaves search for good and cannot be published again; its orders and bookings stay. To stop selling for a while, keep it paused instead.')}</p>
+      </ConfirmationDialog>
+      {l.status === 'paused' && <Button className="outline-button" onClick={() => setClosing(true)}>{t('Close')}<span className="sr-only"> {l.title}</span></Button>}
+      {l.status === 'suspended' && <small className="operation-note">{t('Suspended by Trezutil. Contact the team to review it.')}</small>}
       {(l.status === 'draft' || l.status === 'pending_review') && <Button className="small-primary" busy={busy} onClick={() => change(l, 'publish')}>{t('Publish')}</Button>}
       {l.status === 'published' && <Button className="outline-button" busy={busy} onClick={() => change(l, 'pause')}>{t('Pause')}</Button>}
       {l.status === 'paused' && <Button className="small-primary" busy={busy} onClick={() => change(l, 'resume')}>{t('Resume')}</Button>}
@@ -74,7 +85,7 @@ export function SellerListingsPage() {
               <b role="cell"><PriceTag amount={l.price_amount} currency={l.price_currency} sale={listingSale(l)} /></b>
               <span role="cell"><StatusBadge status={l.status} /></span>
               <span role="cell">{timeAgo(l.updated_at)}</span>
-              <span role="cell"><ListingActions l={l} canManage={canManage} busy={busy === l.id} change={change} /></span>
+              <span role="cell"><ListingActions l={l} canManage={canManage} busy={busy === l.id} change={change} onClosed={listings.reload} /></span>
             </div>
           ))}
         </div>
@@ -167,7 +178,7 @@ export function SellerListingDetailPage() {
           <Heading level={1}>{l.title}</Heading>
           <PriceTag className="detail-price" amount={l.price_amount} currency={l.price_currency} sale={listingSale(l)} />
           <p>{l.description || t('No description yet.')}</p>
-          <ListingActions l={l} canManage={canManage} busy={busy === l.id} change={change} />
+          <ListingActions l={l} canManage={canManage} busy={busy === l.id} change={change} onClosed={data.reload} />
           <PromotionPanel l={l} canManage={canManage} onChanged={data.reload} />
           {l.status === 'published' && <ActionLink className="text-action" href={`/products/${encodeURIComponent(l.id)}`}>{t('View as a customer')} <Icon name="arrow" size={16} /></ActionLink>}
           <div className="info-rows">

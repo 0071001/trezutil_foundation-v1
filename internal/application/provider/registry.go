@@ -54,6 +54,23 @@ func (r *ProviderRegistry) Register(provider *domain.IntegrationProvider, adapte
 	return nil
 }
 
+// UpdateProvider replaces the stored record of a registered provider (status, priority, health) and keeps its
+// adapter, so a provider switched off in the database stops being selected at the next reload. It reports
+// whether the provider was registered.
+func (r *ProviderRegistry) UpdateProvider(provider *domain.IntegrationProvider) bool {
+	if provider == nil {
+		return false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	entry, ok := r.providers[r.registryKey(provider.OrganizationID, provider.ID)]
+	if !ok {
+		return false
+	}
+	entry.Provider = provider
+	return true
+}
+
 func (r *ProviderRegistry) Unregister(orgID, providerID string) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

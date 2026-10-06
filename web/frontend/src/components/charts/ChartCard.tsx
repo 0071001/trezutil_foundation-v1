@@ -7,6 +7,8 @@ export interface ChartTable {
 }
 
 export interface ChartCardProps {
+  /** An id for the card, so a control elsewhere can refer to it (aria-controls). */
+  id?: string
   title: string
   /** What is measured and over which period: "Orders placed, last 30 days". */
   subtitle?: string
@@ -23,17 +25,23 @@ export interface ChartCardProps {
 }
 
 /** A titled panel for one chart, with a "View as a table" switch that shows the same numbers as text. */
-export function ChartCard({ title, subtitle, actions, table, empty, loading, wide, children }: ChartCardProps) {
+export function ChartCard({ id: given, title, subtitle, actions, table, empty, loading, wide, children }: ChartCardProps) {
   const [asTable, setAsTable] = useState(false)
-  const id = useId()
+  const generated = useId()
+  const id = given ?? generated
   return (
-    <section className={`tzc-card ${wide ? 'wide' : ''}`} aria-labelledby={`${id}-title`} aria-busy={loading || undefined}>
+    <section id={given} className={`tzc-card ${wide ? 'wide' : ''}`} aria-labelledby={`${id}-title`} aria-busy={loading || undefined}>
       <div className="tzc-card-head">
         <div>
           <h2 id={`${id}-title`}>{title}</h2>
           {subtitle && <p>{subtitle}</p>}
         </div>
-        {actions && <div className="tzc-card-actions">{actions}</div>}
+        <div className="tzc-card-actions">
+          {actions}
+          {table && !loading && !empty && (
+            <button type="button" className="tz-small-btn" aria-pressed={asTable} onClick={() => setAsTable((v) => !v)}>{asTable ? t('View as a chart') : t('View as a table')}</button>
+          )}
+        </div>
       </div>
       <div className="tzc-card-body">
         {loading ? <div className="skeleton tzc-skeleton" aria-hidden="true" />
@@ -48,11 +56,6 @@ export function ChartCard({ title, subtitle, actions, table, empty, loading, wid
             </div>
           ) : children}
       </div>
-      {table && !loading && !empty && (
-        <div className="tzc-card-foot">
-          <button type="button" className="tz-small-btn" aria-pressed={asTable} onClick={() => setAsTable((v) => !v)}>{asTable ? t('View as a chart') : t('View as a table')}</button>
-        </div>
-      )}
     </section>
   )
 }

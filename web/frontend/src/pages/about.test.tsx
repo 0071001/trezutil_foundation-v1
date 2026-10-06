@@ -128,7 +128,7 @@ describe('the primary menu stays about what you came to do', () => {
     expect(within(bar).queryByText(/Our company/)).toBeNull()
     expect(within(bar).queryByRole('link', { name: /About Trezutil|Contact us/ })).toBeNull()
     await userEvent.click(within(bar).getByRole('button', { name: 'Open menu' }))
-    const menu = within(bar).getByRole('navigation', { name: 'Menu' })
+    const menu = within(screen.getByRole('dialog', { name: 'Menu' })).getByRole('navigation', { name: 'Menu' }) // the same phone menu as every other page
     expect(within(menu).queryByText(/Our company/)).toBeNull()
     expect(within(menu).getByRole('link', { name: 'For businesses' })).toHaveAttribute('href', '/seller')
   })

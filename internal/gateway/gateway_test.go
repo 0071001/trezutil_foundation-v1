@@ -459,6 +459,166 @@ func TestReadyzUpAndDown(t *testing.T) {
 	}
 }
 
+// Finding S-6: the public /readyz used to list every upstream with its internal address.
+func TestReadyzPublicAnswerIsTheStatusAlone(t *testing.T) {
+	up := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) }))
+	defer up.Close()
+	upstreams := map[string]*Upstream{"conversation": {Name: "conversation", URL: mustURL(t, up.URL)}}
+	_, srv := testGateway(t, upstreams, nil, t.TempDir())
+	t.Setenv("METRICS_TOKEN", "operator-secret-token")
+
+	get := func(auth string) (int, string) {
+		req, _ := http.NewRequest(http.MethodGet, srv.URL+"/readyz", nil)
+		if auth != "" {
+			req.Header.Set("Authorization", auth)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp.StatusCode, string(b)
+	}
+
+	for _, auth := range []string{"", "Bearer wrong", "operator-secret-token", "Bearer "} {
+		code, body := get(auth)
+		if code != http.StatusOK || !strings.Contains(body, `"status":"ready"`) {
+			t.Fatalf("auth %q: %d %s", auth, code, body)
+		}
+		if strings.Contains(body, "http://") || strings.Contains(body, "127.0.0.1") || strings.Contains(body, "conversation") || strings.Contains(body, "upstreams") {
+			t.Errorf("auth %q: the public answer discloses the topology: %s", auth, body)
+		}
+	}
+	code, body := get("Bearer operator-secret-token")
+	if code != http.StatusOK || !strings.Contains(body, `"name":"conversation"`) || !strings.Contains(body, up.URL) {
+		t.Errorf("the operator keeps the detail: %d %s", code, body)
+	}
+
+	t.Setenv("METRICS_TOKEN", "")
+	if _, body := get("Bearer "); strings.Contains(body, "upstreams") {
+		t.Errorf("with no token configured nobody gets the detail: %s", body)
+	}
+}
+
+func headersOf(t *testing.T, srv *httptest.Server, forwardedProto string) http.Header {
+	t.Helper()
+	req, _ := http.NewRequest(http.MethodGet, srv.URL+"/healthz", nil)
+	if forwardedProto != "" {
+		req.Header.Set("X-Forwarded-Proto", forwardedProto)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	return resp.Header
+}
+
+func TestSecurityHeaders_MicrophoneIsAllowedToThisSiteForVoiceInput(t *testing.T) {
+	_, srv := testGateway(t, map[string]*Upstream{}, nil, t.TempDir())
+	pp := headersOf(t, srv, "").Get("Permissions-Policy")
+	if !strings.Contains(pp, "microphone=(self)") || strings.Contains(pp, "microphone=()") {
+		t.Errorf("voice dictation needs the microphone: %q", pp)
+	}
+	if !strings.Contains(pp, "camera=()") {
+		t.Errorf("the camera is not used and stays off: %q", pp)
+	}
+}
+
+func TestContentSecurityPolicy_ReportsOnlyByDefault(t *testing.T) {
+	t.Setenv("CSP_MODE", "")
+	_, srv := testGateway(t, map[string]*Upstream{}, nil, t.TempDir())
+	h := headersOf(t, srv, "")
+	if h.Get("Content-Security-Policy") != "" {
+		t.Error("by default the policy only reports, it does not block")
+	}
+	policy := h.Get("Content-Security-Policy-Report-Only")
+	for _, must := range []string{"default-src 'self'", "script-src 'self' https://js.stripe.com", "object-src 'none'", "frame-ancestors 'none'", "base-uri 'self'", "report-uri /csp-report"} {
+		if !strings.Contains(policy, must) {
+			t.Errorf("the policy lacks %q: %s", must, policy)
+		}
+	}
+	if strings.Contains(policy, "'unsafe-eval'") || regexpScriptUnsafe(policy) {
+		t.Errorf("no inline or eval script may be allowed: %s", policy)
+	}
+}
+
+// regexpScriptUnsafe reports whether script-src allows inline script.
+func regexpScriptUnsafe(policy string) bool {
+	for _, d := range strings.Split(policy, ";") {
+		d = strings.TrimSpace(d)
+		if strings.HasPrefix(d, "script-src") && strings.Contains(d, "'unsafe-inline'") {
+			return true
+		}
+	}
+	return false
+}
+
+func TestContentSecurityPolicy_ModesAndHTTPSUpgrade(t *testing.T) {
+	t.Setenv("CSP_MODE", "enforce")
+	_, srv := testGateway(t, map[string]*Upstream{}, nil, t.TempDir())
+	plain := headersOf(t, srv, "")
+	if plain.Get("Content-Security-Policy") == "" || plain.Get("Content-Security-Policy-Report-Only") != "" {
+		t.Errorf("enforce mode sends the blocking header only: %v", plain)
+	}
+	if strings.Contains(plain.Get("Content-Security-Policy"), "upgrade-insecure-requests") {
+		t.Error("over plain http (local staging) nothing is upgraded")
+	}
+	if !strings.Contains(headersOf(t, srv, "https").Get("Content-Security-Policy"), "upgrade-insecure-requests") {
+		t.Error("over https, insecure subresources are upgraded")
+	}
+
+	t.Setenv("CSP_MODE", "off")
+	_, off := testGateway(t, map[string]*Upstream{}, nil, t.TempDir())
+	h := headersOf(t, off, "")
+	if h.Get("Content-Security-Policy") != "" || h.Get("Content-Security-Policy-Report-Only") != "" {
+		t.Error("off sends no policy")
+	}
+}
+
+func TestCSPReport_IsLoggedBoundedAndRateLimited(t *testing.T) {
+	_, srv := testGateway(t, map[string]*Upstream{}, nil, t.TempDir())
+	post := func(body string) int {
+		resp, err := http.Post(srv.URL+"/csp-report", "application/csp-report", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	report := `{"csp-report":{"blocked-uri":"https://evil.example/x.js","violated-directive":"script-src","document-uri":"https://trezutil.example/","disposition":"report"}}`
+	if code := post(report); code != http.StatusNoContent {
+		t.Errorf("a report is acknowledged with 204, got %d", code)
+	}
+	if code := post("not json"); code != http.StatusNoContent {
+		t.Errorf("garbage is acknowledged too (a browser retries nothing): %d", code)
+	}
+	if code := post(strings.Repeat("x", 9<<10)); code != http.StatusRequestEntityTooLarge {
+		t.Errorf("an oversized body is refused: %d", code)
+	}
+	resp, _ := http.Get(srv.URL + "/csp-report")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusMethodNotAllowed {
+		t.Errorf("only POST: %d", resp.StatusCode)
+	}
+
+	var l reportLimiter
+	now := time.Now()
+	allowed := 0
+	for i := 0; i < 100; i++ {
+		if l.allow(now) {
+			allowed++
+		}
+	}
+	if allowed != cspReportsPerMinute {
+		t.Errorf("a flood of reports logs %d lines, want %d", allowed, cspReportsPerMinute)
+	}
+	if !l.allow(now.Add(61 * time.Second)) {
+		t.Error("the limit resets after a minute")
+	}
+}
+
 func TestStaticSPAServesRealWeb(t *testing.T) {
 	// Use the actual web/index.html if present; otherwise skip.
 	if _, err := os.Stat("web/index.html"); err != nil {

@@ -62,7 +62,6 @@ export const adminGroups: ModuleGroup[] = [
 ]
 
 const ready: ModuleStatus = { kind: 'ready' }
-const planned = (endpoints: string[], limits?: GapId[]): ModuleStatus => ({ kind: 'planned', endpoints, limits })
 const unavailable = (gaps: GapId[], extra: { note?: string; link?: { to: string; label: string } } = {}): ModuleStatus => ({ kind: 'unavailable', gaps, ...extra })
 
 export const sellerModules: PortalModule[] = [
@@ -76,22 +75,22 @@ export const sellerModules: PortalModule[] = [
   { id: 'orders', group: 'operate', label: tx('Orders'), to: '/seller/orders', icon: 'orders', requires: 'manager', status: ready, purpose: tx('Incoming orders to confirm and follow.') },
   { id: 'reservations', group: 'operate', label: tx('Reservations'), to: '/seller/reservations', icon: 'calendar', requires: 'manager', status: ready, purpose: tx('Bookings for your rooms, tables, services and places.') },
   { id: 'inventory', group: 'operate', label: tx('Inventory'), to: '/seller/inventory', icon: 'briefcase', requires: 'manager', status: ready, purpose: tx('What you have in stock, reserved and sold.') },
-  { id: 'availability', group: 'operate', label: tx('Availability'), to: '/seller/availability', icon: 'clock', requires: 'manager', status: unavailable(['G-A5', 'G-B13'], { link: { to: '/seller/hotel', label: tx('Hotel rooms and nightly availability') } }), purpose: tx('Calendars of what can be booked: rooms, tables, slots and vehicles.') },
+  { id: 'availability', group: 'operate', label: tx('Availability'), to: '/seller/availability', icon: 'clock', requires: 'manager', status: ready, purpose: tx('What can still be booked, day by day, for every room, table, slot or item you track.') },
   { id: 'hotel', group: 'operate', label: tx('Hotel rooms'), to: '/seller/hotel', icon: 'building', requires: 'manager', status: ready, purpose: tx('Room types, rooms, rates and nightly capacity.') },
-  { id: 'fulfilment', group: 'operate', label: tx('Fulfilment'), to: '/seller/fulfilment', icon: 'check', requires: 'manager', status: unavailable(['G-A6']), purpose: tx('Prepare, hand over and track what you have sold.') },
+  { id: 'fulfilment', group: 'operate', label: tx('Fulfilment'), to: '/seller/fulfilment', icon: 'check', requires: 'manager', status: ready, purpose: tx('Every delivery, pickup and appointment to carry out, from acceptance to hand-over.') },
   // Grow
   { id: 'marketing', group: 'grow', label: tx('Marketing'), to: '/seller/marketing', icon: 'spark', requires: 'manager', status: unavailable(['G-C4'], { link: { to: '/seller/listings', label: tx('Put a listing on sale from Listings') } }), purpose: tx('Campaigns, audiences and automations to bring customers back.') },
   { id: 'analytics', group: 'grow', label: tx('Analytics'), to: '/seller/analytics', icon: 'chart', requires: 'manager', status: ready, purpose: tx('Sales, orders, bookings and listing performance over time.') },
-  { id: 'customers', group: 'grow', label: tx('Customers'), to: '/seller/customers', icon: 'users', requires: 'manager', status: unavailable(['G-B5']), purpose: tx('The people who buy and book from you, and their history.') },
+  { id: 'customers', group: 'grow', label: tx('Customers'), to: '/seller/customers', icon: 'users', requires: 'manager', status: ready, purpose: tx('The people who buy and book from you, and their history.') },
   // Money
-  { id: 'finance', group: 'money', label: tx('Finance'), to: '/seller/finance', icon: 'wallet', requires: 'manager', status: unavailable(['G-B4']), purpose: tx('Payments, refunds, settlements and balances.') },
-  { id: 'usage', group: 'money', label: tx('Usage and credits'), to: '/seller/usage', icon: 'pulse', requires: 'manager', status: unavailable(['G-A2', 'G-A3']), purpose: tx('Your plan, credit balance and what the assistant has used.') },
+  { id: 'finance', group: 'money', label: tx('Finance'), to: '/seller/finance', icon: 'wallet', requires: 'manager', status: ready, purpose: tx('Payments, refunds, settlements and balances.') },
+  { id: 'usage', group: 'money', label: tx('Usage and credits'), to: '/seller/usage', icon: 'pulse', requires: 'manager', status: ready, purpose: tx('Your plan, credit balance and what the assistant has used.') },
   // Business
   { id: 'business', group: 'business', label: tx('Business profile'), to: '/seller/business', icon: 'building', requires: 'member', status: ready, purpose: tx('Your business, its stores and its verification.') },
-  { id: 'verticals', group: 'business', label: tx('Verticals'), to: '/seller/verticals', icon: 'layers', requires: 'member', status: planned(['GET /verticals', 'GET /listings/manage']), purpose: tx('The kinds of business you run on Trezutil and what each one supports.') },
-  { id: 'team', group: 'business', label: tx('Team'), to: '/seller/team', icon: 'users', requires: 'member', status: planned(['GET /organizations/members', 'POST /organizations/members', 'DELETE /organizations/members'], ['G-D2']), purpose: tx('Who works in your business, and with which role.') },
-  { id: 'integrations', group: 'business', label: tx('Integrations'), to: '/seller/integrations', icon: 'plug', requires: 'manager', status: unavailable(['G-A1', 'G-C7']), purpose: tx('The payment, messaging and provider connections your business uses.') },
-  { id: 'settings', group: 'business', label: tx('Settings'), to: '/seller/settings', icon: 'settings', requires: 'member', status: planned(['GET /auth/users/me'], ['G-A4', 'G-B9', 'G-C2']), purpose: tx('Business preferences, notifications and security.') },
+  { id: 'verticals', group: 'business', label: tx('Verticals'), to: '/seller/verticals', icon: 'layers', requires: 'member', status: ready, purpose: tx('The kinds of business you run on Trezutil and what each one supports.') },
+  { id: 'team', group: 'business', label: tx('Team'), to: '/seller/team', icon: 'users', requires: 'member', status: ready, purpose: tx('Who works in your business, and with which role.') },
+  { id: 'integrations', group: 'business', label: tx('Integrations'), to: '/seller/integrations', icon: 'plug', requires: 'manager', status: ready, purpose: tx('The payment, messaging and provider connections your business uses.') },
+  { id: 'settings', group: 'business', label: tx('Settings'), to: '/seller/settings', icon: 'settings', requires: 'member', status: ready, purpose: tx('Your name and email on Trezutil, and how you sign in.') },
 ]
 
 export const adminModules: PortalModule[] = [
@@ -99,26 +98,26 @@ export const adminModules: PortalModule[] = [
   { id: 'overview', group: 'overview', label: tx('Overview'), to: '/admin', icon: 'home', end: true, requires: 'operator', status: ready, purpose: tx('The platform at a glance.') },
   // People and businesses
   { id: 'users', group: 'people', label: tx('Users'), to: '/admin/users', icon: 'user', requires: 'admin', status: ready, purpose: tx('Search and review accounts.') },
-  { id: 'organizations', group: 'people', label: tx('Organizations and sellers'), to: '/admin/organizations', icon: 'building', requires: 'operator', status: planned(['POST /organizations', 'POST /sellers', 'POST /stores', 'GET /organizations/members'], ['G-B1']), purpose: tx('Every business on the platform: status, verification, stores, members and onboarding.') },
+  { id: 'organizations', group: 'people', label: tx('Organizations and sellers'), to: '/admin/organizations', icon: 'building', requires: 'operator', status: ready, purpose: tx('Every business on the platform: status, verification, team and activity.') },
   // Catalogue
-  { id: 'verticals', group: 'catalog', label: tx('Verticals'), to: '/admin/verticals', icon: 'layers', requires: 'operator', status: planned(['GET /verticals', 'GET /packs', 'POST /search']), purpose: tx('The commerce verticals, their capabilities and how many listings each holds.') },
-  { id: 'categories', group: 'catalog', label: tx('Categories'), to: '/admin/categories', icon: 'filter', requires: 'operator', status: planned(['GET /categories', 'POST /categories'], ['G-A10']), purpose: tx('The category tree listings are published under.') },
-  { id: 'listings', group: 'catalog', label: tx('Listings'), to: '/admin/listings', icon: 'shop', requires: 'operator', status: planned(['GET /listings', 'POST /listings/publish', 'POST /listings/pause', 'POST /listings/resume'], ['G-B3', 'G-A8']), purpose: tx('Review listings across businesses; publish or pause them.') },
+  { id: 'verticals', group: 'catalog', label: tx('Verticals'), to: '/admin/verticals', icon: 'layers', requires: 'operator', status: ready, purpose: tx('The commerce verticals, their capabilities and how many listings each holds.') },
+  { id: 'categories', group: 'catalog', label: tx('Categories'), to: '/admin/categories', icon: 'filter', requires: 'operator', status: ready, purpose: tx('The category tree listings are published under.') },
+  { id: 'listings', group: 'catalog', label: tx('Listings'), to: '/admin/listings', icon: 'shop', requires: 'operator', status: ready, purpose: tx('Review listings across businesses; publish or pause them.') },
   // Commerce
-  { id: 'orders', group: 'commerce', label: tx('Orders'), to: '/admin/orders', icon: 'orders', requires: 'operator', status: planned(['GET /orders/incoming', 'GET /orders/{id}'], ['G-B2']), purpose: tx('Platform orders: seller, customer, payment and fulfilment state.') },
-  { id: 'reservations', group: 'commerce', label: tx('Reservations'), to: '/admin/reservations', icon: 'calendar', requires: 'operator', status: planned(['GET /reservations/incoming'], ['G-B2', 'S-5']), purpose: tx('Platform reservations by business, vertical and status.') },
-  { id: 'payments', group: 'commerce', label: tx('Payments and finance'), to: '/admin/payments', icon: 'wallet', requires: 'operator', status: planned(['GET /payments/{id}', 'POST /payments/{id}/capture', 'POST /payments/{id}/refund'], ['G-B4']), purpose: tx('Payments, captures, refunds and failures.') },
+  { id: 'orders', group: 'commerce', label: tx('Orders'), to: '/admin/orders', icon: 'orders', requires: 'operator', status: ready, purpose: tx('Every order on the platform, by business and customer.') },
+  { id: 'reservations', group: 'commerce', label: tx('Reservations'), to: '/admin/reservations', icon: 'calendar', requires: 'operator', status: ready, purpose: tx('Every booking on the platform, by business and customer.') },
+  { id: 'payments', group: 'commerce', label: tx('Payments and finance'), to: '/admin/payments', icon: 'wallet', requires: 'operator', status: ready, purpose: tx('Payments, captures, refunds and failures.') },
   // Platform
-  { id: 'providers', group: 'platform', label: tx('Providers'), to: '/admin/providers', icon: 'plug', requires: 'operator', status: unavailable(['G-A1']), purpose: tx('Providers, their capabilities, health, executions and fallbacks.') },
-  { id: 'ai', group: 'platform', label: tx('AI control centre'), to: '/admin/ai', icon: 'spark', requires: 'operator', status: unavailable(['G-B10']), purpose: tx('AI providers, models, routing, usage, failures, latency and cost.') },
-  { id: 'channels', group: 'platform', label: tx('Channels'), to: '/admin/channels', icon: 'globe', requires: 'operator', status: unavailable(['G-C7']), purpose: tx('Web, mobile and WhatsApp: configuration status and message delivery health.') },
-  { id: 'monetization', group: 'platform', label: tx('Monetization'), to: '/admin/monetization', icon: 'wallet', requires: 'operator', status: unavailable(['G-A2', 'G-A3']), purpose: tx('Plans, subscriptions, credits and the usage ledger.') },
-  { id: 'search', group: 'platform', label: tx('Search and indexing'), to: '/admin/search', icon: 'search', requires: 'operator', status: unavailable(['G-D5']), purpose: tx('Index health, indexing lag and search failures.') },
+  { id: 'providers', group: 'platform', label: tx('Providers'), to: '/admin/providers', icon: 'plug', requires: 'operator', status: ready, purpose: tx('Providers, their capabilities, health, executions and fallbacks.') },
+  { id: 'ai', group: 'platform', label: tx('AI control centre'), to: '/admin/ai', icon: 'spark', requires: 'operator', status: ready, purpose: tx('AI providers, models, routing, usage, failures, latency and cost.') },
+  { id: 'channels', group: 'platform', label: tx('Channels'), to: '/admin/channels', icon: 'globe', requires: 'operator', status: ready, purpose: tx('Web, mobile and WhatsApp: configuration status and message delivery health.') },
+  { id: 'monetization', group: 'platform', label: tx('Monetization'), to: '/admin/monetization', icon: 'wallet', requires: 'operator', status: ready, purpose: tx('Plans, subscriptions, credits and the usage ledger.') },
+  { id: 'search', group: 'platform', label: tx('Search and indexing'), to: '/admin/search', icon: 'search', requires: 'operator', status: ready, purpose: tx('Index health, indexing lag and search failures.') },
   // Operations
-  { id: 'operations', group: 'operations', label: tx('Incidents and support'), to: '/admin/operations', icon: 'bell', requires: 'operator', status: unavailable(['G-B2', 'G-C8']), purpose: tx('Failed orders, reservations, payments and webhooks, and support cases.') },
-  { id: 'audit', group: 'operations', label: tx('Audit'), to: '/admin/audit', icon: 'doc', requires: 'operator', status: unavailable(['G-C1'], { note: tx('Audit events are written to the service logs. Until a queryable store exists, this console shows no audit rows rather than invent them.') }), purpose: tx('Who did what, to which resource, and when.') },
-  { id: 'security', group: 'operations', label: tx('Security'), to: '/admin/security', icon: 'shield', requires: 'operator', status: unavailable(['G-C2', 'G-D7']), purpose: tx('Sign-in activity, sessions, suspicious activity and rate limits.') },
-  { id: 'health', group: 'operations', label: tx('System health'), to: '/admin/health', icon: 'pulse', requires: 'operator', status: planned(['GET /healthz', 'GET /readyz'], ['G-D5', 'G-D6']), purpose: tx('Gateway and service health.') },
+  { id: 'operations', group: 'operations', label: tx('Incidents and support'), to: '/admin/operations', icon: 'bell', requires: 'operator', status: ready, purpose: tx('Failed orders, reservations, payments and webhooks, and support cases.') },
+  { id: 'audit', group: 'operations', label: tx('Audit'), to: '/admin/audit', icon: 'doc', requires: 'operator', status: ready, purpose: tx('Who did what, to which resource, and when.') },
+  { id: 'security', group: 'operations', label: tx('Security'), to: '/admin/security', icon: 'shield', requires: 'operator', status: ready, purpose: tx('Sign-in activity, sessions, suspicious activity and rate limits.') },
+  { id: 'health', group: 'operations', label: tx('System health'), to: '/admin/health', icon: 'pulse', requires: 'operator', status: ready, purpose: tx('Gateway and service health.') },
   // Settings
   { id: 'site', group: 'settings', label: tx('Site content'), to: '/admin/site', icon: 'globe', requires: 'admin', status: ready, purpose: tx('What visitors see on the home page: the live figures, the partner logos and the order of the sections.') },
   { id: 'settings', group: 'settings', label: tx('Platform settings'), to: '/admin/settings', icon: 'settings', requires: 'operator', status: unavailable(['G-C5']), purpose: tx('Platform settings and feature flags.') },

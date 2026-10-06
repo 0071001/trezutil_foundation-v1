@@ -3,8 +3,10 @@ package gateway
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -12,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -49,10 +52,11 @@ func New(cfg Config, logger zerolog.Logger) *Gateway {
 }
 
 type Gateway struct {
-	config    Config
-	logger    zerolog.Logger
-	transport *http.Transport
-	ready     atomic.Bool
+	config     Config
+	logger     zerolog.Logger
+	transport  *http.Transport
+	ready      atomic.Bool
+	cspLimiter reportLimiter
 }
 
 // Handler returns the root http.Handler for the gateway.
@@ -60,6 +64,7 @@ func (g *Gateway) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", g.handleHealthz)
 	mux.HandleFunc("/readyz", g.handleReadyz)
+	mux.HandleFunc("/csp-report", g.handleCSPReport)
 	// Internet-facing: served only with METRICS_TOKEN set and presented.
 	mux.Handle("/metrics", observability.PublicMetricsHandler())
 	mux.Handle("/api/v1/", http.HandlerFunc(g.apiRouter))
@@ -84,6 +89,7 @@ func (g *Gateway) routes() []apiRoute {
 		{"/api/v1/verticals", "search"},
 		{"/api/v1/conversations", "conversation"},
 		{"/api/v1/packs", "conversation"},
+		{"/api/v1/missions", "conversation"},
 		{"/api/v1/webhooks/whatsapp", "conversation"},
 		{"/api/v1/payments", "payment"},
 		{"/api/v1/webhooks/payments", "payment"},
@@ -190,8 +196,19 @@ type upstreamStatus struct {
 }
 
 type readyResponse struct {
-	Status    string           `json:"status"`
-	Upstreams []upstreamStatus `json:"upstreams"`
+	Status string `json:"status"`
+	// Upstreams (names and internal addresses) are shown only to a caller that presents METRICS_TOKEN:
+	// the public answer is the status alone, so the topology is not disclosed (finding S-6).
+	Upstreams []upstreamStatus `json:"upstreams,omitempty"`
+}
+
+// operatorAllowed reports whether the request carries the operator token (METRICS_TOKEN as a bearer token).
+func operatorAllowed(r *http.Request) bool {
+	token := os.Getenv("METRICS_TOKEN")
+	if token == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), []byte("Bearer "+token)) == 1
 }
 
 func (g *Gateway) handleReadyz(w http.ResponseWriter, r *http.Request) {
@@ -216,6 +233,9 @@ func (g *Gateway) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	if !allUp {
 		statusCode = http.StatusServiceUnavailable
 		gwStatus = "degraded"
+	}
+	if !operatorAllowed(r) {
+		statuses = nil
 	}
 	g.writeJSON(w, r, readyResponse{Status: gwStatus, Upstreams: statuses}, statusCode)
 }
@@ -338,17 +358,116 @@ func (g *Gateway) logging(next http.Handler) http.Handler {
 // A Content-Security-Policy is deliberately left to the reverse proxy: it must
 // be tuned to the payment provider's script and frame origins.
 func securityHeaders(next http.Handler) http.Handler {
+	cspName, cspValue := contentSecurityPolicy(os.Getenv("CSP_MODE"))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
-		if r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https") {
+		// The microphone is allowed to this site only: voice dictation needs it. The camera is not used.
+		h.Set("Permissions-Policy", "camera=(), microphone=(self), geolocation=(self)")
+		secure := r.TLS != nil || strings.EqualFold(r.Header.Get("X-Forwarded-Proto"), "https")
+		if secure {
 			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+		if cspName != "" {
+			v := cspValue
+			if secure {
+				v += "; upgrade-insecure-requests"
+			}
+			h.Set(cspName, v)
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// contentSecurityPolicy returns the header to send for CSP_MODE: "enforce", "report-only" (the default:
+// violations are reported to /csp-report and logged, nothing is blocked) or "off".
+//
+// The web app is a single-page app served from this origin. The wide allowances are the ones it needs:
+// Stripe.js and its payment frame, Google Fonts, and listing photos from any https address (sellers paste
+// links, there is no media upload yet). No inline script is allowed.
+func contentSecurityPolicy(mode string) (header, value string) {
+	policy := strings.Join([]string{
+		"default-src 'self'",
+		"script-src 'self' https://js.stripe.com",
+		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+		"font-src 'self' https://fonts.gstatic.com",
+		"img-src 'self' data: blob: https:",
+		"media-src 'self' blob:",
+		"connect-src 'self' https://*.stripe.com https://*.stripe.network",
+		"frame-src https://*.stripe.com https://*.stripe.network",
+		"object-src 'none'",
+		"base-uri 'self'",
+		"form-action 'self'",
+		"frame-ancestors 'none'",
+		"report-uri /csp-report",
+	}, "; ")
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "off":
+		return "", ""
+	case "enforce":
+		return "Content-Security-Policy", policy
+	default:
+		return "Content-Security-Policy-Report-Only", policy
+	}
+}
+
+// handleCSPReport logs what a browser says the policy blocked. The body is small and untrusted: it is
+// bounded, parsed for a few known fields only, truncated, and the logging is rate-limited so a flood of
+// reports cannot flood the logs.
+func (g *Gateway) handleCSPReport(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.Header().Set("Allow", http.MethodPost)
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, 8<<10+1))
+	if err != nil || len(body) > 8<<10 {
+		w.WriteHeader(http.StatusRequestEntityTooLarge)
+		return
+	}
+	if g.cspLimiter.allow(time.Now()) {
+		var report struct {
+			Body struct {
+				BlockedURI         string `json:"blocked-uri"`
+				ViolatedDirective  string `json:"violated-directive"`
+				EffectiveDirective string `json:"effective-directive"`
+				DocumentURI        string `json:"document-uri"`
+				Disposition        string `json:"disposition"`
+			} `json:"csp-report"`
+		}
+		if json.Unmarshal(body, &report) == nil && report.Body.ViolatedDirective != "" {
+			clip := func(s string) string {
+				if len(s) > 200 {
+					return s[:200]
+				}
+				return s
+			}
+			g.logger.Warn().Str("event", "csp_violation").Str("directive", clip(report.Body.ViolatedDirective)).Str("blocked", clip(report.Body.BlockedURI)).
+				Str("document", clip(report.Body.DocumentURI)).Str("disposition", clip(report.Body.Disposition)).Msg("content security policy report")
+		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// reportLimiter allows a few reports per minute in all.
+type reportLimiter struct {
+	mu     sync.Mutex
+	window time.Time
+	count  int
+}
+
+const cspReportsPerMinute = 30
+
+func (l *reportLimiter) allow(now time.Time) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if now.Sub(l.window) >= time.Minute {
+		l.window, l.count = now, 0
+	}
+	l.count++
+	return l.count <= cspReportsPerMinute
 }
 
 // gatewayRoute is the bounded metric label of a gateway request: the API
@@ -362,7 +481,7 @@ func (g *Gateway) gatewayRoute(path string) string {
 			}
 		}
 		return "unmatched" // never label by an attacker-chosen path
-	case path == "/healthz" || path == "/readyz" || path == "/metrics":
+	case path == "/healthz" || path == "/readyz" || path == "/metrics" || path == "/csp-report":
 		return path
 	default:
 		return "static"

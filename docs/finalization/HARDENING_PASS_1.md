@@ -64,7 +64,7 @@ Rules: `infrastructure/prometheus/alerts.yml`, validated with `promtool check ru
 | TrezutilNotReady | a service reports not ready for 5 min | Database unreachable | `curl /readyz`; PostgreSQL health; restart |
 | TrezutilServiceDown | a scrape target is down for 2 min | Process or network problem | `docker compose ps`, `/healthz`; `METRICS_TOKEN` for the gateway job |
 
-Routing to people (Alertmanager, PagerDuty, email) is deployment-specific and not included.
+Routing to people was added in pass 2 (§8): Alertmanager sends `severity=page` alerts to `ALERT_WEBHOOK_PAGE_URL` (hourly until resolved) and `severity=ticket` alerts to `ALERT_WEBHOOK_TICKET_URL` (twice a day). The destinations are yours to choose.
 
 ## 5. Security review (focused)
 
@@ -95,7 +95,7 @@ Findings fixed in this pass:
 
 Remaining risks (not fixed here, by decision or dependency):
 
-- No Content-Security-Policy: set it at the reverse proxy once the payment provider's script/frame origins are known.
+- ~~No Content-Security-Policy~~ — added in pass 2 (§8); production stays in `report-only` until a real payment has been made under the enforced policy.
 - Audit trail is a log stream, not a durable tamper-proof table (out of scope for this pass).
 - Internal services trust each other's network position; keep the compose network private.
 - OpenSearch runs without its security plugin on the internal network.
@@ -123,3 +123,35 @@ Stack: `docker-compose.app.yml` + `docker-compose.monitoring.yml` on a clean dat
 - Logs: no secret, token, header value, JWT or OTP code in any service log; `audit`, `payment_failed`, `webhook_failed` and `reservation_failed` events present with request ids.
 
 Environment notes for running this on Docker Desktop for Windows: address the stack as `127.0.0.1` (the IPv6 loopback relay can stall after an aborted large upload), and the compose network is `internal`.
+
+## 8. Pass 2 (2026-10-05): what was added after this pass
+
+Done in the "finalize" work; each item says how it was checked.
+
+**Security findings closed** (the portal audit, `docs/web/PORTALS_BACKEND_GAP_ANALYSIS.md` §S): **S-1** anonymous seller profile read returned the phone number and user id; **S-2** public store read returned the organization id, phone and email; **S-5** platform staff could read any order but not reservations; **S-6** the public `/readyz` listed internal service addresses. Each now has unit tests (`internal/api/profile_access_test.go`, gateway and reservation tests) and was re-checked against the staging stack. S-3 (organization sub-roles), S-4 (team invitation by user id), S-7 (audit is a log, not a table), S-8 (refresh tokens cannot be revoked) and S-9 (public reads are not rate-limited) are **still open**.
+
+**Content-Security-Policy.** The gateway sends one policy (`default-src 'self'`; scripts from itself and `js.stripe.com`; Stripe frames and connections; images from https, `data:` and `blob:`; no objects, no framing, `form-action 'self'`) in the mode of `CSP_MODE`: `report-only` (default), `enforce` or `off`. Browsers report what it would block to `POST /csp-report`, which logs `event=csp_violation` (bounded body, truncated fields, at most 30 logged reports a minute). Checked on staging in `enforce`: 26 page loads (home, search, listing, sign-in, legal, admin, seller) with no violation. **Not checked: the Stripe payment form under the enforced policy** (there is no Stripe account here), so production should start in `report-only` and move to `enforce` after one real payment.
+
+**Permissions-Policy** now allows the microphone for the site itself (`microphone=(self)`): the earlier `microphone=()` blocked the voice dictation of the assistant. Camera stays off; geolocation is for the site only.
+
+**TLS and the administration console** (`deployments/docker/docker-compose.proxy.yml`, `deployments/proxy/Caddyfile`): Caddy obtains and renews the certificate, redirects HTTP, caps bodies at 2 MB, replaces `X-Forwarded-For`, and answers 403 on `/admin`, `/api/v1/admin/*` and `/api/v1/auth/staff/*` unless the client is in `ADMIN_ALLOW_IPS`. The configuration validates (`caddy validate`); a real certificate needs a public domain, so that part is **not exercised**.
+
+**Backups.** `scripts/ops/backup.sh` and `scripts/ops/restore-check.sh`: a restore rehearsal on the staging data matched on every counted table and on the booking exclusion constraint; a truncated archive and an altered archive were each refused; the scratch database was dropped each time. **Not done:** a schedule and an off-host copy (they belong to the host).
+
+**Alert routing.** `infrastructure/prometheus/alertmanager.yml` and the overlay: a `page` alert and a `ticket` alert fired into a real Alertmanager reached their own destination and not the other. The real destinations are yours to provide.
+
+**Audit trail (S-7, partly).** Migration `000025` adds `audit_events`, append-only by trigger (the database refuses an UPDATE or a DELETE: checked on a real schema); the services write to it besides the log line, best-effort and without ever blocking the action; the console reads it (`GET /admin/audit`). It is not tamper-proof (a database superuser can still alter it) and holds only what the services already audit. Details: `CONSOLE_MODULES.md` §2.
+
+**Account suspension.** An administrator can suspend and reactivate a customer or seller account with a reason that goes to the audit trail; nobody can moderate themselves or a staff account; two administrators acting at once cannot both succeed. A session already open may last up to 15 minutes. `CONSOLE_MODULES.md` §3.
+
+**A step that used to be a server error is a conflict.** Confirming an order that is not paid answered 500 (and would have raised a false 5xx alert); it is now 409 `INVALID_TRANSITION`, like the new order steps.
+
+**Checked on the staging stack, 2026-10-05, after the console modules** (image rebuilt, migration `000025` applied, services recreated; CSP enforced; a temporary QA administrator and two labelled QA orders, removed afterwards):
+
+- Live API checks as that administrator: 31 of 31. The order lifecycle end to end (a wrong step is a 409, one fulfilment record, the home *transactions* figure moves), the audit trail (every step recorded in order, by the right person, with a request id; a rewrite refused by the database), account suspension (reason required, not twice, not oneself, not a staff account, reactivation), the three platform lists (search, status filter, a hostile status refused, no contact data) and anonymous callers refused (401).
+- Live browser checks in French: 12 of 12. Orders, audit (filtered from an order, filtered by kind, CSV export), organizations, the empty bookings state, the moderation dialog, no horizontal overflow on a phone, and **no page error, failed request or CSP violation** during the whole visit.
+- The seller side was **not** driven from the staging browser (staging has no seller session without a WhatsApp code); it is covered by the real-stack E2E below, with a real buyer and seller.
+
+**Still true from §5:** the audit trail is a log stream plus the table above; internal services trust the private network; OpenSearch runs without its security plugin on that network; the rate limits are in memory; Stripe, WhatsApp and the AI providers are verified against emulators only.
+
+Day-to-day operation (deploy, rollback, backups, restore, incidents, secrets): `RUNBOOK.md`.

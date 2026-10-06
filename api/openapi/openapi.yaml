@@ -874,6 +874,439 @@ paths:
               schema:
                  $ref: '#/components/schemas/ActionCheckResponse'
 
+  /missions:
+    post:
+      summary: Create a draft mission (Organiser)
+      description: >
+        Records a goal the caller delegates to Trezutil. Only `objective` is required; the kind, title, place and
+        head count are read from it unless given. The mission is always a draft: nothing is searched, booked or
+        ordered and no credit is used. A retry carrying the same Idempotency-Key returns the first mission (200).
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMissionRequest'
+      responses:
+        '201':
+          description: Draft mission created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mission'
+        '200':
+          description: The mission an earlier request with the same Idempotency-Key created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mission'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      summary: List the caller's missions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/MissionStatus' }
+        - in: query
+          name: page
+          schema: { type: integer, minimum: 1, default: 1 }
+        - in: query
+          name: page_size
+          schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+      responses:
+        '200':
+          description: The caller's missions, most recently changed first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissionPage'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /missions/{mission_id}:
+    get:
+      summary: Get one of the caller's missions
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MissionId'
+      responses:
+        '200':
+          description: Mission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mission'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    patch:
+      summary: Change a mission or move it through its lifecycle
+      description: >
+        Any field may be changed while the mission is not completed or cancelled. A `status` change must follow the
+        lifecycle: draft to active or cancelled; active to paused, completed or cancelled; paused to active or
+        cancelled.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MissionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateMissionRequest'
+      responses:
+        '200':
+          description: Updated mission
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mission'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /missions/{mission_id}/steps:
+    post:
+      summary: Add a step to a mission
+      description: >
+        Records a pending step at the next position. Steps are recorded, not executed: `action_type` only names the
+        commerce action a later phase will run through the Commerce Action Runtime. At most 30 steps per mission;
+        a completed or cancelled mission takes none.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MissionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateMissionStepRequest'
+      responses:
+        '201':
+          description: Step recorded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissionStep'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+    get:
+      summary: List a mission's steps in order
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MissionId'
+      responses:
+        '200':
+          description: Steps ordered by position
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: '#/components/schemas/MissionStep' } }
+                  total: { type: integer }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /missions/{mission_id}/plan:
+    post:
+      summary: Prepare the plan of a mission (Organiser)
+      description: >
+        A planner turns the mission into a plan: ordered steps that are intentions to act, each naming the commerce
+        action it will run and whether the Commerce OS can run it today (`action_support`). Nothing is searched,
+        reserved, ordered or paid, no credit is used and the mission stays as it is (a draft is not activated).
+        Planning is repeatable: the same request again returns the same plan (200) and never a second set of steps.
+        A mission that already has a different plan answers 409 PLAN_EXISTS unless `replace` is true; a replacement is
+        the next version and the old one is kept (`superseded`). A mission whose kind has no template (OTHER,
+        BUSINESS_TRIP, PROJECT) is not planned: the answer is 200 with `status: needs_information` and no steps.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MissionId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                replace: { type: boolean, default: false, description: Prepare a new version when the mission already has a different plan }
+      responses:
+        '201':
+          description: A new plan version was stored
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissionPlan'
+        '200':
+          description: The plan that already exists for this request, or needs_information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissionPlan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: PLAN_EXISTS, PLAN_IN_PROGRESS, MISSION_CLOSED or PLAN_CONFLICT
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+    get:
+      summary: Read the plan of a mission
+      description: >
+        The current plan, or one version of its history with `version`. A mission without a plan answers 200 with
+        `status: none`, which is a state, not an error.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MissionId'
+        - in: query
+          name: version
+          schema: { type: integer, minimum: 1 }
+      responses:
+        '200':
+          description: The plan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissionPlan'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /missions/{mission_id}/steps/{step_id}/execute:
+    post:
+      summary: Execute one step of a mission (Organiser)
+      description: >
+        Runs ONE step through the existing Commerce Action Runtime, on request; nothing runs a whole mission. The
+        request has no body: what the step asks of the runtime is decided server-side from the mission and the step,
+        never by the client. The first executable action is SEARCH_LISTINGS (a catalogue search, in the vertical the
+        step maps to and the mission's place if it has one); other steps answer 422 STEP_NOT_EXECUTABLE.
+        The runtime remains the only place where the action runs and where credits are checked, reserved, consumed or
+        released; the mission layer never touches them. Every attempt is a durable execution record: a summary and
+        references (for a search, the ids of the first listings found), not a copy of commerce data.
+        The same step with the same Idempotency-Key is the same execution: a repeated request returns it (200) and
+        runs nothing. A failed step can be executed again (a new attempt); a completed step cannot (409). A failure
+        of the runtime is a recorded outcome (201 with status `failed` and a stable `error.code`), not an HTTP error.
+        An attempt that never recorded its outcome is given up on after two minutes.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MissionId'
+        - in: path
+          name: step_id
+          required: true
+          schema: { type: string, format: uuid }
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '201':
+          description: An attempt was run (completed or failed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissionStepExecutionResult'
+        '200':
+          description: The execution an earlier request with the same Idempotency-Key made
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MissionStepExecutionResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: STEP_IN_PROGRESS, STEP_NOT_RUNNABLE (completed or skipped, or its plan was replaced), STEP_WAITING (a step it depends on has not completed), STEP_NEEDS_INPUT (the mission's dates, or a listing, are missing) or MISSION_NOT_RUNNABLE (paused or closed)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+        '422':
+          description: STEP_NOT_EXECUTABLE, the step has no executable action behind it yet
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /missions/{mission_id}/run:
+    post:
+      summary: Run a whole mission (Organiser)
+      description: >
+        Orchestrates the mission, on request: it runs, one step after another and in the order of the plan's dependency
+        graph, the steps that are ready, each through the existing Commerce Action Runtime (the only place where actions
+        run and where credits are checked, reserved, consumed or released; the orchestrator never touches them). A step
+        runs only after every step it depends on has completed, and takes what it needs from them by reference (an
+        availability check takes the first listing the search found and the mission's dates). Only the steps of the
+        mission's current plan are run.
+        The body is optional. `on_failure` is `stop` (the default: stop at the first failure) or `continue` (carry on with
+        the steps that do not depend on the failed one). What depends on a failed, blocked or skipped step is BLOCKED and
+        never run; what completed stays completed (nothing is rolled back); a failed step is never retried by a run (that
+        is /resume) and never retried by itself. A step whose action needs the person's confirmation is blocked for them:
+        nothing is confirmed on their behalf.
+        Running is idempotent: a completed step is never run again, so repeating the request is safe and runs only what is
+        still to be done. One orchestration of a mission runs at a time (a lease that expires by itself if a process dies):
+        while another holds it, the answer is 202 with the current state and nothing was run by this request.
+        A draft mission becomes active when its first step is run, and completed when every step is completed. The mission
+        has no new status: `outcome` is derived from its steps.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MissionId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                on_failure: { type: string, enum: [stop, continue], default: stop }
+      responses:
+        '200':
+          description: The state of the mission after the run (also when there was nothing left to run, or the mission was already completed)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionExecutionState' }
+        '202':
+          description: Another orchestration holds the mission; nothing was run by this request. The state is as read (busy is true).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionExecutionState' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: PLAN_REQUIRED (the mission has no plan), MISSION_GRAPH_INVALID (the stored dependencies form a cycle or are invalid; nothing is run) or MISSION_NOT_RUNNABLE (paused or cancelled)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /missions/{mission_id}/resume:
+    post:
+      summary: Resume a mission after a failure (Organiser)
+      description: >
+        A run that also runs, once each in this call, the steps whose latest attempt failed or went silent. Steps that
+        completed are never run again; a step blocked by a confirmation requirement is never retried. Same body, answers
+        and guarantees as /run. Each call retries a failed step at most once: there is no automatic or unbounded retry.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MissionId'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                on_failure: { type: string, enum: [stop, continue], default: stop }
+      responses:
+        '200':
+          description: The state of the mission after the resume
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionExecutionState' }
+        '202':
+          description: Another orchestration holds the mission; nothing was run by this request
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionExecutionState' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: PLAN_REQUIRED, MISSION_GRAPH_INVALID or MISSION_NOT_RUNNABLE
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
+  /missions/{mission_id}/execution:
+    get:
+      summary: The execution state of a mission (Organiser)
+      description: >
+        Where the mission's current plan stands: the mission's outcome and progress, and every step with its state
+        (pending, ready, running, completed, failed, blocked, skipped), what it waits for and, when blocked, why. Read-only:
+        nothing is run or changed. READY and BLOCKED are derived from the step statuses and the plan's dependencies, never
+        stored.
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/MissionId'
+      responses:
+        '200':
+          description: The execution state
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MissionExecutionState' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: PLAN_REQUIRED or MISSION_GRAPH_INVALID
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorResponse' }
   /payments:
     post:
       summary: Create a payment
@@ -1112,6 +1545,11 @@ components:
       name: X-Internal-Service-Token
       description: Service-to-service authentication token for internal endpoints
   parameters:
+    MissionId:
+      in: path
+      name: mission_id
+      required: true
+      schema: { type: string, format: uuid }
     ListingId:
       in: path
       name: listing_id
@@ -1810,3 +2248,204 @@ components:
             text: { type: string }
             cards: { type: array, items: { type: object } }
             confirmation: { type: object }
+    MissionStatus:
+      type: string
+      enum: [draft, active, paused, completed, cancelled]
+    MissionType:
+      type: string
+      description: Open code; the known ones are listed.
+      enum: [EVENT, TRAVEL, STAY, MOVE, TRANSPORT, BUSINESS_TRIP, PROJECT, OTHER]
+    CreateMissionRequest:
+      type: object
+      additionalProperties: false
+      required: [objective]
+      properties:
+        objective: { type: string, minLength: 3, maxLength: 2000, description: What the person wants, in their own words }
+        type: { $ref: '#/components/schemas/MissionType' }
+        title: { type: string, minLength: 2, maxLength: 120 }
+        location: { type: string, maxLength: 120 }
+        participants: { type: integer, minimum: 0, maximum: 100000 }
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date }
+        budget_minor: { type: integer, minimum: 0, description: Minor units; needs a currency }
+        currency: { type: string, pattern: '^[A-Za-z]{3}$' }
+        preferences: { type: object, maxProperties: 20, additionalProperties: { type: string, maxLength: 200 } }
+    UpdateMissionRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        objective: { type: string, minLength: 3, maxLength: 2000 }
+        type: { $ref: '#/components/schemas/MissionType' }
+        title: { type: string, minLength: 2, maxLength: 120 }
+        location: { type: string, maxLength: 120 }
+        participants: { type: integer, minimum: 0, maximum: 100000 }
+        start_date: { type: string, description: 'YYYY-MM-DD; an empty string clears it' }
+        end_date: { type: string, description: 'YYYY-MM-DD; an empty string clears it' }
+        budget_minor: { type: integer, minimum: 0 }
+        currency: { type: string, pattern: '^[A-Za-z]{3}$' }
+        preferences: { type: object, additionalProperties: { type: string } }
+        status: { $ref: '#/components/schemas/MissionStatus' }
+    Mission:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        type: { $ref: '#/components/schemas/MissionType' }
+        title: { type: string }
+        objective: { type: string }
+        status: { $ref: '#/components/schemas/MissionStatus' }
+        location: { type: string }
+        start_date: { type: string, format: date, nullable: true }
+        end_date: { type: string, format: date, nullable: true }
+        participants: { type: integer }
+        budget_minor: { type: integer }
+        currency: { type: string }
+        preferences: { type: object, additionalProperties: { type: string } }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    MissionPage:
+      type: object
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/Mission' } }
+        total: { type: integer }
+        page: { type: integer }
+        page_size: { type: integer }
+    CreateMissionStepRequest:
+      type: object
+      additionalProperties: false
+      required: [type, title]
+      properties:
+        type: { type: string, pattern: '^[A-Za-z][A-Za-z0-9_ ]{1,31}$', description: A code such as VENUE or CATERING }
+        title: { type: string, minLength: 2, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        action_type: { type: string, description: The commerce action a later phase will run, for example SEARCH_LISTINGS }
+    MissionStep:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        mission_id: { type: string, format: uuid }
+        type: { type: string }
+        title: { type: string }
+        description: { type: string }
+        status: { type: string, enum: [pending, in_progress, completed, skipped, failed] }
+        position: { type: integer, minimum: 1 }
+        action_type: { type: string }
+        action_support: { type: string, enum: ['', supported, not_yet_supported], description: 'supported when a handler for action_type is registered in the Commerce Action Runtime; empty for a step added by hand' }
+        plan_version: { type: integer, minimum: 0, description: 0 for a step added by hand }
+        executable: { type: boolean, description: Whether the step has an executable action behind it that the runtime supports }
+        can_execute: { type: boolean, description: Whether it can be executed now (executable, mission draft or active, step pending or failed or stale) }
+        stale: { type: boolean, description: In progress but its attempt has gone silent; it can be executed again }
+        execution: { $ref: '#/components/schemas/MissionStepExecution' }
+        state:
+          type: string
+          enum: [pending, ready, running, completed, failed, blocked, skipped]
+          description: >
+            Where the step stands in the current plan's dependency graph; derived, never stored (the stored status stays
+            one of the five above). Absent for a step added by hand or of a plan that has been replaced.
+        depends_on: { type: array, items: { type: string, format: uuid }, description: The steps this one waits for }
+        blocked_by: { type: array, items: { type: string, format: uuid }, description: The dependencies that keep a blocked step blocked }
+        reason:
+          type: string
+          enum: [waiting, not_executable, abandoned, dependency_failed, dependency_blocked, dependency_skipped, needs_input, needs_confirmation]
+          description: Why a step waits or is blocked
+        detail: { type: string, enum: [dates, listing], description: What is missing when the reason is needs_input }
+        action_ref: { type: string, description: The action the step ran as; empty until steps are connected to the runtime }
+        result_ref: { type: string, description: What the step produced; empty until steps are connected to the runtime }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    MissionPlan:
+      type: object
+      properties:
+        mission_id: { type: string, format: uuid }
+        mission_type: { $ref: '#/components/schemas/MissionType' }
+        plannable: { type: boolean, description: Whether the planner has a plan for the mission's kind }
+        status: { type: string, enum: [current, superseded, none, needs_information] }
+        needs_information: { type: boolean }
+        reason: { type: string, description: 'Why more information is needed, for example no_template' }
+        plan_version: { type: integer, minimum: 0, description: 0 when there is no plan }
+        plan_mission_type: { $ref: '#/components/schemas/MissionType' }
+        planner: { type: string, example: rules }
+        planner_version: { type: string }
+        versions: { type: array, items: { type: integer } }
+        created_at: { type: string, format: date-time }
+        superseded_at: { type: string, format: date-time }
+        steps: { type: array, items: { $ref: '#/components/schemas/MissionStep' } }
+    MissionStepExecution:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        attempt: { type: integer, minimum: 1 }
+        status: { type: string, enum: [in_progress, completed, failed] }
+        action_type: { type: string, example: SEARCH_LISTINGS }
+        started_at: { type: string, format: date-time }
+        completed_at: { type: string, format: date-time }
+        result:
+          type: object
+          description: Present when completed. A small summary with references, never a copy of commerce data.
+          properties:
+            reference: { type: string, description: What the attempt produced; for a search, this execution }
+            total: { type: integer }
+            listing_ids: { type: array, items: { type: string }, description: The first listings found (at most 10) }
+            has_more: { type: boolean }
+            vertical: { type: string }
+            location: { type: string }
+            available: { type: boolean, description: For an availability check, whether the listing is free then }
+            listing_id: { type: string, description: For an availability check, the listing that was checked (the reference) }
+            capacity: { type: integer }
+            remaining: { type: integer }
+            reason: { type: string }
+            start_at: { type: integer, description: Unix seconds }
+            end_at: { type: integer, description: Unix seconds }
+        error:
+          type: object
+          description: Present when failed. A stable classification (a runtime error code such as INSUFFICIENT_CREDITS, or RUNTIME_ERROR, RUNTIME_TIMEOUT, ABANDONED, UNEXPECTED_RESULT, CONFIRMATION_REQUIRED), never a free-text message.
+          properties:
+            code: { type: string }
+    MissionStepExecutionResult:
+      allOf:
+        - $ref: '#/components/schemas/MissionStepExecution'
+        - type: object
+          properties:
+            execution_id: { type: string, format: uuid }
+            mission_id: { type: string, format: uuid }
+            step_id: { type: string, format: uuid }
+            step_status: { type: string, enum: [pending, in_progress, completed, skipped, failed] }
+            replayed: { type: boolean, description: True when the request repeated an Idempotency-Key and nothing was run }
+            step: { $ref: '#/components/schemas/MissionStep' }
+    MissionExecutionState:
+      type: object
+      properties:
+        mission_id: { type: string, format: uuid }
+        plan_version: { type: integer, minimum: 1 }
+        mission_status: { $ref: '#/components/schemas/MissionStatus' }
+        outcome:
+          type: string
+          enum: [empty, completed, in_progress, needs_attention, ready, waiting]
+          description: >
+            Derived from the steps, not stored. completed: every step is completed (a step set aside does not count);
+            in_progress: a step is running, or another run holds the mission and work is left; needs_attention: a step
+            failed, is blocked or was set aside; ready: nothing is wrong and a step can be run; waiting: what is left
+            cannot be run yet.
+        busy: { type: boolean, description: True when another orchestration holds the mission; this request ran nothing }
+        progress:
+          type: object
+          properties:
+            completed: { type: integer }
+            skipped: { type: integer }
+            total: { type: integer }
+        ran:
+          type: array
+          description: The steps this request ran, in order; empty for a read or a request that found nothing to run
+          items:
+            type: object
+            properties:
+              step_id: { type: string, format: uuid }
+              step_type: { type: string }
+              action_type: { type: string }
+              execution_id: { type: string, format: uuid }
+              attempt: { type: integer }
+              status: { type: string, enum: [in_progress, completed, failed] }
+              error_code: { type: string }
+        steps:
+          type: array
+          description: Every step of the current plan, in position order, with its state
+          items: { $ref: '#/components/schemas/MissionStep' }

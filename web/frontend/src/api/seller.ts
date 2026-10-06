@@ -10,6 +10,9 @@ import type { ListingDetail } from '@/types'
  * only selects which of the caller's own organizations to show.
  */
 
+/** The steps of an order after payment: confirm (paid), process (confirmed), ready, fulfil (delivered), complete. */
+export type OrderStep = 'confirm' | 'process' | 'ready' | 'fulfil' | 'complete'
+
 export interface SellerProfile {
   id: string
   display_name: string
@@ -141,6 +144,11 @@ export const sellerApi = {
 
   async confirmOrder(orderId: string): Promise<void> {
     await http.post(`/orders/${encodeURIComponent(orderId)}/confirm`)
+  },
+
+  /** One seller-side step. The server checks who may take it and from which status. */
+  async advanceOrder(orderId: string, step: OrderStep): Promise<void> {
+    await http.post(`/orders/${encodeURIComponent(orderId)}/${step}`)
   },
 
   async incomingReservations(organizationId: string): Promise<ReservationSummary[]> {

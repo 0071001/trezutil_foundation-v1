@@ -16,6 +16,21 @@ describe('http client', () => {
     expect(calls[0].headers.Authorization).toBe('Bearer tok')
   })
 
+  it('sends sign-in calls without the stored token, which may have expired long ago', async () => {
+    signIn('stale')
+    const { calls } = mockApi({
+      'POST /auth/staff/login': () => ({ body: { tokens: { access_token: 'fresh', refresh_token: 'r' }, user: {} } }),
+      'POST /auth/request-otp': () => ({ body: {} }),
+      'POST /auth/verify-otp': () => ({ body: { tokens: { access_token: 'fresh', refresh_token: 'r' }, user: {} } }),
+      'GET /orders': () => ({ body: { items: [] } }),
+    })
+    await http.post('/auth/staff/login', { email: 'a@b.co', password: 'x' })
+    await http.post('/auth/request-otp', { phone: '+1' })
+    await http.post('/auth/verify-otp', { request_id: 'r', code: '1' })
+    await http.get('/orders')
+    expect(calls.map((c) => c.headers.Authorization)).toEqual([undefined, undefined, undefined, 'Bearer stale'])
+  })
+
   it('refreshes once on 401 and replays the request', async () => {
     signIn('old', 'r1')
     let first = true

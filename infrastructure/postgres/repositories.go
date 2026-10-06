@@ -167,6 +167,25 @@ func (r *UserRepository) Update(ctx context.Context, user *domain.User) error {
 	return nil
 }
 
+// SetStatus moves an account from one status to another in one conditional statement: it changes nothing
+// unless the account is still in the from status, so two administrators acting at once cannot both succeed.
+func (r *UserRepository) SetStatus(ctx context.Context, userID string, from, to domain.UserStatus, now int64) error {
+	res, err := r.db.ExecContext(ctx, `UPDATE users SET status = $1, updated_at = $2 WHERE id = $3 AND status = $4`, string(to), toTime(now), userID, string(from))
+	if err != nil {
+		return fmt.Errorf("failed to set user status: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to check rows affected: %w", err)
+	}
+	if n == 0 {
+		return domain.ErrAccountState
+	}
+	return nil
+}
+
+var _ domain.AccountStatusRepository = (*UserRepository)(nil)
+
 // AssignRole assigns a role to a user using the user_roles junction table.
 // This is the CORRECT implementation - uses actual RBAC, NOT user.Status hack.
 func (r *UserRepository) AssignRole(ctx context.Context, userID string, role domain.Role) error {

@@ -204,3 +204,101 @@ func TestSellerConsole_OrderConfirmationIsSellerOnly(t *testing.T) {
 		t.Fatalf("owner confirms: %v %v", confirmed, err)
 	}
 }
+
+// The whole seller-side lifecycle on the real schema: confirmed, preparing, ready (one fulfillment record),
+// delivered, completed. Only the seller side may move the order, a repeated step is a conflict, and a completed
+// order is what the site's "transactions" figure counts.
+func TestSellerConsole_OrderLifecycleReachesCompleted(t *testing.T) {
+	db := NewTestDB(t)
+	defer db.Close()
+	db.Cleanup(t)
+	ctx := context.Background()
+
+	const (
+		owner, buyer      = "5e11e700-0000-4000-8000-0000000000d1", "5e11e700-0000-4000-8000-0000000000d3"
+		org               = "5e11e700-0000-4000-8000-00000000000d"
+		seller, store     = "5e11e700-0000-4000-8000-0000000005d1", "5e11e700-0000-4000-8000-0000000007d1"
+		category, listing = "5e11e700-0000-4000-8000-00000000d002", "5e11e700-0000-4000-8000-0000000001d1"
+	)
+	sellerUser(t, db, ctx, owner, "+243810000021")
+	sellerUser(t, db, ctx, buyer, "+243810000023")
+	createTestOrganization(t, db, ctx, org)
+	orgs := postgres.NewOrganizationRepository(db.DB)
+	if err := orgs.AddMember(ctx, domain.NewOrganizationMember(owner, org, domain.OrganizationRoleOwner)); err != nil {
+		t.Fatal(err)
+	}
+	createTestSeller(t, db, ctx, seller, owner, org)
+	createTestStore(t, db, ctx, store, org)
+	createTestCategory(t, db, ctx, category)
+	createTestListing(t, db, ctx, listing, org, seller, store, category)
+	if _, err := db.DB.ExecContext(ctx, `UPDATE listings SET status='published' WHERE id=$1`, listing); err != nil {
+		t.Fatal(err)
+	}
+
+	orders := application.NewOrderUseCases(postgres.NewOrderRepository(db.DB), postgres.NewListingRepository(db.DB),
+		postgres.NewSellerRepository(db.DB), orgs, postgres.NewUserRepository(db.DB),
+		postgres.NewInventoryRepository(db.DB), postgres.NewFulfillmentRepository(db.DB), nil)
+	order, err := orders.CreateOrder(ctx, buyer, listing, 1)
+	if err != nil {
+		t.Fatalf("buyer creates order: %v", err)
+	}
+	if _, err := db.DB.ExecContext(ctx, `UPDATE orders SET status='paid' WHERE id=$1`, order.ID); err != nil {
+		t.Fatal(err)
+	}
+	transactions := func() int {
+		stats, err := postgres.NewSiteContentRepository(db.DB).Stats(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return stats[domain.SiteMetricTransactions]
+	}
+	if n := transactions(); n != 0 {
+		t.Fatalf("transactions before delivery = %d", n)
+	}
+
+	// the buyer cannot skip ahead, whatever the status
+	if _, err := orders.StartProcessing(ctx, buyer, order.ID); !errors.Is(err, domain.ErrInsufficientPermissions) {
+		t.Fatalf("buyer started the order: %v", err)
+	}
+	// and no step can be taken out of order
+	if _, err := orders.StartProcessing(ctx, owner, order.ID); !errors.Is(err, domain.ErrInvalidOrderTransition) {
+		t.Fatalf("starting a paid order: %v", err)
+	}
+
+	steps := []struct {
+		name string
+		do   func() (*domain.Order, error)
+		want domain.OrderStatus
+	}{
+		{"confirm", func() (*domain.Order, error) { return orders.ConfirmOrder(ctx, owner, order.ID) }, domain.OrderStatusConfirmed},
+		{"start preparing", func() (*domain.Order, error) { return orders.StartProcessing(ctx, owner, order.ID) }, domain.OrderStatusProcessing},
+		{"mark ready", func() (*domain.Order, error) { return orders.ReadyForFulfillment(ctx, owner, order.ID) }, domain.OrderStatusReadyForFulfillment},
+		{"mark delivered", func() (*domain.Order, error) { return orders.FulfilOrder(ctx, owner, order.ID) }, domain.OrderStatusFulfilled},
+		{"complete", func() (*domain.Order, error) { return orders.CompleteOrder(ctx, owner, order.ID) }, domain.OrderStatusCompleted},
+	}
+	for _, s := range steps {
+		got, err := s.do()
+		if err != nil || got.Status != s.want {
+			t.Fatalf("%s: %v %v", s.name, got, err)
+		}
+		var stored string
+		if err := db.DB.QueryRowContext(ctx, `SELECT status FROM orders WHERE id=$1`, order.ID).Scan(&stored); err != nil || stored != string(s.want) {
+			t.Fatalf("%s: stored status %q (%v), want %s", s.name, stored, err, s.want)
+		}
+	}
+
+	var records int
+	if err := db.DB.QueryRowContext(ctx, `SELECT count(*) FROM fulfillments WHERE order_id=$1`, order.ID).Scan(&records); err != nil || records != 1 {
+		t.Fatalf("fulfillment records = %d (%v), want exactly 1", records, err)
+	}
+	if _, err := orders.CompleteOrder(ctx, owner, order.ID); !errors.Is(err, domain.ErrInvalidOrderTransition) {
+		t.Fatalf("completing twice: %v", err)
+	}
+	if n := transactions(); n != 1 {
+		t.Fatalf("transactions after completion = %d, want 1", n)
+	}
+	// the buyer still sees the finished order
+	if got, err := orders.GetOrder(ctx, buyer, order.ID); err != nil || got.Status != domain.OrderStatusCompleted {
+		t.Fatalf("buyer reads the completed order: %v %v", got, err)
+	}
+}

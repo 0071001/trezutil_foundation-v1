@@ -357,7 +357,8 @@ func (u *ReservationUseCasesImpl) CancelReservation(ctx context.Context, actorID
 			TargetType: "reservation",
 			TargetID:   reservationID,
 			Metadata: map[string]interface{}{
-				"previous_status": string(previousStatus),
+				"previous_status":   string(previousStatus),
+				"by_platform_staff": reservation.CustomerID != actorID && u.isPlatformStaff(ctx, actorID),
 			},
 		})
 	}
@@ -400,8 +401,23 @@ func (u *ReservationUseCasesImpl) canCreateReservation(ctx context.Context, acto
 	return actor != nil && actor.IsActive()
 }
 
+// isPlatformStaff reports whether the actor is an active platform administrator or operator.
+func (u *ReservationUseCasesImpl) isPlatformStaff(ctx context.Context, actorID string) bool {
+	if u.userRepo == nil {
+		return false
+	}
+	actor, err := u.userRepo.FindByID(ctx, actorID)
+	return err == nil && actor != nil && !actor.IsSuspended() && (actor.HasRole(domain.RoleAdmin) || actor.HasRole(domain.RoleOperator))
+}
+
+// canAccessReservation: the customer, the owner, an admin or a manager of the organization, and
+// platform administrators and operators (as for orders: without it support could read any order
+// but not the booking behind it, finding S-5). A staff cancellation is audited as such.
 func (u *ReservationUseCasesImpl) canAccessReservation(ctx context.Context, reservation *domain.Reservation, actorID string) bool {
 	if reservation.CustomerID == actorID {
+		return true
+	}
+	if u.isPlatformStaff(ctx, actorID) {
 		return true
 	}
 	if reservation.OrganizationID != "" {

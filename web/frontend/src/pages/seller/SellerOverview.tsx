@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { analyticsApi } from '@/api/analytics'
 import { sellerApi } from '@/api/seller'
-import { PeriodTabs } from '@/components/charts/PeriodTabs'
-import { shortDay } from '@/components/charts/scale'
+import { integer, shortDay } from '@/components/charts/scale'
+import type { BoardMetric } from '@/components/dashboard/ActivityBoard'
+import { DashSkeleton, DashToolbar } from '@/components/dashboard/DashToolbar'
 import { ErrorState, Loading } from '@/components/states'
 import { ActionLink, Heading, Icon, StatusBadge } from '@/components/ui'
 import { formatDate, formatMinor, timeAgo } from '@/lib/format'
-import { t, plural } from '@/lib/i18n'
+import { t, plural, tn } from '@/lib/i18n'
 import { useAsync } from '@/lib/useAsync'
 import { SellerActivity } from '@/pages/seller/SellerActivity'
 import { Metric, SellerHead, useSeller } from '@/pages/seller/SellerShell'
@@ -52,6 +53,9 @@ export function SellerOverviewPage() {
   ].sort((a, b) => b.at - a.at).slice(0, 6)
 
   const needsSetup = !org.seller_profiles.some((p) => p.mine) || org.stores.length === 0
+  // What is waiting for the business, from the latest orders and bookings: a tile beside the figures of the period.
+  const pendingBookings = upcoming.filter((r) => r.status === 'pending').length
+  const toDo: BoardMetric = { id: 'todo', tile: { label: t('To confirm'), icon: 'clock', value: integer(toConfirm.length), note: tn(pendingBookings, '{n} booking request', '{n} booking requests') } }
 
   return (
     <>
@@ -60,16 +64,15 @@ export function SellerOverviewPage() {
 
       {canManage ? (
         <>
-          <div className="tz-dash-head">
-            <p className="tz-asof">{activity.data ? t('Counted by the platform from your orders, bookings and listings, {from} to {to}.', { from: shortDay(activity.data.from), to: shortDay(activity.data.to) }) : ''}</p>
-            <div className="tz-dash-controls">
-              <PeriodTabs value={period} onChange={setPeriod} />
-              <ActionLink href="/seller/analytics" className="tz-link-action">{t('All analytics')} <Icon name="arrow" size={14} /></ActionLink>
-            </div>
-          </div>
-          {activity.loading && !activity.data && <Loading label={t('Loading your figures…')} />}
+          <DashToolbar
+            asOf={activity.data ? t('Counted by the platform from your orders, bookings and listings, {from} to {to}.', { from: shortDay(activity.data.from), to: shortDay(activity.data.to) }).replace(/\.\.$/, '.') : undefined}
+            period={period} onPeriod={setPeriod} onRefresh={() => { lists.reload(); activity.reload() }} exportData={activity.data} exportName={org.display_name}
+          >
+            <ActionLink href="/seller/analytics" className="tz-link-action">{t('All analytics')} <Icon name="arrow" size={14} /></ActionLink>
+          </DashToolbar>
+          {activity.loading && !activity.data && <DashSkeleton label={t('Loading your figures…')} />}
           {activity.error && <ErrorState error={activity.error} onRetry={activity.reload} />}
-          {activity.data && <SellerActivity data={activity.data} />}
+          {activity.data && <SellerActivity data={activity.data} extra={[toDo]} />}
         </>
       ) : (
         <div className="seller-metrics">

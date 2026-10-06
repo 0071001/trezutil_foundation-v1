@@ -86,7 +86,7 @@ export function HotelBooking({ listing }: { listing: ListingDetail }) {
   const step = order ? 3 : booked ? 3 : offer?.available ? 2 : 1
 
   return (
-    <AppShell hideDock>
+    <AppShell>
       <section className="page-section checkout-page">
         <div className="checkout-head"><Brand /><span><Icon name="calendar" size={15} />{t('Hotel stay')}</span></div>
         <div role="list" className="checkout-progress" aria-label={t('Booking progress')}>

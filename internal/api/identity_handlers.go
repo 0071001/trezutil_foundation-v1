@@ -213,6 +213,47 @@ func (h *IdentityHandler) MeH(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, toUserJSON(user), http.StatusOK)
 }
 
+// ProfileEditor is implemented by identity.Service.
+type ProfileEditor interface {
+	UpdateProfile(ctx context.Context, userID string, in identity.ProfileUpdate) (*domain.User, error)
+}
+
+// UpdateMeH handles PATCH /api/v1/auth/users/me {"display_name"?, "email"?}.
+func (h *IdentityHandler) UpdateMeH(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.RequireUser(w, r)
+	if !ok {
+		return
+	}
+	editor, ok := h.useCases.(ProfileEditor)
+	if !ok {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "NOT_AVAILABLE", Message: "Profile editing is not available"}}, http.StatusServiceUnavailable)
+		return
+	}
+	var body struct {
+		DisplayName *string `json:"display_name"`
+		Email       *string `json:"email"`
+	}
+	if err := readJSONBody(r, &body); err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request format"}}, http.StatusBadRequest)
+		return
+	}
+	user, err := editor.UpdateProfile(r.Context(), userID, identity.ProfileUpdate{DisplayName: body.DisplayName, Email: body.Email})
+	switch {
+	case err == nil:
+		writeJSON(w, toUserJSON(user), http.StatusOK)
+	case errors.Is(err, identity.ErrInvalidProfile):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_PROFILE", Message: err.Error()}}, http.StatusBadRequest)
+	case errors.Is(err, identity.ErrStaffEmail):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "STAFF_EMAIL", Message: err.Error()}}, http.StatusForbidden)
+	case errors.Is(err, identity.ErrEmailTaken):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "EMAIL_TAKEN", Message: err.Error()}}, http.StatusConflict)
+	case errors.Is(err, domain.ErrUserSuspended):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "ACCOUNT_SUSPENDED", Message: "This account is suspended"}}, http.StatusForbidden)
+	default:
+		writeFailure(w, "PROFILE_UPDATE_FAILED", err)
+	}
+}
+
 func (h *IdentityHandler) writeAuthError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, domain.ErrUserSuspended):

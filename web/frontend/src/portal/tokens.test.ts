@@ -139,7 +139,7 @@ describe('portal tokens: layering', () => {
     // Every rule in the portal layer is scoped to the portal, the shell parts, or an overlay inside it.
     const unscoped = [...css.matchAll(/^([^\s@/}{][^{]*)\{/gm)]
       .map((m) => m[1]!.trim())
-      .filter((sel) => !/^(\.app\.portal|\.tz-|\.tzc|\.portal-|\.skeleton|\.metric|from|to|\d+%)/.test(sel))
+      .filter((sel) => !/^(\.app\.portal|\.tz-|\.tzx-|\.tzc|\.portal-|\.skeleton|\.metric|from|to|\d+%)/.test(sel))
     expect(unscoped).toEqual([])
   })
 })

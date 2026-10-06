@@ -10,7 +10,7 @@ export type IconName =
   | 'attach' | 'eye' | 'eyeoff' | 'filter' | 'food' | 'heart' | 'home' | 'location' | 'menu' | 'mic' | 'moon' | 'orders'
   | 'search' | 'send' | 'service' | 'shop' | 'spark' | 'sun' | 'user' | 'whatsapp'
   // Portal consoles
-  | 'chart' | 'clock' | 'doc' | 'globe' | 'inbox' | 'layers' | 'lock' | 'logout' | 'pause' | 'play' | 'tag' | 'chat' | 'plug' | 'pulse' | 'settings' | 'shield' | 'users' | 'wallet'
+  | 'chart' | 'clock' | 'doc' | 'download' | 'refresh' | 'globe' | 'inbox' | 'layers' | 'lock' | 'logout' | 'pause' | 'play' | 'tag' | 'chat' | 'plug' | 'pulse' | 'settings' | 'shield' | 'users' | 'wallet'
 
 const paths: Record<IconName, ReactNode> = {
   arrow: <><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></>,
@@ -43,6 +43,8 @@ const paths: Record<IconName, ReactNode> = {
   user: <><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></>,
   chart: <><path d="M4 20V4" /><path d="M4 20h16" /><path d="M8 16v-5M12 16V8M16 16v-3" /></>,
   clock: <><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>,
+  download: <><path d="M12 4v11" /><path d="m7 11 5 5 5-5" /><path d="M5 20h14" /></>,
+  refresh: <><path d="M20 12a8 8 0 1 1-2.5-5.8" /><path d="M20 4v5h-5" /></>,
   doc: <><path d="M6 3h9l4 4v14H6V3Z" /><path d="M14 3v5h5M9 13h6M9 17h6" /></>,
   globe: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18" /></>,
   inbox: <><path d="M3 13h5l1.5 3h5L16 13h5" /><path d="M5 5h14l2 8v6H3v-6l2-8Z" /></>,
@@ -146,6 +148,9 @@ const tone: Record<string, string> = {
   active: 'completed', healthy: 'completed', verified: 'completed', success: 'completed',
   inactive: 'pending', unknown: 'pending', unverified: 'pending', degraded: 'processing',
   failed: 'cancelled', unavailable: 'cancelled', rejected: 'cancelled',
+  // Payments, fulfilments, health checks
+  captured: 'completed', authorized: 'confirmed', created: 'pending', partially_refunded: 'processing', ok: 'completed', down: 'cancelled',
+  accepted: 'confirmed', in_progress: 'processing', ready: 'completed', processed: 'completed', canceled: 'cancelled', past_due: 'cancelled', archived: 'pending',
 }
 
 export function StatusBadge({ status, label }: { status: string; label?: string }) {
@@ -159,6 +164,8 @@ const labels: Record<string, string> = {
   published: tx('Live'), paused: tx('Paused'), pending_review: tx('In review'), sold: tx('Sold'), closed: tx('Closed'), suspended: tx('Suspended'),
   active: tx('Active'), inactive: tx('Inactive'), healthy: tx('Healthy'), degraded: tx('Degraded'), unavailable: tx('Unavailable'), unknown: tx('Unknown'),
   verified: tx('Verified'), unverified: tx('Unverified'), failed: tx('Failed'), success: tx('Succeeded'), rejected: tx('Rejected'),
+  captured: tx('Captured'), authorized: tx('Authorised'), created: tx('Started'), partially_refunded: tx('Partly refunded'), ok: tx('Working'), down: tx('Down'),
+  accepted: tx('Accepted'), in_progress: tx('In progress'), ready: tx('Ready'), processed: tx('Processed'), canceled: tx('Cancelled'), past_due: tx('Past due'), archived: tx('Archived'),
 }
 
 export function statusLabel(status: string): string {

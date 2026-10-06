@@ -22,7 +22,12 @@ type AdminReader interface {
 type AdminHandler struct {
 	reader AdminReader
 	users  domain.UserRepository
-	now    func() time.Time
+	audit  AuditLister
+	// moderation suspends and reactivates accounts
+	moderation AccountModerator
+	// commerce lists orders, bookings and businesses
+	commerce AdminCommerceReader
+	now      func() time.Time
 }
 
 // NewAdminHandler creates an AdminHandler.

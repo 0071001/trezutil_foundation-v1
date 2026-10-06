@@ -20,6 +20,9 @@ import (
 	"github.com/trezutil/trezutil/internal/application/commerce"
 	"github.com/trezutil/trezutil/internal/application/conversation"
 	"github.com/trezutil/trezutil/internal/application/hotel"
+	"github.com/trezutil/trezutil/internal/application/missionexec"
+	"github.com/trezutil/trezutil/internal/application/missionorch"
+	"github.com/trezutil/trezutil/internal/application/missionplanning"
 	"github.com/trezutil/trezutil/internal/application/reservations"
 	"github.com/trezutil/trezutil/internal/application/vertical"
 	whatsappapp "github.com/trezutil/trezutil/internal/application/whatsapp"
@@ -78,7 +81,7 @@ func main() {
 	// Commerce use cases executed by the runtime. They are the same
 	// application services the REST APIs use; the runtime adds identity
 	// enforcement, validation, confirmation, idempotency and usage.
-	auditLog := audit.NewLogger(logger)
+	auditLog := audit.NewLogger(logger).WithStore(postgres.NewAuditRepository(db))
 	listingUseCases := application.NewListingUseCases(
 		listingRepo, categoryRepo,
 		postgres.NewAttributeDefinitionRepository(db), postgres.NewAttributeValueRepository(db),
@@ -194,6 +197,30 @@ func main() {
 	packRoutes := requireOperatorForWrites(userRepo, func(w http.ResponseWriter, r *http.Request) {
 		api.HandleVerticalPacksRoutes(packHandler, w, r)
 	})
+	// Organiser: a person's own missions (goals that may need several commerce actions). Recording a mission runs
+	// no action and uses no credit.
+	// Planning proposes steps from templates (no model) and only asks the runtime registry which actions it has: no
+	// action is run here.
+	missionRepo := postgres.NewMissionRepository(db)
+	// Running ONE mission step is a request to the same runtime the conversation uses: it keeps its authorization,
+	// credits and idempotency; the executor only translates the step and records the outcome.
+	stepExecutor := missionexec.New(missionRepo, missionRepo, missionRepo, missionRepo, runtime, logger)
+	orchestrator := missionorch.New(missionRepo, missionRepo, stepExecutor, logger)
+	missions := api.NewMissionHandler(application.NewMissionUseCases(missionRepo).
+		WithPlanning(missionplanning.NewRuleBased(registry.Has), missionRepo).
+		WithStepStates(stepExecutor)).WithExecution(stepExecutor).WithOrchestration(orchestrator)
+	mux.HandleFunc("POST /api/v1/missions", missions.CreateH)
+	mux.HandleFunc("GET /api/v1/missions", missions.ListH)
+	mux.HandleFunc("GET /api/v1/missions/{id}", missions.GetH)
+	mux.HandleFunc("PATCH /api/v1/missions/{id}", missions.UpdateH)
+	mux.HandleFunc("POST /api/v1/missions/{id}/steps", missions.AddStepH)
+	mux.HandleFunc("GET /api/v1/missions/{id}/steps", missions.StepsH)
+	mux.HandleFunc("POST /api/v1/missions/{id}/plan", missions.PlanH)
+	mux.HandleFunc("GET /api/v1/missions/{id}/plan", missions.GetPlanH)
+	mux.HandleFunc("POST /api/v1/missions/{id}/steps/{step_id}/execute", missions.ExecuteStepH)
+	mux.HandleFunc("POST /api/v1/missions/{id}/run", missions.RunH)
+	mux.HandleFunc("POST /api/v1/missions/{id}/resume", missions.ResumeH)
+	mux.HandleFunc("GET /api/v1/missions/{id}/execution", missions.ExecutionH)
 	mux.HandleFunc("/api/v1/packs", packRoutes)
 	mux.HandleFunc("/api/v1/packs/", packRoutes)
 	mux.HandleFunc("GET /api/v1/webhooks/whatsapp", api.VerifySubscriptionH(common.Getenv("WHATSAPP_VERIFY_TOKEN", "")))

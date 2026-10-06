@@ -241,6 +241,11 @@ var ErrOrderNotFound = fmt.Errorf("order not found")
 // ErrOrderCannotBeCancelled is returned when an order cannot be cancelled from its current status.
 var ErrOrderCannotBeCancelled = fmt.Errorf("order cannot be cancelled from current status")
 
+// ErrInvalidOrderTransition is returned when a seller-side step (confirm, start, ready, deliver, complete)
+// is asked of an order whose current status does not allow it. It is a conflict with the order's state,
+// not a server fault.
+var ErrInvalidOrderTransition = fmt.Errorf("invalid order transition")
+
 // OrderRepository defines the interface for order persistence.
 type OrderRepository interface {
 	Create(ctx context.Context, order *Order) error

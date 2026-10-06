@@ -63,11 +63,11 @@ Platform only: series `new_users`, `conversations`, `users_by_role`, `top_organi
 
 **Defaults.** Until an administrator publishes, the site shows the built-in content (`DefaultSiteContent` in `internal/domain/site.go`): four metrics on (`conversations`, `connections`, `transactions`, `merchants`), each hidden until it reaches 1, so a figure that is still zero is never advertised (on a young platform the strip may show only some of the four, or none, and then it is not drawn), and the logos shipped in `web/frontend/public/partners/` (a Go test checks the files exist). Metrics added by a later release are added to an older saved document **switched off**, and new sections **visible**.
 
-**Audit.** Every publish and upload is logged with the actor (`site_content_saved`, `site_asset_uploaded`). There is no queryable audit store yet (gap G-C1).
+**Audit.** Every publish and upload is logged with the actor (`site_content_saved`, `site_asset_uploaded`). Those two are log lines only: the durable audit table (`audit_events`, `GET /admin/audit`) holds what the order, reservation and listing use cases audit, plus account suspensions (`CONSOLE_MODULES.md` §2).
 
 ## 5. Screens
 
-- **Administration → Overview.** *Platform today* (the existing totals) and *Activity over the last N days*: six KPI cards with the change against the previous period, revenue per day (with a currency switch), orders, bookings, sign-ups, conversations and new listings per day, orders and bookings by status, live listings by sector, and the businesses with the most orders.
+- **Administration → Overview.** *Platform today* (the existing totals) and *Activity over the last N days*: an **activity board** of six KPI tiles with the change against the previous period (a tile is a button: it selects the trend shown beside the board, with a sparkline of the same series), then revenue per day (with a currency switch), orders, bookings, sign-ups, conversations and new listings per day, orders and bookings by status, live listings by sector, and the businesses with the most orders. A toolbar sets the period (7, 30, 90 days), refreshes, and **exports the figures on screen as CSV** (the day-by-day numbers the server sent, with the period's totals row; amounts stay in their own currency, one column each).
 - **Seller → Dashboard** (managers): the same figures for the business, then what needs attention and recent activity (read from the latest orders). Other members see the catalogue only and no analytics request is made.
 - **Seller → Analytics** (managers): everything above plus new listings, bookings by status, listings by status and sector.
 - **Administration → Site content** (administrators): *Live figures* (switch, minimum, wording in French and English, order, with today's real number and whether it shows), *Partners* (add, edit, remove, reorder, show/hide, upload a logo, optional website), *Home layout* (show or hide each of the six blocks; the order is the product narrative and is kept in code, so there is nothing to move). A **preview** shows the strip or band with today's real figures. Changes are a draft until **Publish changes**; publishing asks for confirmation, goes live at once, and a stale draft is refused.
@@ -81,7 +81,7 @@ Platform only: series `new_users`, `conversations`, `users_by_role`, `top_organi
 - Customers appear as counts only (new and returning); a seller still cannot list or read customers (gap G-B5).
 - Payments, refunds, settlements and platform AI usage are not part of these figures (gaps G-B4, G-B10).
 - The hero text, banners and promotions copy are not managed from the console.
-- The headline figures are not exported (CSV) yet.
+- The export is the figures of the period on screen only: no scheduled export, no other formats.
 
 ## 7. Tests
 

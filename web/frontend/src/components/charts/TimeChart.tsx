@@ -34,7 +34,7 @@ function useBox() {
     if (!el || typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(([entry]) => {
       const w = Math.round(entry?.contentRect.width ?? 0)
-      if (w > 0) setBox({ w, h: Math.max(170, Math.min(300, Math.round(w * 0.42))) })
+      if (w > 0) setBox({ w, h: Math.max(180, Math.min(320, Math.round(w * 0.36))) })
     })
     observer.observe(el)
     return () => observer.disconnect()
@@ -107,10 +107,10 @@ export function TimeChart({ label, dates, series, kind, format = plain, axisForm
   return (
     <div className="tzc" ref={ref} onKeyDown={key} onBlur={() => setActive(null)} onPointerLeave={() => setActive(null)} tabIndex={0} role="group" aria-label={summarize(label, dates, series, format)} aria-describedby={`${id}-hint`}>
       <span id={`${id}-hint`} className="sr-only">{t('Use the left and right arrow keys to read each day.')}</span>
-      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} aria-hidden="true" focusable="false" className="tzc-svg" data-kind={kind}>
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} aria-hidden="true" focusable="false" className="tzc-svg" data-kind={kind} data-has-active={active !== null || undefined}>
         {gridTicks.map((v) => (
           <g key={v}>
-            <line className="tzc-grid" x1={M.left} x2={W - M.right} y1={y(v)} y2={y(v)} />
+            <line className={`tzc-grid${v === 0 ? ' base' : ''}`} x1={M.left} x2={W - M.right} y1={y(v)} y2={y(v)} />
             <text className="tzc-tick" x={M.left - 8} y={y(v) + 4} textAnchor="end">{axis(v)}</text>
           </g>
         ))}

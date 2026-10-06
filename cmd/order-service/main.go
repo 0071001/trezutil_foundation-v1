@@ -48,7 +48,7 @@ func main() {
 	orderRepo := postgres.NewOrderRepository(db)
 
 	// Critical commerce actions leave a structured audit line (internal/infrastructure/audit).
-	auditLog := audit.NewLogger(logger)
+	auditLog := audit.NewLogger(logger).WithStore(postgres.NewAuditRepository(db))
 	orderUseCases := application.NewOrderUseCases(orderRepo, listingRepo, sellerRepo, orgRepo, userRepo, inventoryRepo, fulfillmentRepo, auditLog)
 	availabilityProvider := availability.NewCapacityAvailabilityProvider(inventoryRepo, capacityRepo).WithReservations(reservationRepo)
 	availabilityUseCases := availability.NewAvailabilityUseCases(listingRepo, availabilityProvider, nil)
@@ -89,6 +89,10 @@ func main() {
 	mux.HandleFunc("GET /api/v1/orders/{order_id}", pathToQuery("order_id", orders.GetOrderH))
 	mux.HandleFunc("POST /api/v1/orders/{order_id}/cancel", pathToQuery("order_id", orders.CancelOrderH))
 	mux.HandleFunc("POST /api/v1/orders/{order_id}/confirm", pathToQuery("order_id", orders.ConfirmOrderH))
+	// The seller side after confirmation: start preparing, ready, delivered, complete (never the buyer).
+	for _, step := range []string{"process", "ready", "fulfil", "complete"} {
+		mux.HandleFunc("POST /api/v1/orders/{order_id}/"+step, pathToQuery("order_id", orders.OrderStepH(step)))
+	}
 	// Reservations and availability
 	mux.HandleFunc("POST /api/v1/reservations", bookings.CreateReservationH)
 	mux.HandleFunc("GET /api/v1/reservations", api.ListMyReservationsH(reservationRepo))
@@ -110,6 +114,7 @@ func main() {
 	mux.HandleFunc("GET /api/v1/hotels/room-types/{listing_id}/capacity", hotelAPI.CapacityH)
 	// Seller operations (organization staff only)
 	mux.HandleFunc("GET /api/v1/inventory", staff(inventory.ListInventory))
+	mux.HandleFunc("POST /api/v1/inventory/adjust", staff(inventory.AdjustInventoryH))
 	mux.HandleFunc("GET /api/v1/inventory/{inventory_id}", staff(stripAPI(inventory.GetInventory)))
 	mux.HandleFunc("GET /api/v1/fulfillments/{fulfillment_id}", staff(stripAPI(fulfillment.GetFulfillment)))
 	mux.HandleFunc("POST /api/v1/fulfillments/{fulfillment_id}/transition", staff(stripAPI(fulfillment.TransitionFulfillment)))

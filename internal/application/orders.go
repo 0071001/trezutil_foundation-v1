@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -205,7 +206,7 @@ func (u *OrderUseCases) ConfirmOrder(ctx context.Context, actorID string, orderI
 	}
 
 	if order.Status != domain.OrderStatusPaid {
-		return nil, fmt.Errorf("cannot confirm order from status %s: only paid orders can be confirmed", order.Status)
+		return nil, errOrderState("cannot confirm order from status %s: only paid orders can be confirmed", order.Status)
 	}
 
 	now := time.Now().Unix()
@@ -255,8 +256,22 @@ func (u *OrderUseCases) ConfirmOrder(ctx context.Context, actorID string, orderI
 	return order, nil
 }
 
-// ReadyForFulfillment transitions order to READY_FOR_FULFILLMENT and creates fulfillment if needed.
-func (u *OrderUseCases) ReadyForFulfillment(ctx context.Context, actorID string, orderID string) (*domain.Order, error) {
+// errOrderState reports a step the order's current status does not allow (a conflict, not a fault).
+func errOrderState(format string, args ...any) error {
+	return fmt.Errorf("%w: %s", domain.ErrInvalidOrderTransition, fmt.Sprintf(format, args...))
+}
+
+// advanceOrder moves an order one step along the seller-side lifecycle:
+// paid → confirmed → processing → ready_for_fulfillment → fulfilled → completed.
+// Only the seller side may do it (canManageOrder: never the buyer), only from the one status the step
+// starts from, and the order's version guards against two clicks racing: the second one fails with
+// ErrOptimisticLock instead of repeating the step. after runs once the order has been saved.
+func (u *OrderUseCases) advanceOrder(
+	ctx context.Context, actorID, orderID string,
+	from, to domain.OrderStatus, action string,
+	apply func(order *domain.Order, now int64) error,
+	after func(order *domain.Order, now int64) error,
+) (*domain.Order, error) {
 	if actorID == "" {
 		return nil, domain.ErrInsufficientPermissions
 	}
@@ -273,104 +288,88 @@ func (u *OrderUseCases) ReadyForFulfillment(ctx context.Context, actorID string,
 		return nil, domain.ErrInsufficientPermissions
 	}
 
-	if order.Status != domain.OrderStatusProcessing {
-		return nil, fmt.Errorf("cannot set ready for fulfillment from status %s: only processing orders can be ready", order.Status)
+	if order.Status != from {
+		return nil, errOrderState("cannot %s an order that is %s: only %s orders can", action, order.Status, from)
 	}
 
 	now := time.Now().Unix()
-
-	// Transition order
-	if err := order.ReadyForFulfillment(now); err != nil {
+	if err := apply(order, now); err != nil {
 		return nil, err
 	}
-
-	// Create fulfillment if needed (for first item's listing)
-	if len(order.Items) > 0 && u.fulfillmentRepo != nil {
-		listing, err := u.listingRepo.FindByID(ctx, order.Items[0].ListingID)
-		if err == nil {
-			// Infer fulfillment type from listing
-			fulfillmentType := u.inferFulfillmentType(listing)
-			if fulfillmentType != domain.FulfillmentTypeNone {
-				fulfillment := domain.NewFulfillment(
-					order.OrganizationID,
-					&order.ID,
-					nil,
-					fulfillmentType,
-					now,
-				)
-				if err := u.fulfillmentRepo.Create(ctx, fulfillment); err != nil {
-					return nil, fmt.Errorf("failed to create fulfillment: %w", err)
-				}
-			}
-		}
-	}
-
 	if err := u.orderRepo.Update(ctx, order); err != nil {
+		if errors.Is(err, domain.ErrOptimisticLock) {
+			return nil, err
+		}
 		return nil, fmt.Errorf("failed to update order: %w", err)
 	}
 
 	if u.auditLogger != nil {
 		u.auditLogger.Record(ctx, domain.AuditEntry{
 			ActorID:    actorID,
-			Action:     "order.ready_for_fulfillment",
+			Action:     "order." + string(to),
 			TargetType: "order",
 			TargetID:   orderID,
 			Metadata: map[string]interface{}{
-				"previous_status": string(domain.OrderStatusProcessing),
-				"new_status":      string(domain.OrderStatusReadyForFulfillment),
+				"previous_status": string(from),
+				"new_status":      string(to),
 			},
 		})
 	}
 
+	if after != nil {
+		if err := after(order, now); err != nil {
+			return order, err
+		}
+	}
 	return order, nil
+}
+
+// StartProcessing moves a confirmed order to PROCESSING: the seller has started preparing it.
+func (u *OrderUseCases) StartProcessing(ctx context.Context, actorID string, orderID string) (*domain.Order, error) {
+	return u.advanceOrder(ctx, actorID, orderID,
+		domain.OrderStatusConfirmed, domain.OrderStatusProcessing, "start preparing",
+		func(o *domain.Order, now int64) error { return o.Process(now) }, nil)
+}
+
+// ReadyForFulfillment transitions order to READY_FOR_FULFILLMENT and creates the fulfillment record.
+// The record is created after the order is saved, so of two clicks racing only the one that won the
+// order's version creates it.
+func (u *OrderUseCases) ReadyForFulfillment(ctx context.Context, actorID string, orderID string) (*domain.Order, error) {
+	return u.advanceOrder(ctx, actorID, orderID,
+		domain.OrderStatusProcessing, domain.OrderStatusReadyForFulfillment, "mark ready",
+		func(o *domain.Order, now int64) error { return o.ReadyForFulfillment(now) },
+		func(order *domain.Order, now int64) error {
+			if len(order.Items) == 0 || u.fulfillmentRepo == nil {
+				return nil
+			}
+			listing, err := u.listingRepo.FindByID(ctx, order.Items[0].ListingID)
+			if err != nil {
+				return nil
+			}
+			fulfillmentType := u.inferFulfillmentType(listing)
+			if fulfillmentType == domain.FulfillmentTypeNone {
+				return nil
+			}
+			fulfillment := domain.NewFulfillment(order.OrganizationID, &order.ID, nil, fulfillmentType, now)
+			if err := u.fulfillmentRepo.Create(ctx, fulfillment); err != nil {
+				return fmt.Errorf("order is ready, but its fulfillment record could not be created: %w", err)
+			}
+			return nil
+		})
+}
+
+// FulfilOrder moves a ready order to FULFILLED: it has been handed over or delivered.
+func (u *OrderUseCases) FulfilOrder(ctx context.Context, actorID string, orderID string) (*domain.Order, error) {
+	return u.advanceOrder(ctx, actorID, orderID,
+		domain.OrderStatusReadyForFulfillment, domain.OrderStatusFulfilled, "mark delivered",
+		func(o *domain.Order, now int64) error { return o.Fulfil(now) }, nil)
 }
 
 // CompleteOrder completes a fulfilled order.
 func (u *OrderUseCases) CompleteOrder(ctx context.Context, actorID string, orderID string) (*domain.Order, error) {
-	if actorID == "" {
-		return nil, domain.ErrInsufficientPermissions
-	}
-	if orderID == "" {
-		return nil, domain.ErrOrderNotFound
-	}
-
-	order, err := u.orderRepo.FindByID(ctx, orderID)
-	if err != nil {
-		return nil, domain.ErrOrderNotFound
-	}
-
-	if !u.canManageOrder(ctx, order, actorID) {
-		return nil, domain.ErrInsufficientPermissions
-	}
-
-	if order.Status != domain.OrderStatusFulfilled {
-		return nil, fmt.Errorf("cannot complete order from status %s: only fulfilled orders can be completed", order.Status)
-	}
-
-	now := time.Now().Unix()
-
-	if err := order.Complete(now); err != nil {
-		return nil, err
-	}
-
-	if err := u.orderRepo.Update(ctx, order); err != nil {
-		return nil, fmt.Errorf("failed to complete order: %w", err)
-	}
-
-	if u.auditLogger != nil {
-		u.auditLogger.Record(ctx, domain.AuditEntry{
-			ActorID:    actorID,
-			Action:     "order.completed",
-			TargetType: "order",
-			TargetID:   orderID,
-			Metadata: map[string]interface{}{
-				"previous_status": string(domain.OrderStatusFulfilled),
-				"new_status":      string(domain.OrderStatusCompleted),
-			},
-		})
-	}
-
-	return order, nil
+	return u.advanceOrder(ctx, actorID, orderID,
+		domain.OrderStatusFulfilled, domain.OrderStatusCompleted, "complete",
+		func(o *domain.Order, now int64) error { return o.Complete(now) }, nil)
 }
 
 func (u *OrderUseCases) inferFulfillmentType(listing *domain.Listing) domain.FulfillmentType {

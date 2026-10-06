@@ -50,26 +50,6 @@
 
 /* ----------------------------------------------------------------- nav */
 
-.home-nav { background: var(--surface); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 50; }
-.home-nav-inner { align-items: center; display: flex; gap: 1rem; height: 4.4rem; margin: 0 auto; max-width: 76rem; padding: 0 var(--gutter); }
-.home-nav-links { display: flex; gap: 0.15rem; margin-left: 0.8rem; }
-.home-nav-links .action-link { border-radius: 999px; color: var(--muted); font-size: 0.9rem; font-weight: 600; padding: 0.5rem 0.65rem; white-space: nowrap; transition: background 160ms var(--ease), color 160ms var(--ease); }
-.home-nav-links .action-link:hover { background: var(--surface-2); color: var(--text); }
-.home-nav-business { border-left: 1px solid var(--line); color: var(--text); font-size: 0.9rem; font-weight: 600; margin-left: auto; padding: 0.4rem 0 0.4rem 1rem; white-space: nowrap; }
-/* French labels are longer: a little less room around them keeps the whole bar on one line */
-html:lang(fr) .home-nav-links .action-link { font-size: 0.85rem; padding: 0.5rem 0.5rem; }
-html:lang(fr) .home-nav-business { font-size: 0.85rem; padding-left: 0.8rem; }
-html:lang(fr) .home-nav-signin { font-size: 0.85rem; padding: 0.5rem 0.9rem; }
-.home-nav-business:hover { text-decoration: underline; text-underline-offset: 0.2em; }
-.home-nav-actions { align-items: center; display: flex; gap: 0.6rem; }
-.home-nav-signin { border: 1px solid var(--line); white-space: nowrap; border-radius: 999px; color: var(--text); font-size: 0.9rem; font-weight: 600; padding: 0.55rem 1.1rem; transition: border-color 160ms var(--ease); }
-.home-nav-signin:hover { border-color: var(--text); }
-.home-nav-account { align-items: center; background: var(--blue); border-radius: 50%; color: #fff; display: inline-flex; font-size: 0.8rem; font-weight: 700; height: 2.4rem; justify-content: center; width: 2.4rem; }
-.home-nav-menu { display: none; }
-.home-menu { background: var(--surface); border-bottom: 1px solid var(--line); display: grid; gap: 0.1rem; padding: 0.5rem var(--gutter) 1rem; }
-.home-menu .action-link { align-items: center; border-bottom: 1px solid var(--line); color: var(--text); display: flex; font-weight: 600; gap: 0.7rem; padding: 0.9rem 0.1rem; }
-.home-menu .action-link:last-of-type { border-bottom: 0; }
-.home-menu .drawer-lang { margin-top: 0.6rem; }
 
 /* ---------------------------------------------------------------- hero */
 
@@ -282,6 +262,42 @@ html:lang(fr) .home-lede { margin: 0; max-width: 34rem; }
 .about-actions { align-items: center; display: flex; flex-wrap: wrap; gap: 1rem 1.8rem; }
 .about-business { border-top: 1px solid var(--line); color: var(--muted); margin: 2.6rem 0 0; max-width: 40rem; padding-top: 1.2rem; }
 
+/* ------------------------------------------------------------------ legal */
+/* the legal pages: a calm reading column with the list of documents beside it */
+
+.legal-page { align-items: start; display: grid; gap: clamp(1.5rem, 4vw, 3.5rem); grid-template-columns: 14rem minmax(0, 44rem); }
+.legal-nav { display: grid; gap: 0.2rem; position: sticky; top: 5.5rem; }
+.legal-nav .action-link { border-left: 2px solid var(--line); color: var(--muted); font-size: 0.9rem; font-weight: 600; padding: 0.45rem 0.8rem; }
+.legal-nav .action-link:hover { color: var(--text); }
+.legal-nav .action-link.active { border-left-color: var(--link); color: var(--text); }
+.legal-draft { background: #fff4d6; border: 1px solid #e3c27a; border-radius: 0.8rem; color: #5b3d00; font-size: 0.9rem; line-height: 1.5; margin: 0 0 1.4rem; padding: 0.8rem 1rem; }
+.app.home.dark .legal-draft { background: #3a2c0a; border-color: #8a6a1e; color: #f4dc9a; }
+.legal-draft + .heading { margin-top: 0; }
+.app.home .legal-doc .heading { font-size: clamp(1.9rem, 4vw, 2.8rem); font-weight: 600; letter-spacing: -0.04em; line-height: 1.08; margin: 0; }
+.legal-updated { color: var(--muted); font-size: 0.85rem; margin: 0.6rem 0 0; }
+.legal-intro { color: var(--text); font-size: 1.08rem; line-height: 1.6; margin: 1.2rem 0 0; }
+.legal-toc { background: var(--card); border: 1px solid var(--line); border-radius: 0.9rem; margin: 1.6rem 0 0.5rem; padding: 0.9rem 1.2rem; }
+.legal-toc ol { columns: 2; column-gap: 2rem; margin: 0; padding-left: 1.2rem; }
+.legal-toc li { break-inside: avoid; margin: 0.15rem 0; }
+.legal-toc a { font-size: 0.9rem; }
+.legal-doc section { border-top: 1px solid var(--line); margin-top: 1.8rem; padding-top: 1.4rem; scroll-margin-top: 5.2rem; }
+.legal-doc h2 { color: var(--text); font: 700 1.2rem/1.25 "Manrope", sans-serif; letter-spacing: -0.02em; margin: 0 0 0.7rem; }
+.legal-doc h2 span { color: var(--muted); font-weight: 600; margin-right: 0.3rem; }
+.legal-doc p, .legal-doc li { color: var(--text); font-size: 0.98rem; line-height: 1.65; }
+.legal-doc p { margin: 0 0 0.8rem; max-width: 42rem; }
+.legal-doc ul { list-style: disc; margin: 0 0 0.8rem; padding-left: 1.3rem; }
+.legal-doc li::marker { color: var(--muted); }
+.legal-toc ol { list-style: decimal; }
+.legal-doc li { margin: 0 0 0.4rem; max-width: 42rem; }
+.legal-todo { background: #ffe9a8; border: 1px dashed #b8860b; border-radius: 0.3rem; color: #4d3500; font-weight: 600; padding: 0.02rem 0.3rem; }
+.app.home.dark .legal-todo { background: #4a3a10; border-color: #b8860b; color: #f4dc9a; }
+.legal-link, .legal-doc a { color: var(--link); text-decoration: underline; text-underline-offset: 0.2em; }
+.footer-legal { display: flex; flex-wrap: wrap; gap: 0.3rem 1.2rem; }
+.footer-legal .action-link { color: #8195a8; font-size: 0.78rem; }
+.footer-legal .action-link:hover { color: #fff; }
+.legal-consent a { text-decoration: underline; text-underline-offset: 0.2em; }
+@media (max-width: 900px) { .legal-page { grid-template-columns: 1fr; } .legal-nav { display: flex; flex-wrap: wrap; position: static; } .legal-nav .action-link { border: 1px solid var(--line); border-radius: 999px; } .legal-nav .action-link.active { background: var(--card); border-color: var(--link); } .legal-toc ol { columns: 1; } }
+
 /* ---------------------------------------------------------------- footer */
 
 .home-footer-main { display: grid; gap: 3rem; grid-template-columns: 1.6fr repeat(4, 1fr); margin: 0 auto; max-width: 76rem; padding: 4rem var(--gutter) 3rem; }
@@ -318,16 +334,6 @@ html:lang(fr) .home-lede { margin: 0; max-width: 34rem; }
   .home-business-inner { grid-template-areas: "copy" "photo" "caps"; grid-template-columns: 1fr; }
   .business-photo { max-height: 20rem; min-height: 14rem; }
 }
-@media (max-width: 1180px) {
-  .home-nav-links, .home-nav-business, .home-nav-signin { display: none; }
-  .home-nav-menu { display: flex; }
-  .home-nav-actions { margin-left: auto; }
-}
-@media (max-width: 1365px) { /* French is longer: the bar needs about 1366 pixels, below that the menu button takes over, as it does at 1180 in English */
-  html:lang(fr) .home-nav-links, html:lang(fr) .home-nav-business, html:lang(fr) .home-nav-signin { display: none; }
-  html:lang(fr) .home-nav-menu { display: flex; }
-  html:lang(fr) .home-nav-actions { margin-left: auto; }
-}
 @media (max-width: 900px) {
   .home-footer-main { grid-template-columns: 1fr 1fr; }
   .home-footer-main .footer-brand { grid-column: 1 / -1; }
@@ -339,8 +345,6 @@ html:lang(fr) .home-lede { margin: 0; max-width: 34rem; }
   .app.home .trust-icon { height: 3.6rem; width: 3.6rem; }
 }
 @media (max-width: 640px) {
-  .home-nav-inner { height: 4rem; }
-  .home-nav-actions .lang-switch { display: none; } /* the menu carries the language switch */
   .need-field { min-height: 7.4rem; padding: 1.1rem 1.1rem 0.4rem; }
   .need-hint { display: none; }
   .need-send { margin-left: auto; }

@@ -104,6 +104,12 @@ func (u *OrganizationUseCases) UpdateOrganization(ctx context.Context, actorID, 
 	if address, ok := updates["address"].(*string); ok {
 		org.Address = address
 	}
+	if province, ok := updates["province"].(*string); ok {
+		org.Province = province
+	}
+	if city, ok := updates["city"].(*string); ok {
+		org.City = city
+	}
 
 	org.UpdatedAt = time.Now().Unix()
 
@@ -201,6 +207,18 @@ func (u *OrganizationUseCases) RemoveMember(ctx context.Context, actorID, organi
 	}
 
 	if memberRole != domain.OrganizationRoleOwner && memberRole != domain.OrganizationRoleAdmin {
+		return domain.ErrInsufficientPermissions
+	}
+	// An owner is never removed from the workspace (an admin could otherwise take the business over), and only
+	// an owner removes an admin.
+	targetRole, err := u.orgRepo.GetMemberRole(ctx, organizationID, userID)
+	if err != nil {
+		return domain.ErrNotMember
+	}
+	if targetRole == domain.OrganizationRoleOwner {
+		return domain.ErrOwnerProtected
+	}
+	if targetRole == domain.OrganizationRoleAdmin && memberRole != domain.OrganizationRoleOwner {
 		return domain.ErrInsufficientPermissions
 	}
 

@@ -108,7 +108,7 @@ export default function DetailPage() {
   }
 
   return (
-    <AppShell dockPrompt={ask}>
+    <AppShell>
       <section className="page-section detail-page">
         <nav className="breadcrumbs" aria-label={t('Breadcrumb')}><ActionLink href="/">{t('Home')}</ActionLink><Icon name="chevron" size={13} /><ActionLink href={copy.crumbHref}>{t(copy.crumb)}</ActionLink><Icon name="chevron" size={13} /><span aria-current="page">{l.title}</span></nav>
         <div className="detail-grid">

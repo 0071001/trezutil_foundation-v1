@@ -9,6 +9,10 @@ import '@/styles/app.css'
 import '@/styles/portal.css'
 // The home page ("tell us what you need"): scoped under `.app.home`.
 import '@/styles/home.css'
+// Organiser: the question and the mission it becomes; scoped under .organise.
+import '@/styles/organise.css'
+// The primary navigation (How it works, Discover, Organise, Activities); follows the tokens of both frames.
+import '@/styles/nav.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

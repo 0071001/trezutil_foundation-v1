@@ -57,7 +57,7 @@ function GroupRow({ group }: { group: NeedGroup }) {
       <ul className="need-asks">
         {group.needs.map((need) => (
           <li key={need}>
-            <button type="button" onClick={() => openConversation(navigate, t(need))}>
+            <button type="button" onClick={() => (group.askAt ? navigate(`${group.askAt}?q=${encodeURIComponent(t(need))}`) : openConversation(navigate, t(need)))}>
               <span>“{t(need)}”</span>
               <Icon name="arrow" size={15} />
             </button>
@@ -157,11 +157,11 @@ export function DiscoverySection() {
  * what Trezutil and the business do in blue (`data-side`, drawn in CSS).
  */
 const STEPS: { who: string; title: string; copy: string; side: 'you' | 'us' }[] = [
-  { who: tx('You'), title: tx('You say what you need'), copy: tx('In your own words, written or spoken.'), side: 'you' },
-  { who: tx('Trezutil'), title: tx('We understand it'), copy: tx('Budget, place, date: we ask only what we need to find the right thing.'), side: 'us' },
-  { who: tx('The offers'), title: tx('You see what fits'), copy: tx('Products, services, places and providers that match, with their availability.'), side: 'us' },
-  { who: tx('You'), title: tx('You act'), copy: tx('Buy, book or pay online, from the conversation.'), side: 'you' },
-  { who: tx('The business'), title: tx('It confirms'), copy: tx('The seller receives the order or the booking, confirms it and follows it from its own space.'), side: 'us' },
+  { who: tx('Conversation'), title: tx('You say what you need'), copy: tx('In your own words, written or spoken.'), side: 'you' },
+  { who: tx('Intention'), title: tx('We understand it'), copy: tx('Budget, place, date: we ask only what we need to find the right thing.'), side: 'us' },
+  { who: tx('Discovery'), title: tx('You see what fits'), copy: tx('Products, services, places and providers that match, with their availability.'), side: 'us' },
+  { who: tx('Action'), title: tx('You act'), copy: tx('Buy, book or pay online, from the conversation.'), side: 'you' },
+  { who: tx('Transaction'), title: tx('It confirms'), copy: tx('The seller receives the order or the booking, confirms it and follows it from its own space.'), side: 'us' },
 ]
 
 const ACTIONS: { label: string; soon?: boolean }[] = [
@@ -172,7 +172,7 @@ const ACTIONS: { label: string; soon?: boolean }[] = [
 export function LoopSection() {
   return (
     <section className="home-section home-loop" id="how" aria-labelledby="how-title">
-      <SectionHeading id="how-title" title={t('From your need to the action')} copy={t('You don’t have to search everywhere. This is what happens when you ask.')} />
+      <SectionHeading id="how-title" title={t('From your need to the action')} copy={t('Trezutil is not a listing site: it is one commerce system, from the conversation to the transaction.')} />
       <ol className="loop">
         {STEPS.map((step, i) => (
           <li key={step.title} data-side={step.side}>

@@ -45,6 +45,21 @@ describe('customer hotel stay', () => {
     expect(screen.getByRole('button', { name: /reserve suite/i })).toBeEnabled()
   })
 
+  it('offers to ask Trezutil about the hotel inline, as the other pages do, and has no bar across the page', async () => {
+    mockApi({
+      'GET /listings': () => ({ body: listing }),
+      'GET /stores': () => ({ body: { Name: 'Hotel du Fleuve' } }),
+      'POST /search': () => ({ body: { items: [] } }),
+      'GET /verticals': () => ({ status: 503, body: {} }),
+      'GET /hotels/property': () => ({ body: property }),
+    })
+    const { container } = renderAt('/hotels/r1')
+    await screen.findByRole('heading', { level: 1, name: 'Hotel du Fleuve' })
+    const ask = screen.getByRole('link', { name: /Ask Trezutil about this hotel/ })
+    expect(ask).toHaveAttribute('href', `/conversation?q=${encodeURIComponent('Show me Hotel du Fleuve')}`)
+    expect(container.querySelector('.conversation-dock')).toBeNull()
+  })
+
   it('refuses impossible stays before asking the server', async () => {
     const { calls } = mockApi({
       'GET /listings': () => ({ body: listing }),

@@ -76,9 +76,9 @@ export function SellerLayout() {
   const groups = useMemo(() => shellGroups('seller', { canManage }), [canManage])
 
   if (orgsStatus === 'idle' || (orgsStatus === 'loading' && orgs.length === 0)) return <PortalLoading label={t('Loading your business…')} />
-  if (orgsStatus === 'error') return <AppShell hideDock><div className="seller-state"><ErrorState error={orgsError ?? t('Could not load')} onRetry={portals.reload} /></div></AppShell>
+  if (orgsStatus === 'error') return <AppShell><div className="seller-state"><ErrorState error={orgsError ?? t('Could not load')} onRetry={portals.reload} /></div></AppShell>
   // A signed-in account that belongs to no business has no workspace yet: the onboarding page explains the steps.
-  if (!org) return <AppShell hideDock><SellerOnboardingPage /></AppShell>
+  if (!org) return <AppShell><SellerOnboardingPage /></AppShell>
 
   const selectOrg = (id: string) => { setSelected(id); try { localStorage.setItem(ORG_KEY, id) } catch { /* ignore */ } }
   return (

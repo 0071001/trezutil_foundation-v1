@@ -1,0 +1,82 @@
+/*
+ * The primary navigation: "How it works" and three menus that open under their word (src/components/nav.tsx).
+ *
+ * Light on purpose: the words stay as they were in the header, a small caret says a word opens, and the panel is one
+ * short list with a hairline, a soft shadow and one line under each entry. No gradient, no glow, no cards, no
+ * badges. It uses the tokens both frames define (--surface, --text, --muted, --line, --blue), so it follows light
+ * and dark mode in the product shell and in the home frame. The phone's menus use the same words, grouped.
+ */
+
+.site-nav { align-items: center; display: flex; gap: 0.2rem; }
+
+/* Where it sits: next to the brand, on every page and at every width, with the actions pushed to the right. (It used to be
+   centred on the page, which left it nothing to give when the bar is crowded and made it collide with the actions.) */
+.nav-inner > .desktop-nav { left: auto; margin: 0 0 0 1.4rem; position: static; top: auto; transform: none; }
+
+/* The four entries are one size and one box: the link and the three buttons line up on the same baseline, with the
+   same height and padding, a picture before each word, and the same rounded rest state when the pointer is on them. */
+.site-nav > .action-link, .site-nav-trigger { align-items: center; border-radius: 999px; color: var(--muted); display: inline-flex; font: 600 0.97rem/1 "DM Sans", sans-serif; gap: 0.5rem; height: 2.6rem; padding: 0 0.9rem; transition: background 160ms var(--ease), color 160ms var(--ease); white-space: nowrap; }
+.site-nav > .action-link:hover, .site-nav-trigger:hover { background: var(--surface-2, var(--ice)); color: var(--text); }
+.site-nav > .action-link .icon, .site-nav-trigger > .icon { flex: none; opacity: 0.9; }
+html:lang(fr) .site-nav > .action-link, html:lang(fr) .site-nav-trigger { font-size: 0.93rem; padding: 0 0.78rem; }
+
+/* The header is one for every page; on the home page it scrolls with the page instead of being fixed over it. */
+.navbar.is-sticky { position: sticky; }
+.nav-business { border-left: 1px solid var(--line); color: var(--text); font-size: 0.82rem; font-weight: 600; padding: 0.35rem 0 0.35rem 0.9rem; white-space: nowrap; }
+.nav-business:hover { text-decoration: underline; text-underline-offset: 0.2em; }
+.nav-signin { border: 1px solid var(--line); border-radius: 999px; color: var(--text); font-size: 0.82rem; font-weight: 600; padding: 0.5rem 1rem; white-space: nowrap; transition: border-color 160ms var(--ease); }
+.nav-signin:hover { border-color: var(--text); }
+@media (max-width: 1360px) { .nav-business { display: none; } } /* it is in the phone menu and the footer too */
+.site-nav-item { position: relative; }
+
+/* the word that opens a menu looks like the plain links around it (the header's own rules style `.action-link`) */
+.site-nav-trigger { background: transparent; border: 0; cursor: pointer; }
+.site-nav-trigger[aria-expanded="true"] { color: var(--text); }
+.site-nav-caret { border-bottom: 1.5px solid currentColor; border-right: 1.5px solid currentColor; flex: none; height: 0.36rem; margin-top: -0.18rem; opacity: 0.75; transform: rotate(45deg); transition: transform 160ms var(--ease), margin 160ms var(--ease); width: 0.36rem; }
+.site-nav-trigger[aria-expanded="true"] .site-nav-caret { margin-top: 0.14rem; transform: rotate(-135deg); }
+
+.site-nav-panel {
+  animation: site-nav-in 170ms var(--ease) both;
+  background: var(--card, var(--surface));
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  box-shadow: var(--card-shadow, 0 14px 36px rgba(11, 18, 32, 0.12));
+  left: 50%;
+  margin-top: 0.55rem;
+  min-width: 21.5rem;
+  padding: 0.4rem;
+  position: absolute;
+  top: 100%;
+  transform: translateX(-50%);
+  z-index: 60;
+}
+@keyframes site-nav-in {
+  from { opacity: 0; transform: translate(-50%, -4px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+/* the gap between the word and its panel must not close the menu when the pointer crosses it */
+.site-nav-panel::before { content: ""; height: 0.7rem; left: 0; position: absolute; right: 0; top: -0.7rem; }
+
+.site-nav-panel ul { list-style: none; margin: 0; padding: 0; }
+.site-nav-link { align-items: center; border-radius: 0.7rem; color: var(--text); display: flex; gap: 0.9rem; padding: 0.65rem 0.75rem; text-decoration: none; transition: background 140ms var(--ease); }
+.site-nav-link:hover, .site-nav-link:focus-visible { background: var(--surface-2, var(--ice)); }
+.site-nav-link:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+.site-nav-icon { align-items: center; background: var(--blue-soft); border-radius: 0.65rem; color: var(--blue); display: inline-flex; flex: none; height: 2.3rem; justify-content: center; width: 2.3rem; }
+.site-nav-text { display: grid; gap: 0.1rem; min-width: 0; }
+.site-nav-text strong { font: 700 0.98rem "Manrope", sans-serif; letter-spacing: -0.01em; }
+.site-nav-text small { color: var(--muted); font-size: 0.84rem; font-weight: 500; line-height: 1.35; }
+.site-nav-note { border-top: 1px solid var(--line); color: var(--muted); font-size: 0.8rem; line-height: 1.45; margin: 0.4rem 0.4rem 0.2rem; padding-top: 0.7rem; }
+.site-nav-note a { color: var(--blue); font-weight: 700; text-decoration: none; }
+.site-nav-note a:hover { text-decoration: underline; text-underline-offset: 0.2em; }
+
+/* the phone's menus: the same words, grouped under their own heading */
+.nav-group { border-top: 1px solid var(--line); margin-top: 0.5rem; padding-top: 0.2rem; }
+.nav-group > h3 { align-items: center; color: var(--muted); display: flex; font: 700 0.72rem "DM Sans", sans-serif; gap: 0.45rem; letter-spacing: 0.12em; margin: 0.7rem 0 0.1rem; text-transform: uppercase; }
+.nav-group-text { display: grid; gap: 0.05rem; }
+.nav-group-text small { color: var(--muted); font-size: 0.78rem; font-weight: 500; }
+.nav-group .site-nav-note { border-top: 0; margin: 0.2rem 0 0.4rem; padding: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .site-nav-panel { animation: none; }
+  .site-nav-caret, .site-nav-link { transition: none; }
+}

@@ -59,6 +59,9 @@ type Config struct {
 	Lockout          time.Duration
 	Clock            Clock
 	Logger           zerolog.Logger
+	// OnPhoneSignIn runs after a successful one-time-code sign-in (team invitations become memberships). Its
+	// failure is logged and never fails the sign-in. Optional.
+	OnPhoneSignIn func(ctx context.Context, userID, phone string) error
 }
 
 // Service issues and verifies OTP challenges and manages sessions.
@@ -175,6 +178,11 @@ func (s *Service) VerifyOTP(ctx context.Context, challengeID, code string) (*Ses
 	user, err := s.FindOrCreateVerifiedUser(ctx, challenge.Phone)
 	if err != nil {
 		return nil, err
+	}
+	if s.cfg.OnPhoneSignIn != nil {
+		if err := s.cfg.OnPhoneSignIn(ctx, user.ID, user.Phone); err != nil {
+			s.cfg.Logger.Error().Err(err).Str("event", "sign_in_hook_failed").Msg("team invitations could not be accepted at sign-in")
+		}
 	}
 	return s.issueSession(user)
 }

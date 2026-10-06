@@ -48,9 +48,9 @@ function SingleCheckout() {
 
   useEffect(() => { document.title = t('Secure checkout — Trezutil') }, [])
 
-  if (!listingId) return <AppShell hideDock><EmptyState icon="orders" title={t('Nothing to check out')} copy={t('Choose something to buy first — your bag keeps what you’ve picked.')} action={t('Open your bag')} href="/cart" /></AppShell>
-  if (listing.loading) return <AppShell hideDock><Loading label={t('Preparing checkout…')} /></AppShell>
-  if (listing.error || !listing.data) return <AppShell hideDock><section className="page-section"><ErrorState error={listing.error ?? t('Listing not found')} onRetry={listing.reload} /></section></AppShell>
+  if (!listingId) return <AppShell><EmptyState icon="orders" title={t('Nothing to check out')} copy={t('Choose something to buy first — your bag keeps what you’ve picked.')} action={t('Open your bag')} href="/cart" /></AppShell>
+  if (listing.loading) return <AppShell><Loading label={t('Preparing checkout…')} /></AppShell>
+  if (listing.error || !listing.data) return <AppShell><section className="page-section"><ErrorState error={listing.error ?? t('Listing not found')} onRetry={listing.reload} /></section></AppShell>
 
   const l = listing.data
   const step = !order ? 1 : isAwaitingPayment(order) ? 2 : 3
@@ -71,7 +71,7 @@ function SingleCheckout() {
   }
 
   return (
-    <AppShell hideDock>
+    <AppShell>
       <section className="page-section checkout-page">
         <div className="checkout-head"><Brand /><span><Icon name="check" size={15} />{t('Secure checkout')}</span></div>
         <Progress step={step} />
@@ -160,9 +160,9 @@ function BagCheckout() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listings.data])
 
-  if (bag.length === 0 && !order) return <AppShell hideDock><EmptyState icon="orders" title={t('Your bag is empty')} copy={t('Add products while you explore — they stay here until you’re ready to order.')} action={t('Start discovering')} href="/discover" /></AppShell>
-  if (listings.loading) return <AppShell hideDock><Loading label={t('Preparing checkout…')} /></AppShell>
-  if (listings.error) return <AppShell hideDock><section className="page-section"><ErrorState error={listings.error} onRetry={listings.reload} /></section></AppShell>
+  if (bag.length === 0 && !order) return <AppShell><EmptyState icon="orders" title={t('Your bag is empty')} copy={t('Add products while you explore — they stay here until you’re ready to order.')} action={t('Start discovering')} href="/discover" /></AppShell>
+  if (listings.loading) return <AppShell><Loading label={t('Preparing checkout…')} /></AppShell>
+  if (listings.error) return <AppShell><section className="page-section"><ErrorState error={listings.error} onRetry={listings.reload} /></section></AppShell>
 
   const group = groups.length === 1 ? groups[0] : groups.find((g) => g.key === chosen)
   const qty = (l: ListingDetail, fallback: number) => Math.max(1, Math.min(99, quantities[l.id] ?? fallback))
@@ -189,7 +189,7 @@ function BagCheckout() {
   }
 
   return (
-    <AppShell hideDock>
+    <AppShell>
       <section className="page-section checkout-page">
         <div className="checkout-head"><Brand /><span><Icon name="check" size={15} />{t('Secure checkout')}</span></div>
         <Progress step={step} />

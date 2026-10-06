@@ -75,7 +75,7 @@ export default function ConversationPage() {
   const myRequests = thread.turns.filter((t) => t.role === 'user').slice(-6).reverse()
 
   return (
-    <AppShell compact hideDock>
+    <AppShell compact>
       <div className="conversation-app">
         <aside className={`chat-sidebar ${sidebar ? 'open' : ''}`} aria-label={t('Conversation')}>
           <Button className="new-chat" onClick={reset}><Icon name="spark" />{t('New conversation')}</Button>

@@ -116,7 +116,7 @@ export function HotelDetail({ listing }: { listing: ListingDetail }) {
 
   const where = [hotel.address, hotel.city].filter(Boolean).join(', ')
   return (
-    <AppShell dockPrompt={t('Show me {name}', { name: hotel.name })}>
+    <AppShell>
       <section className="page-section detail-page hotel-page">
         <nav className="breadcrumbs" aria-label={t('Breadcrumb')}><ActionLink href="/">{t('Home')}</ActionLink><Icon name="chevron" size={13} /><ActionLink href="/search?vertical=HOTEL">{t('Hotels')}</ActionLink><Icon name="chevron" size={13} /><span aria-current="page">{hotel.name}</span></nav>
         <div className="detail-grid">
@@ -139,6 +139,7 @@ export function HotelDetail({ listing }: { listing: ListingDetail }) {
                 <Button className="primary-button" onClick={reserve} disabled={!chosenOffer?.available}>{chosenOffer?.available ? t('Reserve {title}', { title: current!.title }) : t('Reserve')}<Icon name="arrow" size={18} /></Button>
               </div>
             </form>
+            <ActionLink className="detail-ask" href={`/conversation?q=${encodeURIComponent(t('Show me {name}', { name: hotel.name }))}`}><span className="dock-logo"><Icon name="spark" /></span><span><strong>{t('Ask Trezutil about this hotel')}</strong><small>{t('Compare, check details or ask what matters')}</small></span><Icon name="arrow" /></ActionLink>
             {quote && (
               <div className={`inline-notice ${quote.offers.some((o) => o.available) ? 'success' : 'error'}`} role="status">
                 <Icon name={quote.offers.some((o) => o.available) ? 'check' : 'bell'} size={16} />

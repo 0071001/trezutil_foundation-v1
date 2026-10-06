@@ -45,5 +45,5 @@ export function SellerOnboardingPage() {
 
 /** Public route (/seller/onboarding) — the same page inside the app shell. */
 export function SellerOnboardingRoute() {
-  return <AppShell hideDock><SellerOnboardingPage /></AppShell>
+  return <AppShell><SellerOnboardingPage /></AppShell>
 }

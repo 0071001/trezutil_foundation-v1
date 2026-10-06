@@ -1,0 +1,53 @@
+# The edge of a Trezutil deployment: TLS, then the gateway.
+#
+# Caddy gets and renews the certificate by itself (Let's Encrypt) for PUBLIC_HOST, answers on 80
+# only to redirect to 443, and forwards everything else to the API gateway, the only service
+# that faces the outside (it serves the web app and /api/v1/*). Run it with:
+#
+#   docker compose -f deployments/docker/docker-compose.app.yml \
+#                  -f deployments/docker/docker-compose.proxy.yml \
+#                  --env-file deployments/docker/app.env up -d
+#
+# Needs, in app.env: PUBLIC_HOST (the domain, DNS pointing at this host), ACME_EMAIL (a mailbox
+# Let's Encrypt can reach), TRUSTED_PROXY_HOPS=1 and CORS_ALLOWED_ORIGINS=https://<PUBLIC_HOST>.
+{
+	email {$ACME_EMAIL}
+}
+
+{$PUBLIC_HOST} {
+	encode zstd gzip
+
+	# The gateway refuses bodies over 1 MiB (a logo upload is at most 512 KiB); stop anything bigger here.
+	request_body {
+		max_size 2MB
+	}
+
+	# The administration console and the staff sign-in are for the team, not for the internet: only
+	# the addresses in ADMIN_ALLOW_IPS (space-separated addresses or ranges, for example the office or a
+	# VPN) may reach them. The default, 127.0.0.1, shuts everyone out, which is the safe state: set the
+	# variable before the first staff sign-in, or open a tunnel to the host.
+	@admin_denied {
+		path /admin /admin/* /api/v1/admin /api/v1/admin/* /api/v1/auth/staff/*
+		not remote_ip {$ADMIN_ALLOW_IPS:127.0.0.1}
+	}
+	respond @admin_denied "Forbidden" 403
+
+	# No version banner.
+	header -Server
+
+	reverse_proxy api-gateway:8080 {
+		# This proxy is the edge: whatever the client sent as X-Forwarded-For is replaced by what we saw,
+		# so the gateway's per-IP limits and logs see the real client (TRUSTED_PROXY_HOPS=1).
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+
+		health_uri /healthz
+		health_interval 15s
+		health_timeout 3s
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ClipboardEvent, type FormEvent, type 
 import { Navigate, useNavigate, useSearchParams } from 'react-router'
 import { authApi } from '@/api/auth'
 import { toApiError } from '@/api/client'
+import { LegalConsent } from '@/components/legal'
 import { AppShell } from '@/components/shell'
 import { Brand, Button, Field, Heading, Icon, type IconName } from '@/components/ui'
 import { safeReturnTo, useSession } from '@/lib/session'
@@ -136,7 +137,7 @@ export default function AuthPage({ mode = 'login' }: { mode?: 'login' | 'registe
   const onPaste = (e: ClipboardEvent<HTMLInputElement>) => { e.preventDefault(); fill(e.clipboardData.getData('text')) }
 
   return (
-    <AppShell compact hideDock>
+    <AppShell compact>
       <div className="auth-page">
         <div className="auth-visual">
           <Brand />
@@ -152,12 +153,13 @@ export default function AuthPage({ mode = 'login' }: { mode?: 'login' | 'registe
             <div className="mobile-auth-brand"><Brand /></div>
             <div className="section-eyebrow">{mode === 'register' ? t('Create account') : t('Welcome')}</div>
             <Heading level={2}>{mode === 'register' ? t('Start with Trezutil') : t('Sign in to Trezutil')}</Heading>
-            <p>{expired ? t('For your security, please sign in again.') : t('Enter your phone number. We’ll text you a 6-digit code — no password needed. New here? Your account is created on first sign-in.')}</p>
+            <p>{expired ? t('For your security, please sign in again.') : t('Enter your phone number. We’ll send you a 6-digit code on WhatsApp — no password needed. New here? Your account is created on first sign-in.')}</p>
             <Field label={t('Phone number')} error={error ?? undefined}>
               <input type="tel" inputMode="tel" autoComplete="tel" placeholder="+243 81 234 5678" value={phone} onChange={(e) => { setPhone(e.target.value); setError(null) }} autoFocus aria-invalid={!!error} />
             </Field>
             <Button className="primary-button full-button" type="submit" busy={busy}>{busy ? t('Sending code…') : t('Send code')}<Icon name="arrow" /></Button>
-            <p className="auth-switch">{t('By continuing you agree to receive a one-time SMS code.')}</p>
+            <p className="auth-switch">{t('By continuing you agree to receive a one-time code on WhatsApp.')}</p>
+            <LegalConsent />
           </form>
         ) : (
           <form className="auth-card" onSubmit={(e) => { e.preventDefault(); void verify(digits.join('')) }} noValidate>

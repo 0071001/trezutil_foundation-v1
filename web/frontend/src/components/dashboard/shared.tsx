@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { Analytics, DayCount } from '@/api/analytics'
+import type { Analytics, DayCount, RankedEntry } from '@/api/analytics'
 import { ChartCard } from '@/components/charts/ChartCard'
 import { compact } from '@/components/charts/scale'
 import { TimeChart, seriesTable } from '@/components/charts/TimeChart'
@@ -78,5 +78,33 @@ export function CountCard({ title, subtitle, series, kind = 'bars', unit, wide }
     <ChartCard title={title} subtitle={subtitle} wide={wide} empty={values.every((v) => v === 0) ? t('Nothing in this period.') : undefined} table={seriesTable(dates(series), chart)}>
       <TimeChart label={title} dates={dates(series)} series={chart} kind={kind} />
     </ChartCard>
+  )
+}
+
+/**
+ * A ranking: position, name, what it is ranked on, the money it brought (each currency apart),
+ * and a thin bar for its share of the leader. The bar is decoration; the numbers are in the text.
+ */
+export function RankedList({ label, entries, empty, meta, weight }: {
+  label: string
+  entries: RankedEntry[]
+  empty: string
+  /** What each entry is ranked on, in words: "38 orders". */
+  meta: (entry: RankedEntry) => string
+  /** The number the bars compare: orders, units. */
+  weight: (entry: RankedEntry) => number
+}) {
+  if (entries.length === 0) return <p className="tzc-empty">{empty}</p>
+  const top = Math.max(1, ...entries.map(weight))
+  return (
+    <ol className="tz-rank" aria-label={label}>
+      {entries.map((e, i) => (
+        <li key={e.id}>
+          <span className="pos" aria-hidden="true">{i + 1}</span>
+          <span className="name">{e.name}<small>{meta(e)}</small><span className="share" aria-hidden="true"><i style={{ width: `${Math.max(3, Math.round((weight(e) / top) * 100))}%` }} /></span></span>
+          <span className="amount">{revenueList(e.revenue) || '—'}</span>
+        </li>
+      ))}
+    </ol>
   )
 }

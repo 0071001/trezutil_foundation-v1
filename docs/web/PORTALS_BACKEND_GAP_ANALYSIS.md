@@ -125,6 +125,8 @@ POST /capacity/{inventory_id}        {from, to, units}                          
 RESTAURANT tables, SERVICES slots and VEHICLE fleets depend on this (L2). *Persistence:* tables exist (`inventory_resources`, `capacity_units`, `*_audit`); a **low-stock threshold** needs a column if wanted.
 
 **G-A6 · Order lifecycle.** *Exists:* `OrderUseCases.ReadyForFulfillment`, `CompleteOrder` (seller-only); fulfilment transition/assign/tracking routes (by fulfilment id).
+
+> **BUILT 2026-10-05 (the lifecycle; not the fulfilment id).** `POST /orders/{id}/process | ready | fulfil | complete` (with the existing `/confirm`) carry an order paid → confirmed → processing → ready → fulfilled → completed. Seller side only (owner, admin or manager of the business, or platform staff; never the buyer); each step starts from exactly one status (a wrong one is a 409 `INVALID_TRANSITION`) and two clicks racing are a 409 `ORDER_CHANGED`. The fulfilment record is created when the order becomes ready, once. The seller Orders page offers the next step of each order. **Still missing:** orders do not return their fulfilment id, and there is no courier assignment or tracking screen, so the seller *Fulfilment* module stays unavailable. See `docs/finalization/CONSOLE_MODULES.md`.
 ```
 POST /orders/{id}/ready        POST /orders/{id}/complete        (MGR)
 GET  /orders/{id}  → adds fulfillment_id, payment_id, status history
@@ -143,6 +145,8 @@ GET  /fulfillments?order_id=|reservation_id=                     (OWN or MGR or 
 ### Group B — missing read models
 
 **G-B1 · Organizations (admin).**
+
+> **BUILT 2026-10-05 (the list).** `GET /admin/organizations?q=&status=&page=&page_size=` (admin or operator): name, type, status, verification, place, and the counts of members, stores, live listings and orders; no phone or email. **Not built:** the detail aggregate, the verification filter, and any action (onboarding stays with the team).
 ```
 GET /admin/organizations?q=&status=&verification=&vertical=&limit=&offset=
     → {items:[{id, display_name, legal_name, status, verification_status, created_at, owner:{user_id}, counts:{members, stores, listings, orders_30d}}], total}
@@ -152,6 +156,8 @@ GET /admin/organizations/{id}
 `ADMIN|OP`. No new tables (joins over existing). Today `GET /organizations` returns **one** organization by id and requires membership or `OP`.
 
 **G-B2 · Platform commerce search and exceptions.**
+
+> **BUILT 2026-10-05 (orders and reservations).** `GET /admin/orders` and `GET /admin/reservations` (`?q=&status=&page=&page_size=`, admin or operator): newest first, searchable by id, business, customer (and listing for bookings), names only. **Not built:** payments across businesses, the exceptions feed, the filters by business, vertical and date.
 ```
 GET /admin/orders?q=&status=&organization_id=&seller_id=&customer_id=&vertical=&from=&to=&limit=&offset=
 GET /admin/reservations?…same filters…
@@ -200,6 +206,8 @@ GET /analytics/reservations?…  GET /analytics/listings?organization_id=&from=&
 ### Group C — missing persistence
 
 **G-C1 · Durable audit.** Today: structured log lines only (`internal/infrastructure/audit`, "not a tamper-proof store"). Needed:
+
+> **BUILT 2026-10-05.** Migration `000025_audit_events` (append-only: a trigger refuses UPDATE and DELETE), `audit.Logger.WithStore` (every audit line is also stored, best-effort, never blocking the action), `GET /admin/audit?action=&actor_id=&target_type=&target_id=&from=&to=&page=` (admin or operator), and the console page. It is **not a tamper-proof ledger** (a database superuser can still alter it) and **it records only what the services already audited**: order, reservation, listing, inventory and organization actions, plus the new account suspensions; staff sign-ins and site-content saves are logs only.
 ```
 table audit_events (id, occurred_at, actor_id, actor_role, organization_id?, action, target_type, target_id, outcome, request_id, ip?, metadata jsonb, prev_hash?)
 GET /admin/audit?actor_id=&action=&target_type=&target_id=&organization_id=&request_id=&from=&to=&limit=&offset=     (ADMIN)
@@ -231,6 +239,8 @@ Uses `channel_accounts`, `webhook_events`, `payment_webhook_events`, `providers.
 
 **G-D1 · Admin user management.** `GET /admin/users/{id}`; `POST /admin/users/{id}/suspend|reactivate {reason}`; `POST /admin/users/{id}/roles {grant|revoke, role}`; all `ADMIN`, all audited (G-C1), cannot remove the last admin, cannot act on self. Today only the `trezutil-admin` CLI changes accounts.
 
+> **PARTLY BUILT 2026-10-05 (suspend and reactivate).** `POST /admin/users/{id}/suspend {reason}` and `/reactivate` (administrators only): a reason of 3–300 characters, audited; nobody moderates themselves or a staff account (those stay with `trezutil-admin`); two administrators acting at once cannot both succeed. A suspended account cannot sign in or refresh; a session already open may work for up to 15 minutes (`JWT_ACCESS_TTL`). **Not built:** the user detail and role grant/revoke.
+
 **G-D2 · Team.** `GET /organizations/members` returns user ids only, and `POST` needs a `user_id`. Needed: members with `display_name`, masked phone, role, joined date; and an invite by phone number that resolves server-side without revealing whether an arbitrary number has an account (`POST /organizations/members/invite {phone, role}` → pending invite accepted at next sign-in). `OWNER+ADMIN`; role changes `PATCH …/members/{user_id}`.
 
 **G-D3 · Organization role enforcement.** `accountant`, `sales`, `operations` exist but every guard knows only owner/admin/manager. Define the matrix (e.g. accountant: payments/finance read; sales: orders/customers/marketing; operations: orders/reservations/inventory) and enforce it in the guards, the use cases and tests — otherwise the portal cannot offer per-role navigation honestly.
@@ -254,13 +264,13 @@ Evidence is code or a live request against the local staging stack (anonymous `c
 
 | ID | Finding | Evidence | Impact | Recommended fix |
 |---|---|---|---|---|
-| **S-1** | **Anonymous seller profile read exposes phone number and user id** | `GET /api/v1/sellers?seller_id=<id>` returned **200 with `Phone`, `UserID`, `OrganizationID`, `TrustLevel`, `VerificationStatus`** to an unauthenticated caller (**verified live**). The `seller_id` comes from any public search result (`Seller.SellerID`). `GetSellerH` has no guard. | Personal data of every seller is harvestable; the user id links the seller to platform accounts | Require auth and restrict to members/`OP`, or return a public projection (display name, trust, verification only). **P0** |
-| S-2 | Public store read returns organization id, phone and email | `GET /api/v1/stores?store_id=` 200 anonymous with `OrganizationID, Phone, Email, Address, Latitude, Longitude` (**verified live**) | Business contact data is intended for "Sold by", but `OrganizationID` is the tenant key used by many scoped APIs | Return a public projection (name, city, address, coordinates, public phone); drop `OrganizationID` and email. P1 |
+| **S-1** | **Anonymous seller profile read exposes phone number and user id** | `GET /api/v1/sellers?seller_id=<id>` returned **200 with `Phone`, `UserID`, `OrganizationID`, `TrustLevel`, `VerificationStatus`** to an unauthenticated caller (**verified live**). The `seller_id` comes from any public search result (`Seller.SellerID`). `GetSellerH` has no guard. | Personal data of every seller is harvestable; the user id links the seller to platform accounts | Require auth and restrict to members/`OP`, or return a public projection (display name, trust, verification only). **P0** **FIXED 2026-10-05.** `GET /api/v1/sellers` returns the whole profile only to the seller, members of its organization and platform admins/operators; every other caller (a guest included) gets a public projection (`ID, DisplayName, SellerType, Bio, Status, VerificationStatus, TrustLevel, CreatedAt`). `internal/api/profile_access.go`, tested and re-verified live on staging. |
+| S-2 | Public store read returns organization id, phone and email | `GET /api/v1/stores?store_id=` 200 anonymous with `OrganizationID, Phone, Email, Address, Latitude, Longitude` (**verified live**) | Business contact data is intended for "Sold by", but `OrganizationID` is the tenant key used by many scoped APIs | Return a public projection (name, city, address, coordinates, public phone); drop `OrganizationID` and email. P1 **FIXED 2026-10-05.** `GET /api/v1/stores` returns the whole record only to members of the owning organization and platform staff; others get name, slug, description, place and coordinates (no phone, email or organization id). |
 | S-3 | Organization roles `accountant`, `sales`, `operations` have no enforcement | `membership.go` defines seven roles; `tenantStaffOnly`, `canAccessOrder`, `canAccessReservation`, hotel `canManage` consider owner/admin/manager only | A least-privilege model cannot be offered; an accountant cannot see finance data | G-D3. P2 |
 | S-4 | Team invite needs a raw user id; member list returns ids only | `AddMemberH` body `{user_id, membership_role}`; `GetMembersH` returns `domain.OrganizationMember` | Owners cannot onboard staff without out-of-band ids; UI would display opaque ids | G-D2. P1 |
-| **S-5** | **Platform staff cannot read or cancel reservations** while they can read any order | `canAccessReservation` knows only the customer and org owner/admin/manager; `canAccessOrder` and `payment.AccessPolicy` also admit platform admin/operator | Admin reservation operations impossible by API; asymmetry invites ad-hoc workarounds | Add the platform-staff branch (read; cancel behind a reason + audit). P1 |
-| S-6 | Public `/readyz` returns internal upstream URLs | `GET /readyz` 200 anonymous: `http://conversation-service:8091`, `http://search-service:8081`… (**verified live**) | Topology disclosure | Return status only publicly; detailed health behind `OP` (G-D5). P2 |
-| S-7 | Audit is a log trail, not a store | `internal/infrastructure/audit` docstring; no audit table | No queryable, tamper-evident history for admin audit or disputes | G-C1. P1 |
+| **S-5** | **Platform staff cannot read or cancel reservations** while they can read any order | `canAccessReservation` knows only the customer and org owner/admin/manager; `canAccessOrder` and `payment.AccessPolicy` also admit platform admin/operator | Admin reservation operations impossible by API; asymmetry invites ad-hoc workarounds | Add the platform-staff branch (read; cancel behind a reason + audit). P1 **FIXED 2026-10-05.** Platform admins and operators (active accounts only) can read and cancel any reservation, like orders; a staff cancellation is audited with `by_platform_staff`. A reason on the cancellation is not required yet. |
+| S-6 | Public `/readyz` returns internal upstream URLs | `GET /readyz` 200 anonymous: `http://conversation-service:8091`, `http://search-service:8081`… (**verified live**) | Topology disclosure | Return status only publicly; detailed health behind `OP` (G-D5). P2 **FIXED 2026-10-05.** The public `/readyz` answers `{"status":"ready"|"degraded"}` and the status code only; the detail (names and internal addresses) is for a caller presenting `METRICS_TOKEN` as a bearer token. |
+| S-7 | Audit is a log trail, not a store | `internal/infrastructure/audit` docstring; no audit table | No queryable, tamper-evident history for admin audit or disputes | G-C1. P1 | **PARTLY FIXED 2026-10-05.** A durable, append-only audit table now exists and is read by the console (G-C1); it is not tamper-proof and covers only what the services already audit. |
 | S-8 | Refresh tokens cannot be revoked or listed | KNOWN_LIMITATIONS L10 | A stolen refresh token lives 30 days unless the user is suspended | G-C2. P1 |
 | S-9 | Rate limiting covers only OTP and staff login | `WindowLimiter` used only in `identity_handlers.go` | Anonymous search, conversation and public reads are unthrottled | G-D7. P2 |
 | S-10 | Access and refresh tokens are kept in `localStorage` | KNOWN_LIMITATIONS operational note | XSS-sensitive; the consoles raise the stakes (admin tokens) | HttpOnly refresh cookie + short-lived in-memory access token. P2 |

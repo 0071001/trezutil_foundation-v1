@@ -1,0 +1,42 @@
+# Where Trezutil's alerts go (rules: alerts.yml; the first action for each is in
+# docs/finalization/HARDENING_PASS_1.md and RUNBOOK.md).
+#
+# Two kinds of alert, by the label `severity` the rules carry:
+#   page    something is failing for customers now (5xx, payments, webhooks, a service down):
+#           it goes to whoever is on call, again every hour until it is resolved;
+#   ticket  something to look at today (reservation errors, a provider failing): it goes to the
+#           team channel, again twice a day.
+#
+# Each receiver is a webhook, so the destination is yours to choose: a WhatsApp or Telegram or
+# Slack bridge, an incident service (PagerDuty, Opsgenie), or a small script. The addresses are
+# secrets (they carry a token): they are read from files (`url_file`) that the monitoring
+# overlay writes from ALERT_WEBHOOK_PAGE_URL and ALERT_WEBHOOK_TICKET_URL in app.env. Nothing here
+# is a placeholder that could be sent by mistake.
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: team
+  group_by: [alertname]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  routes:
+    - matchers: [severity="page"]
+      receiver: on-call
+      repeat_interval: 1h
+
+receivers:
+  - name: on-call
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/page_url
+        send_resolved: true
+  - name: team
+    webhook_configs:
+      - url_file: /etc/alertmanager/secrets/ticket_url
+        send_resolved: true
+
+# When a service is down, the errors and "not ready" alerts that follow from it are noise.
+inhibit_rules:
+  - source_matchers: [alertname="TrezutilServiceDown"]
+    target_matchers: [alertname=~"TrezutilHigh5xxRate|TrezutilNotReady|TrezutilProviderFailures"]

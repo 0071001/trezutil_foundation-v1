@@ -20,6 +20,12 @@ test.beforeAll(async () => {
   }
 })
 
+/** Opens a module of the seller workspace from its navigation (on a phone the rail is a drawer behind "Open menu"). */
+const goToSellerModule = async (page, isMobile, name) => {
+  if (isMobile) await page.getByRole('button', { name: 'Open menu' }).click()
+  await page.getByRole('navigation', { name: 'Seller workspace' }).getByRole('link', { name: new RegExp(`^${name}`) }).first().click()
+}
+
 /** A date input value (YYYY-MM-DD) `days` from today (UTC). */
 const day = (days) => new Date(Date.now() + days * 86400000).toISOString().slice(0, 10)
 
@@ -41,7 +47,7 @@ const noConsoleErrors = (page) => {
 test('A — discovery: home → search → results → detail (guest)', async ({ page }) => {
   const errors = noConsoleErrors(page)
   await page.goto('/')
-  await expect(page.getByRole('heading', { level: 1, name: /tell us what you need/i })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1, name: /what do you need today/i })).toBeVisible()
   await page.goto('/search')
   const box = page.getByRole('combobox', { name: 'Search Trezutil' })
   await box.fill('Riverside apartment')
@@ -148,9 +154,8 @@ test('F — account: orders → order detail → reservations', async ({ page, c
 test('G — seller: dashboard → listing → inventory → orders → reservations', async ({ page, context, isMobile }) => {
   await signInContext(context, seller)
   await page.goto('/seller')
-  await expect(page.getByText('Sales this week')).toBeVisible()
-  const nav = (name) => (isMobile ? page.locator('.seller-mobile-tabs') : page.locator('.seller-nav')).getByRole('link', { name })
-  await nav('Listings').click()
+  await expect(page.getByRole('heading', { name: 'Needs your attention' })).toBeVisible()
+  await goToSellerModule(page, isMobile, 'Listings')
   await expect(page.getByRole('heading', { name: 'Listings', exact: true })).toBeVisible()
   await page.locator('.listing-row a').first().click()
   await expect(page.getByText('View as a customer')).toBeVisible()
@@ -210,8 +215,7 @@ test('J — hotel seller: room types → nights → open nights', async ({ page,
   await signInContext(context, seller)
   await context.addInitScript((id) => localStorage.setItem('trezutil_seller_org', id), hotelOrg)
   await page.goto('/seller')
-  const nav = (name) => (isMobile ? page.locator('.seller-mobile-tabs') : page.locator('.seller-nav')).getByRole('link', { name })
-  await nav('Hotel rooms').click()
+  await goToSellerModule(page, isMobile, 'Hotel rooms')
   await expect(page.getByRole('heading', { name: 'Hotel rooms', exact: true })).toBeVisible()
   await page.getByRole('button', { name: /^nights$/i }).first().click()
   await expect(page.getByRole('table', { name: /next 14 nights/i })).toBeVisible()

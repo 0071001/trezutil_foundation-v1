@@ -104,6 +104,32 @@ const ART: Record<string, ReactNode> = {
       <path className="f-paper" d="M168 86h14l-2 18h-10Z" />
     </>
   ),
+  // organising something: a plan on a ring binder, two parts ticked and one to do, a suitcase, and the pin of where it is going
+  organise: (
+    <>
+      <path d="M14 134H226" />
+      <rect className="f-paper" x="66" y="24" width="112" height="110" rx="6" />
+      <path className="f-blue" d="M66 30a6 6 0 0 1 6-6h100a6 6 0 0 1 6 6v18H66Z" />
+      <rect className="f-ink" x="92" y="16" width="6" height="16" rx="3" />
+      <rect className="f-ink" x="146" y="16" width="6" height="16" rx="3" />
+      <rect className="f-paper" x="80" y="62" width="15" height="15" rx="3" />
+      <path className="s-blue s-thick" d="m83.5 69.5 3.5 3.5 6-7" />
+      <path d="M104 70H160" />
+      <rect className="f-paper" x="80" y="88" width="15" height="15" rx="3" />
+      <path className="s-blue s-thick" d="m83.5 95.5 3.5 3.5 6-7" />
+      <path d="M104 96H150" />
+      <rect className="f-paper" x="80" y="114" width="15" height="15" rx="3" />
+      <path d="M104 122H138" />
+      <rect className="f-coral" x="22" y="94" width="38" height="40" rx="5" />
+      <path d="M32 94v-7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4v7" />
+      <path d="M22 112H60M32 112v22M50 112v22" />
+      <circle className="f-sun" cx="40" cy="46" r="8" />
+      <path d="M40 30v-4M40 66v-4M24 46h-4M60 46h-4M28.7 34.7l-2.8-2.8M53.1 58.1l-2.8-2.8M51.3 34.7l2.8-2.8M26.9 58.1l2.8-2.8" />
+      <path className="f-sun" d="M206 98c-7-7-13-12-13-19a13 13 0 0 1 26 0c0 7-6 12-13 19Z" />
+      <circle className="f-paper" cx="206" cy="79" r="4.6" />
+      <path d="M180 126q18-4 24-22" strokeDasharray="3 5" />
+    </>
+  ),
   // getting around: a taxi (its roof light is lit), on the road
   around: (
     <>

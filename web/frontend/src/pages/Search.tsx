@@ -91,7 +91,7 @@ export default function SearchPage() {
   const refine = `/conversation?q=${encodeURIComponent(q ? t('Help me choose: {q}', { q }) : t('Help me find something'))}`
 
   return (
-    <AppShell dockPrompt={q ? t('Help me choose: {q}', { q }) : undefined}>
+    <AppShell>
       <section className="page-section search-page">
         <PageIntro eyebrow={t('Search Trezutil')} title={t('Find what you need.')} copy={t('Search naturally, then refine by category, price or availability.')} />
         <SearchComposer initial={q} onSubmit={(value) => update({ q: value })} />

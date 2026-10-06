@@ -209,6 +209,8 @@ describe('ChartCard', () => {
 
 describe('KpiCard', () => {
   const card = (props: Partial<Parameters<typeof KpiCard>[0]>) => render(<KpiCard label="Orders placed" value="42" icon="orders" days={30} {...props} />)
+  /** What the comparison says, as one sentence: the chip and the words that follow it. */
+  const said = (container: HTMLElement) => container.querySelector('.tzc-delta')?.textContent?.replace(/\s+/g, ' ').trim()
 
   it('shows the figure and its label', () => {
     card({})
@@ -218,14 +220,14 @@ describe('KpiCard', () => {
 
   it('says how far up it is, in good news', () => {
     const { container } = card({ current: 150, previous: 100 })
-    expect(screen.getByText(/\+50 % vs the previous 30 days/)).toBeInTheDocument()
+    expect(said(container)).toBe('▲ +50 % vs the previous 30 days')
     expect(container.querySelector('.tzc-delta')).toHaveClass('good')
   })
 
   it('treats a drop in a good measure as bad news, and a drop in a bad measure as good', () => {
     const down = card({ current: 50, previous: 100 })
     expect(down.container.querySelector('.tzc-delta')).toHaveClass('bad')
-    expect(screen.getByText(/-50 % vs the previous 30 days/)).toBeInTheDocument()
+    expect(said(down.container)).toBe('▼ -50 % vs the previous 30 days')
     down.unmount()
     const cancelled = card({ label: 'Cancelled', current: 2, previous: 5, goodWhen: 'down' })
     expect(cancelled.container.querySelector('.tzc-delta')).toHaveClass('good')
@@ -238,9 +240,9 @@ describe('KpiCard', () => {
   })
 
   it('does not invent a percentage when the period before had nothing', () => {
-    card({ current: 5, previous: 0 })
-    expect(screen.getByText(/5 more than the previous 30 days \(none then\)/)).toBeInTheDocument()
-    expect(screen.queryByText(/%/)).not.toBeInTheDocument()
+    const { container } = card({ current: 5, previous: 0 })
+    expect(said(container)).toBe('▲ +5 more than the previous 30 days (none then)')
+    expect(container.textContent).not.toMatch(/%/)
     expect(screen.queryByText(/Infinity|NaN/)).not.toBeInTheDocument()
   })
 
@@ -253,8 +255,32 @@ describe('KpiCard', () => {
   })
 
   it('words a one-day comparison as "the previous day"', () => {
-    card({ current: 3, previous: 2, days: 1 })
-    expect(screen.getByText(/vs the previous day/)).toBeInTheDocument()
+    const { container } = card({ current: 3, previous: 2, days: 1 })
+    expect(said(container)).toBe('▲ +50 % vs the previous day')
+  })
+
+  it('is a plain figure unless it is given something to open', () => {
+    const { container } = card({})
+    expect(container.querySelector('.tzc-kpi')?.tagName).toBe('DIV')
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('becomes a toggle that says whether it is the one selected, and tells what it controls', async () => {
+    let chosen = 0
+    const { rerender } = render(<KpiCard label="Orders placed" value="42" icon="orders" selected={false} onSelect={() => { chosen++ }} controls="trend-panel" />)
+    const tile = screen.getByRole('button', { name: /Orders placed/ })
+    expect(tile).toHaveAttribute('aria-pressed', 'false')
+    expect(tile).toHaveAttribute('aria-controls', 'trend-panel')
+    await userEvent.click(tile)
+    expect(chosen).toBe(1)
+    rerender(<KpiCard label="Orders placed" value="42" icon="orders" selected onSelect={() => { chosen++ }} controls="trend-panel" />)
+    expect(screen.getByRole('button', { name: /Orders placed/ })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('can be the large tile of a board, with a taller trend line', () => {
+    const { container } = card({ hero: true, spark: [1, 3, 2] })
+    expect(container.querySelector('.tzc-kpi')).toHaveClass('lead')
+    expect(container.querySelector('svg.tzc-spark')).toHaveClass('tall')
   })
 
   it('compares nothing when it is not given a previous figure, and keeps a note', () => {

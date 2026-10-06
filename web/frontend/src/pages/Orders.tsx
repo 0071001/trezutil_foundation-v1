@@ -91,7 +91,7 @@ export function OrderDetailPage() {
   }
 
   return (
-    <AppShell dockPrompt={t('I have a question about order {slice}', { slice: o.id.slice(0, 8) })}>
+    <AppShell>
       <section className="page-section narrow-page">
         <div className="back-link"><ActionLink href="/orders">{t('← Back to orders')}</ActionLink></div>
         <PageIntro eyebrow={t('Order #{slice}', { slice: o.id.slice(0, 8) })} title={statusLabel(o.status)} copy={`${o.title || t('Your order')}${o.quantity ? t(' · quantity {quantity}', { quantity: o.quantity }) : ''} · ${formatMinor(o.total_minor, o.currency)}`} actions={<StatusBadge status={o.status} />} />

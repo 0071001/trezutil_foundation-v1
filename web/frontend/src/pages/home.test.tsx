@@ -60,13 +60,14 @@ describe('the welcome', () => {
     expect(document.title).toBe('Trezutil — Tell us what you need')
   })
 
-  it('has a clean top bar: brand, the needs and Discover, For businesses, language, theme and sign-in, and no search field', async () => {
+  it('has a clean top bar: brand, How it works and three menus, For businesses, language, theme and sign-in, and no search field', async () => {
     server()
     renderAt('/')
     const bar = await screen.findByRole('banner')
     expect(within(bar).getByRole('link', { name: 'Trezutil home' })).toBeInTheDocument()
     const nav = within(bar).getByRole('navigation', { name: 'Primary' })
-    expect(within(nav).getAllByRole('link').map((a) => [a.textContent, a.getAttribute('href')])).toEqual([['Find a place', '/search?vertical=REAL_ESTATE'], ['Get something', '/search?vertical=RETAIL'], ['Find a service', '/search?vertical=SERVICES'], ['Go out', '/search?vertical=RESTAURANT'], ['Discover', '/discover']])
+    expect(within(nav).getByRole('link', { name: 'How it works' })).toHaveAttribute('href', '/about#how')
+    expect(within(nav).getAllByRole('button').map((b) => b.textContent)).toEqual(['Discover', 'Organise', 'Activities'])
     expect(within(bar).getByRole('link', { name: 'For businesses' })).toHaveAttribute('href', '/seller')
     expect(within(bar).getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login')
     expect(within(bar).queryByRole('searchbox')).toBeNull()
@@ -181,11 +182,11 @@ describe('the composer', () => {
 })
 
 describe('what can we help you with', () => {
-  it('names needs, not categories: four groups that always show', async () => {
+  it('names needs, not categories: five groups that always show', async () => {
     server()
     renderAt('/')
     const section = await region('What can we help you with?')
-    expect(within(section).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Find a place', 'Get something', 'Find a service', 'Go out'])
+    expect(within(section).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual(['Find a place', 'Get something', 'Find a service', 'Go out', 'Organise something'])
     const links = within(section).getAllByRole('link').map((a) => [a.textContent, a.getAttribute('href')])
     expect(links).toEqual(expect.arrayContaining([
       ['Homes and apartments', '/search?vertical=REAL_ESTATE'], ['Hotels', '/search?vertical=HOTEL'], ['Products', '/search?vertical=RETAIL'],
@@ -217,7 +218,7 @@ describe('what can we help you with', () => {
     server()
     const none = renderAt('/')
     const section = await region('What can we help you with?')
-    await waitFor(() => expect(within(section).getAllByRole('heading', { level: 3 })).toHaveLength(4))
+    await waitFor(() => expect(within(section).getAllByRole('heading', { level: 3 })).toHaveLength(5))
     expect(within(section).queryByRole('heading', { name: 'Get around' })).toBeNull()
     none.unmount()
 
@@ -284,14 +285,14 @@ describe('discover what exists around you', () => {
 })
 
 describe('from need to action', () => {
-  it('lets a stranger follow the loop from you, to Trezutil, to the offers, to you, to the business', async () => {
+  it('lets a stranger follow the five stages: conversation, intention, discovery, action, transaction', async () => {
     server()
     renderAt('/')
     const section = await region('From your need to the action')
     const steps = [...section.querySelectorAll('ol.loop > li')]
     expect(steps.map((li) => [li.querySelector('.loop-who')?.textContent, li.querySelector('h3')?.textContent])).toEqual([
-      ['You', 'You say what you need'], ['Trezutil', 'We understand it'], ['The offers', 'You see what fits'],
-      ['You', 'You act'], ['The business', 'It confirms'],
+      ['Conversation', 'You say what you need'], ['Intention', 'We understand it'], ['Discovery', 'You see what fits'],
+      ['Action', 'You act'], ['Transaction', 'It confirms'],
     ])
   })
 
@@ -395,8 +396,11 @@ describe('the pictures', () => {
     renderAt('/')
     const section = await region('What can we help you with?')
     const art = section.querySelectorAll('svg.need-art')
-    expect(art).toHaveLength(4)
+    expect(art).toHaveLength(5) // one for each need, Organise included
     for (const drawing of art) expect(drawing).toHaveAttribute('aria-hidden', 'true')
+    // Organise something has its own drawing, like the other needs: the one it is drawn next to is its row
+    const organise = within(section).getByRole('heading', { level: 3, name: 'Organise something' }).closest('li')!
+    expect(organise.querySelector('svg.need-art')).not.toBeNull()
     expect(within(section).queryAllByRole('img')).toHaveLength(0)
   })
 

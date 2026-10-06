@@ -42,6 +42,144 @@ export interface AdminUserPage {
   pageSize: number
 }
 
+export interface AuditEvent {
+  id: number
+  at: string
+  actorId: string
+  /** The actor's display name; empty for the system or an account that no longer exists. */
+  actorName: string
+  action: string
+  targetType: string
+  targetId: string
+  requestId: string
+  metadata: Record<string, unknown>
+}
+
+export interface AuditPage {
+  items: AuditEvent[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface AuditFilters {
+  /** The start of the action name: "order." lists every order event. */
+  action?: string
+  actorId?: string
+  targetType?: string
+  targetId?: string
+  /** Plain dates (2026-10-05); "to" includes the whole day. */
+  from?: string
+  to?: string
+}
+
+export function mapAuditEvent(value: unknown): AuditEvent {
+  const raw = obj(value)
+  return {
+    id: num(raw.id),
+    at: str(raw.at),
+    actorId: str(raw.actor_id),
+    actorName: str(raw.actor_name),
+    action: str(raw.action),
+    targetType: str(raw.target_type),
+    targetId: str(raw.target_id),
+    requestId: str(raw.request_id),
+    metadata: obj(raw.metadata),
+  }
+}
+
+export interface AdminPage<T> {
+  items: T[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface AdminListQuery {
+  q?: string
+  status?: string
+  page?: number
+  pageSize?: number
+}
+
+export interface AdminOrder {
+  id: string
+  status: string
+  totalMinor: number
+  currency: string
+  title: string
+  itemCount: number
+  organizationId: string
+  organizationName: string
+  customerId: string
+  customerName: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface AdminReservation {
+  id: string
+  status: string
+  title: string
+  listingId: string
+  organizationId: string
+  organizationName: string
+  customerId: string
+  customerName: string
+  startAt: string
+  endAt: string
+  quantity: number
+  partySize: number
+  createdAt: string
+}
+
+export interface AdminOrganization {
+  id: string
+  displayName: string
+  type: string
+  status: string
+  verificationStatus: string
+  city: string
+  country: string
+  members: number
+  stores: number
+  publishedListings: number
+  orders: number
+  createdAt: string
+}
+
+export function mapAdminOrder(value: unknown): AdminOrder {
+  const raw = obj(value)
+  return {
+    id: str(raw.id), status: str(raw.status), totalMinor: num(raw.total_minor), currency: str(raw.currency), title: str(raw.title), itemCount: num(raw.item_count),
+    organizationId: str(raw.organization_id), organizationName: str(raw.organization_name), customerId: str(raw.customer_id), customerName: str(raw.customer_name),
+    createdAt: str(raw.created_at), updatedAt: str(raw.updated_at),
+  }
+}
+
+export function mapAdminReservation(value: unknown): AdminReservation {
+  const raw = obj(value)
+  return {
+    id: str(raw.id), status: str(raw.status), title: str(raw.title), listingId: str(raw.listing_id),
+    organizationId: str(raw.organization_id), organizationName: str(raw.organization_name), customerId: str(raw.customer_id), customerName: str(raw.customer_name),
+    startAt: str(raw.start_at), endAt: str(raw.end_at), quantity: num(raw.quantity), partySize: num(raw.party_size), createdAt: str(raw.created_at),
+  }
+}
+
+export function mapAdminOrganization(value: unknown): AdminOrganization {
+  const raw = obj(value)
+  return {
+    id: str(raw.id), displayName: str(raw.display_name), type: str(raw.type), status: str(raw.status), verificationStatus: str(raw.verification_status),
+    city: str(raw.city), country: str(raw.country), members: num(raw.members), stores: num(raw.stores), publishedListings: num(raw.published_listings),
+    orders: num(raw.orders), createdAt: str(raw.created_at),
+  }
+}
+
+async function adminList<T>(path: string, params: AdminListQuery, map: (v: unknown) => T): Promise<AdminPage<T>> {
+  const raw = obj(await http.get<unknown>(`${path}${query({ q: params.q, status: params.status, page: params.page, page_size: params.pageSize })}`))
+  return { items: arr(raw.items).map(map), total: num(raw.total), page: num(raw.page) || 1, pageSize: num(raw.page_size) || 25 }
+}
+
 function counts(value: unknown): Record<string, number> {
   const out: Record<string, number> = {}
   for (const [k, v] of Object.entries(obj(value))) out[k] = num(v)
@@ -87,6 +225,32 @@ export const adminApi = {
 
   async overview(): Promise<AdminOverview> {
     return mapOverview(await http.get<unknown>('/admin/overview'))
+  },
+
+  /** Every order on the platform, newest first (administrators and operators). Names and states, no contact data. */
+  orders: (params: AdminListQuery = {}) => adminList('/admin/orders', params, mapAdminOrder),
+  /** Every booking on the platform, newest first. */
+  reservations: (params: AdminListQuery = {}) => adminList('/admin/reservations', params, mapAdminReservation),
+  /** Every business on the platform, newest first, with its counts. */
+  organizations: (params: AdminListQuery = {}) => adminList('/admin/organizations', params, mapAdminOrganization),
+
+  /** The durable audit trail, newest first. Filters narrow it; nothing here can change an entry. */
+  async audit(filters: AuditFilters = {}, page = 1, pageSize = 50): Promise<AuditPage> {
+    const raw = obj(await http.get<unknown>(`/admin/audit${query({
+      action: filters.action, actor_id: filters.actorId, target_type: filters.targetType, target_id: filters.targetId,
+      from: filters.from, to: filters.to, page, page_size: pageSize,
+    })}`))
+    return { items: arr(raw.items).map(mapAuditEvent), total: num(raw.total), page: num(raw.page) || 1, pageSize: num(raw.page_size) || pageSize }
+  },
+
+  /** Suspends an account (administrators only). The reason, 3 to 300 characters, goes to the audit trail. */
+  async suspendUser(id: string, reason: string): Promise<void> {
+    await http.post(`/admin/users/${encodeURIComponent(id)}/suspend`, { reason })
+  },
+
+  /** Gives a suspended account back. */
+  async reactivateUser(id: string, reason = ''): Promise<void> {
+    await http.post(`/admin/users/${encodeURIComponent(id)}/reactivate`, reason ? { reason } : {})
   },
 
   async users(params: { q?: string; page?: number; pageSize?: number } = {}): Promise<AdminUserPage> {

@@ -11,6 +11,8 @@
 > Every claim below was read in code or, where marked **verified live**, checked against the local staging
 > stack. Nothing is assumed from what a menu "would need".
 
+> **Update 2026-10-05.** This map is the Phase 0 audit and its rows are not rewritten. What has been built since is listed in [`../finalization/CONSOLE_MODULES.md`](../finalization/CONSOLE_MODULES.md): the seller order lifecycle (G-A6), and in the administration the Orders, Reservations, Organizations and Audit modules (G-B1, G-B2, G-C1) and account suspension (G-D1). A row below that says *BACKEND GAP* for one of these is out of date; the gap analysis carries the dated notes. Counts: seller 8 of 20 modules ready, administration 7 of 20.
+
 ## 0. How to read this
 
 ### Status

@@ -111,6 +111,14 @@ type Fulfillment struct {
 	UpdatedAt     int64
 }
 
+// referenceStem is the first eight characters of an id (all of it when it is shorter), for readable references.
+func referenceStem(id string) string {
+	if len(id) > 8 {
+		return id[:8]
+	}
+	return id
+}
+
 // NewFulfillment creates a new Fulfillment.
 func NewFulfillment(tenantID string, orderID, reservationID *string, ftype FulfillmentType, now int64) *Fulfillment {
 	if !IsValidFulfillmentType(ftype) {
@@ -119,9 +127,9 @@ func NewFulfillment(tenantID string, orderID, reservationID *string, ftype Fulfi
 
 	var ref string
 	if orderID != nil {
-		ref = "FUL-" + (*orderID)[:8] + "-" + fmt.Sprintf("%d", now%1000000)
+		ref = "FUL-" + referenceStem(*orderID) + "-" + fmt.Sprintf("%d", now%1000000)
 	} else if reservationID != nil {
-		ref = "FUL-" + (*reservationID)[:8] + "-" + fmt.Sprintf("%d", now%1000000)
+		ref = "FUL-" + referenceStem(*reservationID) + "-" + fmt.Sprintf("%d", now%1000000)
 	} else {
 		ref = "FUL-" + fmt.Sprintf("%d", now)
 	}

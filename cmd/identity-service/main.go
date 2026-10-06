@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/trezutil/trezutil/infrastructure/postgres"
@@ -15,6 +16,7 @@ import (
 	"github.com/trezutil/trezutil/internal/application"
 	"github.com/trezutil/trezutil/internal/application/identity"
 	"github.com/trezutil/trezutil/internal/domain"
+	"github.com/trezutil/trezutil/internal/infrastructure/audit"
 	"github.com/trezutil/trezutil/internal/infrastructure/otp"
 	"github.com/trezutil/trezutil/internal/infrastructure/whatsapp"
 	"github.com/trezutil/trezutil/packages/auth"
@@ -58,6 +60,11 @@ func main() {
 	}
 
 	userRepo := postgres.NewUserRepository(db)
+	orgRepo := postgres.NewOrganizationRepository(db)
+	auditStore := postgres.NewAuditRepository(db)
+	auditLog := audit.NewLogger(logger).WithStore(auditStore)
+	// Team invitations by phone number become memberships when the number signs in.
+	team := application.NewTeamUseCases(postgres.NewTeamRepository(db), orgRepo, auditLog)
 	svc, err := identity.NewService(identity.Config{
 		Users:          userRepo,
 		Challenges:     postgres.NewOTPChallengeRepository(db),
@@ -71,6 +78,7 @@ func main() {
 		MaxLoginFailures: common.GetenvInt("STAFF_LOGIN_MAX_FAILURES", identity.DefaultMaxLoginFailures),
 		Lockout:          time.Duration(common.GetenvInt("STAFF_LOGIN_LOCKOUT_MINUTES", int(identity.DefaultLockout/time.Minute))) * time.Minute,
 		Logger:           logger,
+		OnPhoneSignIn:    team.AcceptInvitations,
 	})
 	if err != nil {
 		log.Fatalf("identity-service: %v", err)
@@ -82,10 +90,11 @@ func main() {
 	// Seller onboarding (operator-assisted): platform operators create the
 	// organization and add the seller's account as owner; the owner then
 	// creates the seller profile and stores. Authorization lives in the use cases.
-	orgRepo := postgres.NewOrganizationRepository(db)
-	orgs := api.NewOrganizationHandler(application.NewOrganizationUseCases(orgRepo, userRepo, nil))
-	sellers := api.NewSellerHandler(application.NewSellerUseCases(postgres.NewSellerRepository(db), orgRepo, userRepo, nil))
-	stores := api.NewStoreHandler(application.NewStoreUseCases(postgres.NewStoreRepository(db), orgRepo, userRepo, nil))
+	orgUseCases := application.NewOrganizationUseCases(orgRepo, userRepo, auditLog)
+	orgs := api.NewOrganizationHandler(orgUseCases)
+	profileAccess := api.NewProfileAccess(userRepo, orgRepo)
+	sellers := api.NewSellerHandler(application.NewSellerUseCases(postgres.NewSellerRepository(db), orgRepo, userRepo, auditLog)).WithAccess(profileAccess)
+	stores := api.NewStoreHandler(application.NewStoreUseCases(postgres.NewStoreRepository(db), orgRepo, userRepo, auditLog)).WithAccess(profileAccess)
 	orgStaff := organizationStaffOnly(orgRepo, userRepo)
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/auth/request-otp", h.RequestOTPH)
@@ -93,8 +102,13 @@ func main() {
 	mux.HandleFunc("POST /api/v1/auth/staff/login", h.StaffLoginH)
 	mux.HandleFunc("POST /api/v1/auth/refresh", h.RefreshH)
 	mux.HandleFunc("GET /api/v1/auth/users/me", h.MeH)
+	mux.HandleFunc("PATCH /api/v1/auth/users/me", h.UpdateMeH)
 	mux.HandleFunc("POST /api/v1/organizations", orgs.CreateOrganizationH)
 	mux.HandleFunc("GET /api/v1/organizations", orgStaff(orgs.GetOrganizationH))
+	// Editing the business, a seller profile and a store (checked fields only; the use cases decide who may).
+	mux.HandleFunc("PATCH /api/v1/organizations", orgs.PatchOrganizationH())
+	mux.HandleFunc("PATCH /api/v1/sellers", sellers.PatchSellerH())
+	mux.HandleFunc("PATCH /api/v1/stores", stores.PatchStoreH())
 	mux.HandleFunc("GET /api/v1/organizations/members", orgStaff(orgs.GetMembersH))
 	mux.HandleFunc("POST /api/v1/organizations/members", orgs.AddMemberH)
 	mux.HandleFunc("DELETE /api/v1/organizations/members", orgs.RemoveMemberH)
@@ -106,9 +120,48 @@ func main() {
 	mux.HandleFunc("POST /api/v1/stores", stores.CreateStoreH)
 	mux.HandleFunc("GET /api/v1/stores", stores.GetStoreH)
 	// Administration console API: every route checks the caller's role itself.
-	admin := api.NewAdminHandler(postgres.NewAdminRepository(db), userRepo)
+	adminRepo := postgres.NewAdminRepository(db)
+	admin := api.NewAdminHandler(adminRepo, userRepo).
+		WithAudit(auditStore).
+		WithCommerce(adminRepo).
+		WithModeration(identity.NewModeration(userRepo, userRepo, auditLog))
 	mux.HandleFunc("GET /api/v1/admin/overview", admin.OverviewH())
 	mux.HandleFunc("GET /api/v1/admin/users", admin.UsersH())
+	mux.HandleFunc("POST /api/v1/admin/users/{user_id}/suspend", admin.SuspendUserH())
+	mux.HandleFunc("POST /api/v1/admin/users/{user_id}/reactivate", admin.ReactivateUserH())
+	mux.HandleFunc("GET /api/v1/admin/audit", admin.AuditH())
+	mux.HandleFunc("GET /api/v1/admin/orders", admin.OrdersH())
+	mux.HandleFunc("GET /api/v1/admin/reservations", admin.ReservationsH())
+	mux.HandleFunc("GET /api/v1/admin/organizations", admin.OrganizationsH())
+	// Seller workspace read models (money, customers, fulfilment, availability, usage, integrations) and team.
+	consoleRepo := postgres.NewConsoleRepository(db)
+	console := api.NewConsoleHandler(consoleRepo, userRepo, orgRepo).WithTeam(team, orgUseCases)
+	mux.HandleFunc("GET /api/v1/sellers/finance", console.FinanceH())
+	mux.HandleFunc("GET /api/v1/sellers/customers", console.CustomersH())
+	mux.HandleFunc("GET /api/v1/sellers/fulfilments", console.FulfilmentsH())
+	mux.HandleFunc("GET /api/v1/sellers/capacity", console.CapacityH())
+	mux.HandleFunc("GET /api/v1/sellers/usage", console.UsageH())
+	mux.HandleFunc("GET /api/v1/sellers/integrations", console.IntegrationsH())
+	mux.HandleFunc("GET /api/v1/sellers/team", console.TeamH())
+	mux.HandleFunc("POST /api/v1/sellers/team/invitations", console.InviteH())
+	mux.HandleFunc("DELETE /api/v1/sellers/team/invitations/{id}", console.RevokeInvitationH())
+	mux.HandleFunc("PATCH /api/v1/sellers/team/members/{user_id}", console.ChangeRoleH())
+	mux.HandleFunc("DELETE /api/v1/sellers/team/members/{user_id}", console.RemoveMemberH())
+	// Administration modules: listings, payments, operations, providers, channels, security, AI, monetization, health.
+	adminConsole := api.NewAdminConsoleHandler(consoleRepo, userRepo).
+		WithAudit(auditStore, auditLog).
+		WithHealth(db, api.ParseHealthTargets(common.Getenv("HEALTH_TARGETS", defaultHealthTargets)), configuredIntegrations())
+	mux.HandleFunc("GET /api/v1/admin/listings", adminConsole.ListingsH())
+	mux.HandleFunc("GET /api/v1/admin/payments", adminConsole.PaymentsH())
+	mux.HandleFunc("GET /api/v1/admin/operations", adminConsole.OperationsH())
+	mux.HandleFunc("GET /api/v1/admin/providers", adminConsole.ProvidersH())
+	mux.HandleFunc("POST /api/v1/admin/providers/{id}/enable", adminConsole.EnableProviderH())
+	mux.HandleFunc("POST /api/v1/admin/providers/{id}/disable", adminConsole.DisableProviderH())
+	mux.HandleFunc("GET /api/v1/admin/channels", adminConsole.ChannelsH())
+	mux.HandleFunc("GET /api/v1/admin/security", adminConsole.SecurityH())
+	mux.HandleFunc("GET /api/v1/admin/ai", adminConsole.AIH())
+	mux.HandleFunc("GET /api/v1/admin/monetization", adminConsole.MonetizationH())
+	mux.HandleFunc("GET /api/v1/admin/health", adminConsole.HealthH())
 	// Dashboards: figures computed from the platform's tables. Staff read the whole
 	// platform; owners, admins and managers read their own business.
 	analytics := api.NewAnalyticsHandler(postgres.NewAnalyticsRepository(db), userRepo, orgRepo)
@@ -130,6 +183,30 @@ func main() {
 	srv := common.NewServer(":"+common.Getenv("HTTP_PORT", "8086"), common.Observe("identity-service", logger, authn.Middleware(mux)))
 	if err := common.Run(srv, logger, "identity-service"); err != nil {
 		log.Fatalf("identity-service: %v", err)
+	}
+}
+
+// defaultHealthTargets are the services the console's health report probes (the Docker deployment's names).
+const defaultHealthTargets = "gateway=http://api-gateway:8080/healthz,search=http://search-service:8081/readyz," +
+	"conversation=http://conversation-service:8091/readyz,commerce=http://order-service:8085/readyz,payment=http://payment-service:8083/readyz"
+
+// configuredIntegrations says which external integrations have their settings present. Values are never read
+// beyond "set or not"; the *_CONFIGURED flags are passed by the deployment so no secret reaches this service.
+func configuredIntegrations() api.ConfiguredFlags {
+	set := func(names ...string) bool {
+		for _, n := range names {
+			if strings.TrimSpace(os.Getenv(n)) == "" {
+				return false
+			}
+		}
+		return true
+	}
+	return api.ConfiguredFlags{
+		"whatsapp_sender":       set("WHATSAPP_PHONE_NUMBER_ID", "WHATSAPP_ACCESS_TOKEN"),
+		"whatsapp_otp_template": set("WHATSAPP_OTP_TEMPLATE"),
+		"stripe":                os.Getenv("STRIPE_CONFIGURED") == "true",
+		"ai_assistant":          os.Getenv("AI_CONFIGURED") == "true",
+		"metrics_token":         os.Getenv("METRICS_CONFIGURED") == "true",
 	}
 }
 

@@ -74,15 +74,15 @@ export default function BookPage() {
     }
   }
 
-  if (listing.loading) return <AppShell hideDock><Loading label={t('Loading…')} /></AppShell>
-  if (listing.error || !listing.data) return <AppShell hideDock><section className="page-section"><ErrorState error={listing.error ?? t('Listing not found')} onRetry={listing.reload} /></section></AppShell>
+  if (listing.loading) return <AppShell><Loading label={t('Loading…')} /></AppShell>
+  if (listing.error || !listing.data) return <AppShell><section className="page-section"><ErrorState error={listing.error ?? t('Listing not found')} onRetry={listing.reload} /></section></AppShell>
   const l = listing.data
   // Hotel stays book whole nights and several rooms; payment follows the stay.
   if (l.vertical === 'HOTEL') return <HotelBooking listing={l} />
   const step = booked ? 3 : availability?.available ? 2 : 1
 
   return (
-    <AppShell hideDock>
+    <AppShell>
       <section className="page-section checkout-page">
         <div className="checkout-head"><Brand /><span><Icon name="calendar" size={15} />{t('Reservation')}</span></div>
         <div role="list" className="checkout-progress" aria-label={t('Booking progress')}>

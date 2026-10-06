@@ -145,6 +145,15 @@ type OrderUseCases interface {
 	ConfirmOrder(ctx context.Context, actorID string, orderID string) (*domain.Order, error)
 }
 
+// orderLifecycle is implemented by order use cases that carry an order through the seller-side steps
+// after confirmation (application.OrderUseCases).
+type orderLifecycle interface {
+	StartProcessing(ctx context.Context, actorID string, orderID string) (*domain.Order, error)
+	ReadyForFulfillment(ctx context.Context, actorID string, orderID string) (*domain.Order, error)
+	FulfilOrder(ctx context.Context, actorID string, orderID string) (*domain.Order, error)
+	CompleteOrder(ctx context.Context, actorID string, orderID string) (*domain.Order, error)
+}
+
 // idempotentOrderCreator is implemented by order use cases that support
 // idempotent checkout (application.OrderUseCases).
 type idempotentOrderCreator interface {
@@ -320,11 +329,18 @@ func (h *OrganizationHandler) RemoveMemberH(w http.ResponseWriter, r *http.Reque
 // SellerHandler handles seller HTTP requests.
 type SellerHandler struct {
 	sellerUseCases SellerUseCases
+	access         ProfileAccess
 }
 
 // NewSellerHandler creates a new SellerHandler.
 func NewSellerHandler(sellerUseCases SellerUseCases) *SellerHandler {
 	return &SellerHandler{sellerUseCases: sellerUseCases}
+}
+
+// WithAccess says who may read a whole seller profile; everyone else reads the public projection.
+func (h *SellerHandler) WithAccess(access ProfileAccess) *SellerHandler {
+	h.access = access
+	return h
 }
 
 // CreateSellerH handles POST /v1/sellers
@@ -350,7 +366,9 @@ func (h *SellerHandler) CreateSellerH(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, req, http.StatusCreated)
 }
 
-// GetSellerH handles GET /v1/sellers/{seller_id}
+// GetSellerH handles GET /v1/sellers/{seller_id}. The whole profile (phone, email, account and
+// organization ids) is for the seller, the members of its organization and platform staff; any
+// other caller, a guest included, gets the public projection.
 func (h *SellerHandler) GetSellerH(w http.ResponseWriter, r *http.Request) {
 	sellerID := r.URL.Query().Get("seller_id")
 	if sellerID == "" {
@@ -364,6 +382,10 @@ func (h *SellerHandler) GetSellerH(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !concerned(r.Context(), h.access, auth.UserID(r.Context()), deref(seller.UserID), deref(seller.OrganizationID)) {
+		writeJSON(w, publicSeller(seller), http.StatusOK)
+		return
+	}
 	writeJSON(w, seller, http.StatusOK)
 }
 
@@ -394,11 +416,18 @@ func (h *SellerHandler) UpdateSellerH(w http.ResponseWriter, r *http.Request) {
 // StoreHandler handles store HTTP requests.
 type StoreHandler struct {
 	storeUseCases StoreUseCases
+	access        ProfileAccess
 }
 
 // NewStoreHandler creates a new StoreHandler.
 func NewStoreHandler(storeUseCases StoreUseCases) *StoreHandler {
 	return &StoreHandler{storeUseCases: storeUseCases}
+}
+
+// WithAccess says who may read a whole store record; everyone else reads the public projection.
+func (h *StoreHandler) WithAccess(access ProfileAccess) *StoreHandler {
+	h.access = access
+	return h
 }
 
 // CreateStoreH handles POST /v1/stores
@@ -424,7 +453,9 @@ func (h *StoreHandler) CreateStoreH(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, req, http.StatusCreated)
 }
 
-// GetStoreH handles GET /v1/stores/{store_id}
+// GetStoreH handles GET /v1/stores/{store_id}. The whole record (phone, email, organization id) is
+// for the members of the owning organization and platform staff; any other caller, a guest
+// included, gets the public projection.
 func (h *StoreHandler) GetStoreH(w http.ResponseWriter, r *http.Request) {
 	storeID := r.URL.Query().Get("store_id")
 	if storeID == "" {
@@ -438,6 +469,10 @@ func (h *StoreHandler) GetStoreH(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !concerned(r.Context(), h.access, auth.UserID(r.Context()), "", store.OrganizationID) {
+		writeJSON(w, publicStore(store), http.StatusOK)
+		return
+	}
 	writeJSON(w, store, http.StatusOK)
 }
 
@@ -680,14 +715,7 @@ func (h *OrderHandler) ConfirmOrderH(w http.ResponseWriter, r *http.Request) {
 
 	order, err := h.orderUseCases.ConfirmOrder(r.Context(), actorID, orderID)
 	if err != nil {
-		switch err {
-		case domain.ErrOrderNotFound:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_NOT_FOUND", Message: "Order not found"}}, http.StatusNotFound)
-		case domain.ErrInsufficientPermissions:
-			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
-		default:
-			writeFailure(w, "CONFIRM_ORDER_FAILED", err)
-		}
+		writeOrderStepFailure(w, "CONFIRM_ORDER_FAILED", err)
 		return
 	}
 
@@ -695,6 +723,70 @@ func (h *OrderHandler) ConfirmOrderH(w http.ResponseWriter, r *http.Request) {
 		"order_id": order.ID,
 		"status":   string(order.Status),
 	}, http.StatusOK)
+}
+
+// writeOrderStepFailure maps the outcome of a seller-side order step: an unknown order is 404, a caller who
+// may not manage it 403, a step the order's status does not allow (or a concurrent click that got there
+// first) 409, anything else a server failure.
+func writeOrderStepFailure(w http.ResponseWriter, code string, err error) {
+	switch {
+	case errors.Is(err, domain.ErrOrderNotFound):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_NOT_FOUND", Message: "Order not found"}}, http.StatusNotFound)
+	case errors.Is(err, domain.ErrInsufficientPermissions):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "Insufficient permissions"}}, http.StatusForbidden)
+	case errors.Is(err, domain.ErrInvalidOrderTransition):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_TRANSITION", Message: "The order is not in a state that allows this step"}}, http.StatusConflict)
+	case errors.Is(err, domain.ErrOptimisticLock):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "ORDER_CHANGED", Message: "The order was just changed by someone else; reload it"}}, http.StatusConflict)
+	default:
+		writeFailure(w, code, err)
+	}
+}
+
+// OrderStepH returns the handler of one seller-side step after confirmation:
+// POST /api/v1/orders/{order_id}/process | ready | fulfil | complete.
+// The use cases decide who may do it (the seller side, never the buyer) and from which status.
+func (h *OrderHandler) OrderStepH(step string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		orderID := r.URL.Query().Get("order_id")
+		if orderID == "" {
+			writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_ORDER_ID", Message: "Order ID required"}}, http.StatusBadRequest)
+			return
+		}
+		actorID := auth.UserID(r.Context())
+		if actorID == "" {
+			writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_USER_ID", Message: "User ID required"}}, http.StatusUnauthorized)
+			return
+		}
+		lifecycle, ok := h.orderUseCases.(orderLifecycle)
+		if !ok {
+			writeJSON(w, ErrorResponse{Error: Error{Code: "NOT_IMPLEMENTED", Message: "Order steps are not available"}}, http.StatusNotImplemented)
+			return
+		}
+
+		var (
+			order *domain.Order
+			err   error
+		)
+		switch step {
+		case "process":
+			order, err = lifecycle.StartProcessing(r.Context(), actorID, orderID)
+		case "ready":
+			order, err = lifecycle.ReadyForFulfillment(r.Context(), actorID, orderID)
+		case "fulfil":
+			order, err = lifecycle.FulfilOrder(r.Context(), actorID, orderID)
+		case "complete":
+			order, err = lifecycle.CompleteOrder(r.Context(), actorID, orderID)
+		default:
+			writeJSON(w, ErrorResponse{Error: Error{Code: "UNKNOWN_STEP", Message: "Unknown order step"}}, http.StatusNotFound)
+			return
+		}
+		if err != nil {
+			writeOrderStepFailure(w, "ORDER_STEP_FAILED", err)
+			return
+		}
+		writeJSON(w, map[string]interface{}{"order_id": order.ID, "status": string(order.Status)}, http.StatusOK)
+	}
 }
 
 // ListingHandler handles listing HTTP requests.

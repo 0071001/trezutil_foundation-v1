@@ -84,12 +84,16 @@ export interface RequestOptions {
 
 const inflightGets = new Map<string, Promise<unknown>>()
 
+/** The calls that open a session. They go out without a token: an access token is short-lived, and one left in the
+ *  browser by an earlier visit makes the server answer 401 to the sign-in itself, which looked like a wrong password. */
+const SIGN_IN_PATHS = new Set(['/auth/request-otp', '/auth/verify-otp', '/auth/staff/login'])
+
 async function send<T>(method: string, path: string, body: unknown, options: RequestOptions, retried: boolean): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }
   // A file upload sets its own multipart boundary; everything else is JSON.
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData
   if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json'
-  const token = tokens.access()
+  const token = SIGN_IN_PATHS.has(path) ? null : tokens.access()
   if (token) headers.Authorization = `Bearer ${token}`
   if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey
 
@@ -163,6 +167,12 @@ export const http = {
   },
   put<T>(path: string, body: unknown = {}, options: RequestOptions = {}): Promise<T> {
     return send<T>('PUT', path, body, options, false)
+  },
+  patch<T>(path: string, body: unknown = {}, options: RequestOptions = {}): Promise<T> {
+    return send<T>('PATCH', path, body, options, false)
+  },
+  del<T>(path: string, options: RequestOptions = {}): Promise<T> {
+    return send<T>('DELETE', path, undefined, options, false)
   },
   /** Sends one file as multipart form data. */
   upload<T>(path: string, field: string, file: File, options: RequestOptions = {}): Promise<T> {

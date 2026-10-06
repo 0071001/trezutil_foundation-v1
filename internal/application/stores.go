@@ -121,6 +121,12 @@ func (u *StoreUseCases) UpdateStore(ctx context.Context, actorID, storeID string
 	if address, ok := updates["address"].(*string); ok {
 		store.Address = address
 	}
+	if province, ok := updates["province"].(*string); ok {
+		store.Province = province
+	}
+	if city, ok := updates["city"].(*string); ok {
+		store.City = city
+	}
 
 	store.UpdatedAt = time.Now().Unix()
 

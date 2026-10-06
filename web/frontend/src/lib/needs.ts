@@ -2,9 +2,10 @@ import type { IconName } from '@/components/ui'
 import { tx } from '@/lib/i18n'
 
 /*
- * The needs Trezutil helps with, in one place. The home page index, the primary
- * menu and the mobile drawer all read this list, so the way a need is named
- * (and where it leads) cannot drift between them. See docs/web/PRIMARY_MENU.md.
+ * The needs Trezutil helps with: the index of the home page ("What can we help you
+ * with?"). The primary navigation is its own list (src/lib/nav.ts), organised by
+ * what a person wants to do (discover, organise, follow their activity) rather than
+ * by need. See docs/web/PRIMARY_MENU.md.
  */
 
 export interface NeedGroup {
@@ -16,6 +17,8 @@ export interface NeedGroup {
   domains: [label: string, href: string][]
   /** Sentences that start a conversation about this need. */
   needs: string[]
+  /** Where the sentences below are taken up: the conversation by default, Organiser for a goal to hand over. */
+  askAt?: string
   /** Offers for these verticals must exist for the group to appear (a group of conversation starters needs none). */
   requiresSupply?: string[]
 }
@@ -42,17 +45,14 @@ export const NEED_GROUPS: NeedGroup[] = [
     needs: [tx('I want to book a restaurant tonight.'), tx('Where can I eat well in Gombe?')],
   },
   {
+    id: 'organise', icon: 'calendar', title: tx('Organise something'), askAt: '/organize',
+    domains: [[tx('Trips, events, moves'), '/organize']],
+    needs: [tx('I want to organise a birthday for 40 people in Kinshasa.'), tx('Help me organise a trip to Goma.')],
+  },
+  {
     id: 'around', icon: 'car', title: tx('Get around'),
     domains: [[tx('Cars'), '/search?vertical=VEHICLE_RENTAL'], [tx('Transport'), '/search?vertical=TRANSPORT']],
     needs: [tx('I need a car for the weekend.')],
     requiresSupply: ['VEHICLE_RENTAL', 'TRANSPORT'],
   },
 ]
-
-/** The needs that always have something behind them (a menu cannot ask the catalogue on every page). */
-export const MENU_NEEDS = NEED_GROUPS.filter((g) => !g.requiresSupply)
-
-/** Other searches of a need worth a link of their own in a menu (for example Hotels under "Find a place"); links to Discover are left out, it has its own entry. */
-export function otherSearches(group: NeedGroup): [label: string, href: string][] {
-  return group.domains.slice(1).filter(([, href]) => href.startsWith('/search'))
-}

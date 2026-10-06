@@ -384,6 +384,51 @@ check("S: replayed refund creates no second refund", refunds == "1", (st, refund
 st, rf3 = call("POST", f"/payments/{pid}/refund?organization_id={org}", {"amount_minor": 100000, "currency": "USD"}, token=seller_token, headers={"Idempotency-Key": "rf-2-" + RUN})
 check("S: over-refund rejected", st >= 400, (st, rf3))
 
+# ---------- Journey L: the order lifecycle, seller side (paid -> confirmed -> processing -> ready -> fulfilled -> completed) ----------
+o_life = new_order("life")
+st, pl = pay(o_life, "pm_card_visa", "pay-life-" + RUN)
+check("L: an order is paid", st == 201 and order_status(o_life) == "paid", (st, pl))
+
+def step(order_id, name, token):
+    return call("POST", f"/orders/{order_id}/{name}", token=token)
+
+# nothing but the seller side moves it, and only from the status each step starts from
+for name in ("confirm", "process", "ready", "fulfil", "complete"):
+    st, _ = step(o_life, name, customer_token)
+    check(f"L: the buyer cannot {name} their own order", st in (403, 404), (name, st))
+st, e = step(o_life, "process", seller_token)
+check("L: a paid order cannot be started before it is confirmed (409, not a server error)", st == 409 and isinstance(e, dict) and (e.get("error") or {}).get("code") == "INVALID_TRANSITION", (st, e))
+st, e = step(o_life, "confirm", seller_token)
+check("L: the seller confirms it", st == 200 and order_status(o_life) == "confirmed", (st, e))
+st, e = step(o_life, "confirm", seller_token)
+check("L: confirming twice is a conflict", st == 409, (st, e))
+st, e = step(o_life, "ready", seller_token)
+check("L: an order cannot skip to ready", st == 409, (st, e))
+st, e = step(o_life, "process", seller_token)
+check("L: the seller starts preparing it", st == 200 and order_status(o_life) == "processing", (st, e))
+st, e = step(o_life, "ready", seller_token)
+check("L: the seller marks it ready", st == 200 and order_status(o_life) == "ready_for_fulfillment", (st, e))
+check("L: one fulfilment record exists for it", sql(f"SELECT COUNT(*) FROM fulfillments WHERE order_id='{o_life}'") == "1")
+st, e = step(o_life, "ready", seller_token)
+check("L: marking ready twice is a conflict and creates no second fulfilment record", st == 409 and sql(f"SELECT COUNT(*) FROM fulfillments WHERE order_id='{o_life}'") == "1", (st, e))
+st, e = step(o_life, "complete", seller_token)
+check("L: an order cannot be completed before it is delivered", st == 409, (st, e))
+st, e = step(o_life, "fulfil", seller_token)
+check("L: the seller marks it delivered", st == 200 and order_status(o_life) == "fulfilled", (st, e))
+st, e = step(o_life, "complete", seller_token)
+check("L: the seller completes it", st == 200 and order_status(o_life) == "completed", (st, e))
+st, e = step(o_life, "complete", seller_token)
+check("L: a completed order cannot be completed again", st == 409, (st, e))
+st, e = step(o_life, "teleport", seller_token)
+check("L: an unknown step is not found", st in (404, 405), (st, e))
+st, e = step("00000000-0000-4000-8000-000000000000", "process", seller_token)
+check("L: an unknown order is not found", st == 404, (st, e))
+# every step left a durable audit event, in order, by the seller (the audit table is append-only)
+actions = sql(f"SELECT string_agg(action, ',' ORDER BY id) FROM audit_events WHERE target_id='{o_life}'")
+check("L: the audit table holds every step of the lifecycle", all(a in (actions or "") for a in ("order.confirmed", "order.processing", "order.ready_for_fulfillment", "order.fulfilled", "order.completed")), actions)
+check("L: the audit table cannot be rewritten", subprocess.run([PSQL, "-h", "localhost", "-U", DB_USER, "-d", DB, "-tAc", f"UPDATE audit_events SET action='x' WHERE target_id='{o_life}'"],
+      capture_output=True, text=True, env=dict(os.environ, PGPASSWORD=DB_PASSWORD)).returncode != 0)
+
 # ---------- Journey AI: model-interpreted conversation -> action ----------
 conv_log = LOG.replace("identity.log", "conversation.log")
 before = open(conv_log, encoding="utf-8", errors="ignore").read().count("AI provider call completed")
@@ -455,7 +500,7 @@ st, bad = call("POST", "/search", {"vertical": "SPACESHIPS"})
 check("H1: unknown vertical -> 400, never OTHER", st == 400 and bad.get("error", {}).get("code") == "INVALID_VERTICAL", (st, bad))
 hotel_sender = "hotel-" + RUN
 st, conv = call("POST", "/conversations/message", {"channel": "web", "message_text": "Find me a hotel in Gombe for two nights for two people",
-                "sender_external_id": hotel_sender, "message_idempotency_key": "h1-" + RUN}, token=customer_token)
+                "sender_external_id": hotel_sender, "message_idempotency_key": "h1-" + RUN, "locale": "en"}, token=customer_token)
 text = (conv.get("response") or {}).get("text", "") if isinstance(conv, dict) else ""
 check("H1: 'a hotel in Gombe for two nights for two people' -> vertical HOTEL, location, nights, party size",
       st == 200 and "hotels & accommodation in Gombe for 2 nights, 2 guests" in text and room_title in text, (st, text))

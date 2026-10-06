@@ -115,13 +115,26 @@ func (l *Listing) Resume() {
 	}
 }
 
-// Suspend transitions the listing to suspended status.
-// Valid from: PUBLISHED
+// Suspend transitions the listing to suspended status (platform moderation).
+// Valid from: PUBLISHED, PAUSED, PENDING_REVIEW: a paused listing is suspended too, so its seller
+// cannot bring it back by resuming it.
 func (l *Listing) Suspend() {
-	if l.Status == ListingStatusPublished {
+	if l.Status == ListingStatusPublished || l.Status == ListingStatusPaused || l.Status == ListingStatusPendingReview {
 		l.Status = ListingStatusSuspended
 		l.UpdatedAt = time.Now().Unix()
 	}
+}
+
+// Reinstate lifts a suspension (platform moderation). The listing comes back paused: its seller decides
+// when it goes live again. Valid from: SUSPENDED. It is deliberately not a ValidateTransition target, so no
+// seller-side action (pause, resume, publish) can leave the suspended status.
+func (l *Listing) Reinstate() error {
+	if l.Status != ListingStatusSuspended {
+		return ErrInvalidStatusTransition
+	}
+	l.Status = ListingStatusPaused
+	l.UpdatedAt = time.Now().Unix()
+	return nil
 }
 
 // Reject transitions a pending review listing back to draft.
@@ -220,7 +233,7 @@ func (l *Listing) ValidateTransition(newStatus ListingStatus) error {
 			return ErrInvalidStatusTransition
 		}
 	case ListingStatusSuspended:
-		if current != ListingStatusPublished {
+		if current != ListingStatusPublished && current != ListingStatusPaused && current != ListingStatusPendingReview {
 			return ErrInvalidStatusTransition
 		}
 	case ListingStatusSold:

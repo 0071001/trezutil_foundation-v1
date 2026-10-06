@@ -235,12 +235,12 @@ describe('Metric', () => {
 
 describe('UnavailableState and PlannedState', () => {
   it('says what is missing, cites the gap, and shows no figure', () => {
-    wrap(<UnavailableState gapIds={['G-B4']} />)
+    wrap(<UnavailableState gapIds={['G-B8']} />)
     const state = screen.getByRole('region', { name: 'Not available yet' })
     expect(state).toHaveAttribute('data-state', 'unavailable')
-    expect(within(state).getByText(/Payments and settlements/)).toBeInTheDocument()
-    expect(within(state).getByText('G-B4')).toBeInTheDocument()
-    expect(within(state).getByText(/no list, ledger or payout view/i)).toBeInTheDocument()
+    expect(within(state).getByText(/Seller inbox/)).toBeInTheDocument()
+    expect(within(state).getByText('G-B8')).toBeInTheDocument()
+    expect(within(state).getByText(/does not exist yet/i)).toBeInTheDocument()
     expect(within(state).queryByRole('table')).not.toBeInTheDocument()
     expect(within(state).queryByRole('button')).not.toBeInTheDocument() // no control that does nothing
   })
@@ -252,13 +252,13 @@ describe('UnavailableState and PlannedState', () => {
   })
 
   it('lists the endpoints a planned screen will use and its known limits', () => {
-    wrap(<PlannedState endpoints={['GET /orders/incoming', 'GET /orders/{id}']} limits={['G-B2']} />)
+    wrap(<PlannedState endpoints={['GET /orders/incoming', 'GET /orders/{id}']} limits={['G-C4']} />)
     const state = screen.getByRole('region', { name: 'Coming soon' })
     expect(state).toHaveAttribute('data-state', 'planned')
     expect(within(state).getByText('GET /orders/incoming')).toBeInTheDocument()
     expect(within(state).getByText('GET /orders/{id}')).toBeInTheDocument()
     expect(within(state).getByText('Known limits')).toBeInTheDocument()
-    expect(within(state).getByText('G-B2')).toBeInTheDocument()
+    expect(within(state).getByText('G-C4')).toBeInTheDocument()
   })
 
   it('omits the limits block when there are none', () => {

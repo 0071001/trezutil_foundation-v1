@@ -80,10 +80,16 @@ func (l *Loader) Load(ctx context.Context) (int, error) {
 		if err != nil {
 			return active, fmt.Errorf("stripe provider %s: %w", p.ID, err)
 		}
-		if err := l.Registry.Register(p, adapter); err != nil && !strings.Contains(err.Error(), "already registered") {
-			return active, err
+		// A provider already registered keeps its adapter but takes the current record, so a status change
+		// (enabled or disabled from the console) applies at this reload.
+		if !l.Registry.UpdateProvider(p) {
+			if err := l.Registry.Register(p, adapter); err != nil && !strings.Contains(err.Error(), "already registered") {
+				return active, err
+			}
 		}
-		active++
+		if p.IsUsable() {
+			active++
+		}
 	}
 	l.mu.Lock()
 	l.webhookSecrets = secrets
