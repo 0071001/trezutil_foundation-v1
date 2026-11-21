@@ -38,6 +38,11 @@ export const authApi = {
     return mapUser(await http.get<unknown>('/auth/users/me'))
   },
 
+  /** PATCH /auth/users/me: the display name and the e-mail address (the phone is the identity and does not change here). */
+  async updateMe(patch: { display_name?: string; email?: string }): Promise<User> {
+    return mapUser(await http.patch<unknown>('/auth/users/me', patch))
+  },
+
   /**
    * Signs out on this device. The backend issues stateless refresh tokens and
    * has no revocation endpoint, so this clears the stored tokens only.

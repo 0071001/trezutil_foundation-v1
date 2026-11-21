@@ -137,6 +137,14 @@ export interface MissionUpdate {
   /** YYYY-MM-DD: what a check of availability needs. */
   start_date?: string
   end_date?: string
+  /** The server checks the lifecycle: draft → active → paused/completed/cancelled (see domain/mission.go). */
+  status?: MissionStatus
+  title?: string
+  objective?: string
+  location?: string
+  budget_minor?: number
+  currency?: string
+  preferences?: Record<string, string>
 }
 
 export interface MissionCreate {
@@ -145,6 +153,7 @@ export interface MissionCreate {
   title?: string
   location?: string
   participants?: number
+  preferences?: Record<string, string>
 }
 
 export function mapMission(value: unknown): Mission {

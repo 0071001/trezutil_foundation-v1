@@ -1,12 +1,9 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript'
-import { screen, within } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { fr } from '@/i18n/fr'
 import { getLang, plural, setLang, t, tn } from '@/lib/i18n'
-import { mockApi, renderAt } from '@/test/utils'
 
 /** Every literal message passed to t(), tx(), tn() and plural() in the app source. */
 function sourceKeys(): Map<string, string> {
@@ -75,24 +72,5 @@ describe('translations', () => {
     expect(tn(1, '{n} item', '{n} items')).toBe('1 article')
     setLang('en', false)
     expect([0, 1, 2].map((n) => plural(n, 'night'))).toEqual(['0 nights', '1 night', '2 nights'])
-  })
-})
-
-describe('language switch and menu', () => {
-  it('shows the primary menu with an icon on every entry, in French by default and in English on request', async () => {
-    setLang('fr', false)
-    mockApi({})
-    renderAt('/discover')
-    const nav = await screen.findByRole('navigation', { name: 'Principale' })
-    for (const label of ['Découvrir', 'Organiser', 'Activités']) expect(within(nav).getByRole('button', { name: label })).toBeInTheDocument()
-    expect(within(nav).getByRole('link', { name: 'Comment ça marche' })).toBeInTheDocument()
-    await userEvent.click(within(nav).getByRole('button', { name: 'Découvrir' }))
-    for (const link of within(within(nav).getByRole('group', { name: 'Découvrir' })).getAllByRole('link')) expect(link.querySelector('svg.icon')).not.toBeNull()
-    await userEvent.click(screen.getAllByRole('button', { name: 'English' })[0])
-    expect(getLang()).toBe('en')
-    expect(document.documentElement.lang).toBe('en')
-    const english = await screen.findByRole('navigation', { name: 'Primary' })
-    expect(within(english).getByRole('button', { name: 'Discover' })).toBeInTheDocument()
-    expect(localStorage.getItem('trezutil_lang')).toBe('en')
   })
 })

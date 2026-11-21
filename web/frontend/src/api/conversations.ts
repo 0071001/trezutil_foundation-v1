@@ -97,12 +97,16 @@ export function resetConversationChannel() {
 }
 
 export const conversationsApi = {
-  /** The idempotency key makes a retried send safe (no duplicate side effects). */
-  async send(text: string, idempotencyKey: string): Promise<ConversationReply> {
+  /**
+   * The idempotency key makes a retried send safe (no duplicate side effects). `sender` is the channel identity of
+   * the thread: the server keeps one conversation per sender, so a caller holding several threads (the conversational
+   * workspace in src/redesign) passes each thread's own; without it the per-tab identity is used, as before.
+   */
+  async send(text: string, idempotencyKey: string, sender?: string): Promise<ConversationReply> {
     return mapReply(await http.post<unknown>('/conversations/message', {
       message_text: text,
       channel: 'web',
-      sender_external_id: senderExternalID(),
+      sender_external_id: sender || senderExternalID(),
       message_idempotency_key: idempotencyKey,
       locale: getLang(),
     }))
@@ -115,4 +119,28 @@ export const conversationsApi = {
   async reject(conversationId: string, token: string): Promise<ConversationReply> {
     return mapReply(await http.post<unknown>(`/conversations/${encodeURIComponent(conversationId)}/reject`, { token }))
   },
+
+  /** GET /conversations: the signed-in user's own web conversations, the most recently active first. */
+  async list(limit = 50): Promise<ServerConversation[]> {
+    const raw = obj(await http.get<unknown>(`/conversations?channel=web&limit=${limit}`))
+    return arr(raw.items).map((v) => {
+      const c = obj(v)
+      return {
+        id: str(c.id), externalId: str(c.external_id), title: str(c.title), messageCount: num(c.message_count),
+        createdAt: num(c.created_at), lastActivityAt: num(c.last_activity_at),
+      }
+    }).filter((c) => c.id && c.externalId)
+  },
+
+  /** GET /conversations/{id}/messages: the transcript (text only) of one of the user's conversations, oldest first. */
+  async messages(conversationId: string): Promise<ServerMessage[]> {
+    const raw = obj(await http.get<unknown>(`/conversations/${encodeURIComponent(conversationId)}/messages`))
+    return arr(raw.items).map((v) => {
+      const m = obj(v)
+      return { id: str(m.id), direction: str(m.direction) === 'inbound' ? 'inbound' as const : 'outbound' as const, text: str(m.text), createdAt: num(m.created_at) }
+    }).filter((m) => m.id && m.text)
+  },
 }
+
+export interface ServerConversation { id: string; externalId: string; title: string; messageCount: number; createdAt: number; lastActivityAt: number }
+export interface ServerMessage { id: string; direction: 'inbound' | 'outbound'; text: string; createdAt: number }

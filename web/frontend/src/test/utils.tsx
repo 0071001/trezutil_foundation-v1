@@ -3,9 +3,7 @@ import { MemoryRouter } from 'react-router'
 import { vi } from 'vitest'
 import { AppRoutes } from '@/App'
 import { I18nProvider } from '@/lib/i18n'
-import { PrefsProvider } from '@/lib/prefs'
 import { SessionProvider } from '@/lib/session'
-import { ToastProvider } from '@/lib/toast'
 
 export interface MockCall { method: string; path: string; body: unknown; headers: Record<string, string> }
 type Handler = (call: MockCall) => { status?: number; body?: unknown } | Promise<{ status?: number; body?: unknown }>
@@ -45,13 +43,9 @@ export const me = { id: 'u1', phone: '+243810000001', display_name: 'Jean Mukend
 export function renderAt(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <PrefsProvider>
-        <ToastProvider>
-          <SessionProvider>
-            <I18nProvider><AppRoutes /></I18nProvider>
-          </SessionProvider>
-        </ToastProvider>
-      </PrefsProvider>
+      <I18nProvider>
+        <SessionProvider><AppRoutes /></SessionProvider>
+      </I18nProvider>
     </MemoryRouter>,
   )
 }
