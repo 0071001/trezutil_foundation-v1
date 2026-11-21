@@ -73,8 +73,10 @@ func (s *MessageStore) FindByID(ctx context.Context, id string) (*domain.Message
 
 // FindByConversationID retrieves all messages for a conversation.
 func (s *MessageStore) FindByConversationID(ctx context.Context, conversationID string) ([]*domain.Message, error) {
+	// Messages are stamped to the second; xmin (the inserting transaction, one per message) keeps their insertion order
+	// when two share a second.
 	query := `SELECT id, conversation_id, direction, type, sender_id, recipient_id, content, external_ref, idempotency_key, language, created_at
-	          FROM messages WHERE conversation_id = $1 ORDER BY created_at`
+	          FROM messages WHERE conversation_id = $1 ORDER BY created_at, xmin::text::bigint`
 	rows, err := s.db.QueryContext(ctx, query, conversationID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query messages: %w", err)

@@ -92,7 +92,7 @@ paths:
             description: User roles
             content:
               application/json:
-                 schema:
+                schema:
                   $ref: '#/components/schemas/UserRolesResponse'
   /organizations:
     post:
@@ -874,6 +874,78 @@ paths:
               schema:
                  $ref: '#/components/schemas/ActionCheckResponse'
 
+  /conversations:
+    get:
+      summary: The caller's own conversations (history)
+      description: >
+        Read-only. The signed-in user's conversations on one channel, the most recently active first, each titled by
+        the first message the user wrote. A guest conversation (never claimed by an account) is never listed.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: channel
+          in: query
+          schema: { type: string, default: web, enum: [web, whatsapp] }
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: The conversations (Cache-Control no-store)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string, format: uuid }
+                        channel: { type: string }
+                        external_id: { type: string, description: 'The channel identity (sender_external_id) that continues it' }
+                        title: { type: string }
+                        message_count: { type: integer }
+                        created_at: { type: integer, description: Unix seconds }
+                        last_activity_at: { type: integer, description: Unix seconds }
+        '400': { description: 'INVALID_CHANNEL or INVALID_LIMIT' }
+        '401': { description: Not signed in }
+  /conversations/{conversation_id}/messages:
+    get:
+      summary: The transcript of one of the caller's conversations
+      description: >
+        Read-only. The text of each message, oldest first; every answer follows the question it answers. The
+        processor's internal data, offers and cards are not part of the transcript.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: conversation_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: The transcript (Cache-Control no-store)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversation_id: { type: string, format: uuid }
+                  external_id: { type: string }
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        direction: { type: string, enum: [inbound, outbound] }
+                        text: { type: string }
+                        created_at: { type: integer, description: Unix seconds }
+        '401': { description: Not signed in }
+        '403': { description: The conversation belongs to another user, or to no account }
+        '404': { description: No such conversation }
   /missions:
     post:
       summary: Create a draft mission (Organiser)

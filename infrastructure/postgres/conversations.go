@@ -183,3 +183,39 @@ func unmarshalConversation(u conversationRow) (*domain.Conversation, error) {
 
 	return conversation, nil
 }
+
+// ListByCustomer returns a customer's conversations on one channel, the most recently active first, each titled by
+// the first message the customer wrote. Read-only (GET /api/v1/conversations).
+func (r *ConversationStore) ListByCustomer(ctx context.Context, customerID string, channel domain.Channel, limit int) ([]domain.ConversationHistoryItem, error) {
+	if limit <= 0 || limit > 100 {
+		limit = 50
+	}
+	query := `SELECT c.id, c.channel, c.external_id, c.created_at,
+	                 COALESCE((SELECT m.content->>'Text' FROM messages m
+	                           WHERE m.conversation_id = c.id AND m.direction = 'inbound'
+	                           ORDER BY m.created_at, m.xmin::text::bigint LIMIT 1), '') AS title,
+	                 COALESCE((SELECT max(m.created_at) FROM messages m WHERE m.conversation_id = c.id), c.updated_at) AS last_at,
+	                 (SELECT count(*) FROM messages m WHERE m.conversation_id = c.id) AS message_count
+	          FROM conversations c
+	          WHERE c.customer_id = $1 AND c.channel = $2
+	          ORDER BY last_at DESC
+	          LIMIT $3`
+	rows, err := r.db.QueryContext(ctx, query, customerID, string(channel), limit)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list conversations: %w", err)
+	}
+	defer rows.Close()
+	out := []domain.ConversationHistoryItem{}
+	for rows.Next() {
+		var s domain.ConversationHistoryItem
+		var ch string
+		var created, last time.Time
+		if err := rows.Scan(&s.ID, &ch, &s.ExternalID, &created, &s.Title, &last, &s.MessageCount); err != nil {
+			return nil, fmt.Errorf("failed to read conversation: %w", err)
+		}
+		s.Channel = domain.Channel(ch)
+		s.CreatedAt, s.LastActivityAt = created.Unix(), last.Unix()
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}

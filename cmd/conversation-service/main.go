@@ -156,7 +156,9 @@ func main() {
 	// that carry none (WhatsApp). French is the platform's primary language.
 	conversation.DefaultLanguage = common.Getenv("DEFAULT_LANGUAGE", "fr")
 
-	convHandler := api.NewConversationHandler(conversation.NewProcessorService(processor), logger)
+	convStore := postgres.NewConversationStore(db)
+	convHandler := api.NewConversationHandler(conversation.NewProcessorService(processor), logger).
+		WithHistory(conversation.NewHistoryService(convStore, convStore, postgres.NewMessageStore(db)))
 	packHandler := api.NewVerticalPackHandler(api.NewVerticalPackService(packRegistry, packResolver, policyEngine))
 
 	// WhatsApp channel

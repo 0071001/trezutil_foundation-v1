@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -42,10 +44,23 @@ type conversationActorJSON struct {
 	Type string `json:"type"`
 }
 
+// ConversationHistory reads back a person's own conversations (conversation.HistoryService).
+type ConversationHistory interface {
+	List(ctx context.Context, userID string, channel domain.Channel, limit int) ([]domain.ConversationHistoryItem, error)
+	Transcript(ctx context.Context, userID, conversationID string) (*domain.Conversation, []*domain.Message, error)
+}
+
 // ConversationHandler handles conversation HTTP requests.
 type ConversationHandler struct {
 	useCases ConversationUseCases
+	history  ConversationHistory
 	logger   zerolog.Logger
+}
+
+// WithHistory enables GET /api/v1/conversations and GET /api/v1/conversations/{id}/messages.
+func (h *ConversationHandler) WithHistory(history ConversationHistory) *ConversationHandler {
+	h.history = history
+	return h
 }
 
 func NewConversationHandler(useCases ConversationUseCases, logger zerolog.Logger) *ConversationHandler {
@@ -223,7 +238,152 @@ func HandleConversationRoutes(handler *ConversationHandler, w http.ResponseWrite
 	case path == "/api/v1/conversations" && method == "POST":
 		handler.HandleProcessMessage(w, r)
 		return
+	case path == "/api/v1/conversations" && method == "GET":
+		handler.HandleListConversations(w, r)
+		return
+	case strings.HasPrefix(path, "/api/v1/conversations/") && strings.HasSuffix(path, "/messages") && method == "GET":
+		handler.HandleConversationMessages(w, r)
+		return
 	}
 
 	writeJSON(w, ErrorResponse{Error: Error{Code: "NOT_FOUND", Message: fmt.Sprintf("Route not found: %s %s", method, path)}}, http.StatusNotFound)
+}
+
+// conversationSummaryJSON is one conversation of GET /api/v1/conversations.
+type conversationSummaryJSON struct {
+	ID             string `json:"id"`
+	Channel        string `json:"channel"`
+	ExternalID     string `json:"external_id"`
+	Title          string `json:"title"`
+	MessageCount   int    `json:"message_count"`
+	CreatedAt      int64  `json:"created_at"`
+	LastActivityAt int64  `json:"last_activity_at"`
+}
+
+// transcriptMessageJSON is one message of GET /api/v1/conversations/{id}/messages: its text only, never the
+// internal data the processor keeps with it.
+type transcriptMessageJSON struct {
+	ID        string `json:"id"`
+	Direction string `json:"direction"`
+	Text      string `json:"text"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+// HandleListConversations handles GET /api/v1/conversations?channel=web&limit=50: the caller's own conversations,
+// the most recently active first. Signed-in users only.
+func (h *ConversationHandler) HandleListConversations(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	userID, ok := auth.RequireUser(w, r)
+	if !ok {
+		return
+	}
+	if h.history == nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "NOT_AVAILABLE", Message: "Conversation history is not available"}}, http.StatusServiceUnavailable)
+		return
+	}
+	channel := domain.Channel(strings.ToLower(r.URL.Query().Get("channel")))
+	if channel == "" {
+		channel = domain.ChannelWeb
+	}
+	if !channel.IsValid() {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_CHANNEL", Message: "Invalid channel"}}, http.StatusBadRequest)
+		return
+	}
+	limit := 50
+	if v := r.URL.Query().Get("limit"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil || n < 1 || n > 100 {
+			writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_LIMIT", Message: "limit must be between 1 and 100"}}, http.StatusBadRequest)
+			return
+		}
+		limit = n
+	}
+	list, err := h.history.List(r.Context(), userID, channel, limit)
+	if err != nil {
+		h.logger.Error().Err(err).Msg("Failed to list conversations")
+		writeJSON(w, ErrorResponse{Error: Error{Code: "HISTORY_FAILED", Message: "The conversations could not be read"}}, http.StatusInternalServerError)
+		return
+	}
+	items := make([]conversationSummaryJSON, 0, len(list))
+	for _, c := range list {
+		items = append(items, conversationSummaryJSON{
+			ID: c.ID, Channel: string(c.Channel), ExternalID: c.ExternalID, Title: c.Title,
+			MessageCount: c.MessageCount, CreatedAt: c.CreatedAt, LastActivityAt: c.LastActivityAt,
+		})
+	}
+	writeJSON(w, map[string]interface{}{"items": items}, http.StatusOK)
+}
+
+// HandleConversationMessages handles GET /api/v1/conversations/{id}/messages: the transcript of one of the caller's
+// conversations, oldest first. 404 for an unknown id, 403 for somebody else's conversation.
+func (h *ConversationHandler) HandleConversationMessages(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	userID, ok := auth.RequireUser(w, r)
+	if !ok {
+		return
+	}
+	if h.history == nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "NOT_AVAILABLE", Message: "Conversation history is not available"}}, http.StatusServiceUnavailable)
+		return
+	}
+	convID := extractIDFromPath(r.URL.Path, "/api/v1/conversations/", "/messages")
+	conv, msgs, err := h.history.Transcript(r.Context(), userID, convID)
+	switch {
+	case errors.Is(err, domain.ErrConversationForbidden):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "This conversation belongs to another user"}}, http.StatusForbidden)
+		return
+	case errors.Is(err, conversation.ErrConversationNotFound):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "NOT_FOUND", Message: "Conversation not found"}}, http.StatusNotFound)
+		return
+	case err != nil:
+		h.logger.Error().Err(err).Msg("Failed to read a conversation")
+		writeJSON(w, ErrorResponse{Error: Error{Code: "HISTORY_FAILED", Message: "The conversation could not be read"}}, http.StatusInternalServerError)
+		return
+	}
+	items := make([]transcriptMessageJSON, 0, len(msgs))
+	for _, m := range orderTranscript(msgs) {
+		if m == nil || m.Content == nil || strings.TrimSpace(m.Content.Text) == "" {
+			continue
+		}
+		items = append(items, transcriptMessageJSON{ID: m.ID, Direction: string(m.Direction), Text: m.Content.Text, CreatedAt: m.CreatedAt})
+	}
+	writeJSON(w, map[string]interface{}{"conversation_id": conv.ID, "external_id": conv.ExternalID, "items": items}, http.StatusOK)
+}
+
+// orderTranscript puts each answer right after the question it answers. Messages are stored to the second, so two
+// exchanges in the same second cannot be ordered by time alone; the processor stores every answer under the key
+// "reply:" + the question's key, which is the real link. An answer without its question (a confirmation's reply,
+// "reply:confirm:…") keeps its place in time.
+func orderTranscript(msgs []*domain.Message) []*domain.Message {
+	ordered := make([]*domain.Message, 0, len(msgs))
+	sorted := append([]*domain.Message(nil), msgs...)
+	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].CreatedAt < sorted[j].CreatedAt })
+	replies := map[string]*domain.Message{}
+	questions := map[string]bool{}
+	for _, m := range sorted {
+		if m == nil {
+			continue
+		}
+		if m.Direction == domain.MessageDirectionInbound && m.IdempotencyKey != "" {
+			questions[m.IdempotencyKey] = true
+		}
+		if m.Direction == domain.MessageDirectionOutbound && strings.HasPrefix(m.IdempotencyKey, "reply:") {
+			replies[strings.TrimPrefix(m.IdempotencyKey, "reply:")] = m
+		}
+	}
+	for _, m := range sorted {
+		if m == nil {
+			continue
+		}
+		if m.Direction == domain.MessageDirectionOutbound && strings.HasPrefix(m.IdempotencyKey, "reply:") && questions[strings.TrimPrefix(m.IdempotencyKey, "reply:")] {
+			continue // placed after its question
+		}
+		ordered = append(ordered, m)
+		if m.Direction == domain.MessageDirectionInbound {
+			if reply := replies[m.IdempotencyKey]; reply != nil && m.IdempotencyKey != "" {
+				ordered = append(ordered, reply)
+			}
+		}
+	}
+	return ordered
 }
