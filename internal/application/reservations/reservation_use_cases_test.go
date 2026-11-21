@@ -34,7 +34,7 @@ func testUUID() string {
 func setupReservationTestDB(t *testing.T) *sql.DB {
 	t.Helper()
 
-	adminDSN := "host=localhost port=5432 user=trezutil password=trezutil dbname=postgres sslmode=disable"
+	adminDSN := reservationTestServer("postgres")
 	adminDB, err := sql.Open("postgres", adminDSN)
 	require.NoError(t, err)
 	defer adminDB.Close()
@@ -48,7 +48,7 @@ func setupReservationTestDB(t *testing.T) *sql.DB {
 		t.Fatalf("failed to create test database: %v", err)
 	}
 
-	testDSN := fmt.Sprintf("host=localhost port=5432 user=trezutil password=trezutil dbname=%s sslmode=disable", reservationTestDBName)
+	testDSN := reservationTestServer(reservationTestDBName)
 	db, err := sql.Open("postgres", testDSN)
 	require.NoError(t, err)
 
@@ -692,4 +692,19 @@ func TestReservationUseCases_ASuspendedStaffAccountReadsNothing(t *testing.T) {
 	_, err = uc.GetReservation(ctx, staff, booked.ID)
 	assert.ErrorIs(t, err, domain.ErrInsufficientPermissions)
 	assert.ErrorIs(t, uc.CancelReservation(ctx, staff, booked.ID), domain.ErrInsufficientPermissions)
+}
+
+// reservationTestServer is the PostgreSQL server these tests create their own database on: localhost:5432 (user and
+// password "trezutil") unless TREZUTIL_TEST_PG_HOST, _PORT, _USER and _PASSWORD point at a disposable server, so the
+// tests never drop or create a database on another server running on the default port.
+func reservationTestServer(dbname string) string {
+	get := func(key, fallback string) string {
+		if v := os.Getenv(key); v != "" {
+			return v
+		}
+		return fallback
+	}
+	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		get("TREZUTIL_TEST_PG_HOST", "localhost"), get("TREZUTIL_TEST_PG_PORT", "5432"),
+		get("TREZUTIL_TEST_PG_USER", "trezutil"), get("TREZUTIL_TEST_PG_PASSWORD", "trezutil"), dbname)
 }

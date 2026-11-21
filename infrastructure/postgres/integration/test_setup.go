@@ -18,8 +18,23 @@ import (
 const (
 	testDBName     = "trezutil_test"
 	migrationsDir  = "../../../migrations"
-	defaultTimeout = 10 * time.Second
+	defaultTimeout = 60 * time.Second // setup and cleanup; slow machines (Docker on Windows) need more than 10 s
 )
+
+// testServer is the PostgreSQL server the integration tests create their own database on. It defaults to
+// localhost:5432 (user and password "trezutil"); TREZUTIL_TEST_PG_HOST, _PORT, _USER and _PASSWORD point the tests at
+// a disposable server instead, so they never touch another database server running on the default port.
+func testServer(dbname string) string {
+	get := func(key, fallback string) string {
+		if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+			return v
+		}
+		return fallback
+	}
+	return fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		get("TREZUTIL_TEST_PG_HOST", "localhost"), get("TREZUTIL_TEST_PG_PORT", "5432"),
+		get("TREZUTIL_TEST_PG_USER", "trezutil"), get("TREZUTIL_TEST_PG_PASSWORD", "trezutil"), dbname)
+}
 
 // TestDB holds the shared test database connection and helpers.
 type TestDB struct {
@@ -30,7 +45,7 @@ type TestDB struct {
 func NewTestDB(tb *testing.T) *TestDB {
 	tb.Helper()
 
-	dsn := fmt.Sprintf("host=localhost port=5432 user=trezutil password=trezutil dbname=postgres sslmode=disable")
+	dsn := testServer("postgres")
 	adminDB, err := sql.Open("postgres", dsn)
 	if err != nil {
 		tb.Fatalf("failed to connect to postgres admin DB: %v", err)
@@ -53,7 +68,7 @@ func NewTestDB(tb *testing.T) *TestDB {
 		tb.Fatalf("failed to create test database: %v", err)
 	}
 
-	testDSN := fmt.Sprintf("host=localhost port=5432 user=trezutil password=trezutil dbname=%s sslmode=disable", testDBName)
+	testDSN := testServer(testDBName)
 	db, err := sql.Open("postgres", testDSN)
 	if err != nil {
 		tb.Fatalf("failed to connect to test database: %v", err)
@@ -61,7 +76,10 @@ func NewTestDB(tb *testing.T) *TestDB {
 	db.SetMaxOpenConns(10)
 	db.SetConnMaxLifetime(30 * time.Second)
 
-	if err := applyMigrations(ctx, db); err != nil {
+	// Thirty-odd migrations can take longer than the setup timeout on a slow machine (Docker on Windows).
+	migCtx, migCancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer migCancel()
+	if err := applyMigrations(migCtx, db); err != nil {
 		tb.Fatalf("failed to apply migrations: %v", err)
 	}
 
@@ -74,7 +92,7 @@ func (t *TestDB) Close() {
 		t.DB.Close()
 	}
 
-	dsn := fmt.Sprintf("host=localhost port=5432 user=trezutil password=trezutil dbname=postgres sslmode=disable")
+	dsn := testServer("postgres")
 	adminDB, err := sql.Open("postgres", dsn)
 	if err != nil {
 		return
