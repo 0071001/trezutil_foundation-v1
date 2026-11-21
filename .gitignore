@@ -36,3 +36,21 @@ web/frontend/node_modules/
 
 # Local infra data
 infrastructure/**/data/
+
+# Local deployment secrets (the template app.env.example stays tracked)
+deployments/docker/app.env
+
+# Database dumps written by scripts/ops/backup.sh and deploy.sh: they hold personal data
+backups/
+*.dump
+*.dump.sha256
+
+# Keys and certificates never belong in the repository
+*.pem
+*.key
+*.p12
+*.pfx
+id_ed25519*
+id_rsa*
+*_ed25519
+*_ed25519.pub
