@@ -1,0 +1,59 @@
+# Trezutil on a VPS it shares with other software (for example Odoo: 4 vCPU, 8 GB RAM, 100 GB SSD).
+#
+#   docker compose -p trezutil \
+#     -f deployments/docker/docker-compose.app.yml \
+#     -f deployments/docker/docker-compose.vps.yml \
+#     --env-file deployments/docker/app.env up -d --build
+#
+# What this overlay changes, and why:
+#   - The gateway listens on 127.0.0.1:${GATEWAY_LOCAL_PORT:-18080} only. The host's existing web server (the nginx that
+#     already serves Odoo on 80/443) forwards the Trezutil domain to it: see deployments/nginx/trezutil.conf. Trezutil
+#     never binds 80, 443, 8069, 8072 (Odoo) or 5432 (a PostgreSQL installed on the host).
+#   - PostgreSQL and OpenSearch keep no published port: they are reachable from the compose network only, so they
+#     cannot collide with the host's PostgreSQL.
+#   - Memory is capped per service (about 3.6 GB in total; measured idle use is about 1.2 GB), so Trezutil cannot starve Odoo. Raise the caps if the host
+#     has room; `docker stats` shows the real use.
+#   - The project name (-p trezutil) isolates containers, networks and volumes: trezutil_pgdata,
+#     trezutil-postgres-1… (scripts/ops/backup.sh expects PG_CONTAINER=trezutil-postgres-1).
+#
+# Use this overlay instead of docker-compose.proxy.yml (Caddy on 80/443) when another web server already owns those
+# ports. Set TRUSTED_PROXY_HOPS=1 and CORS_ALLOWED_ORIGINS=https://<your domain> in app.env.
+
+services:
+  postgres:
+    mem_limit: 768m
+    cpus: 1.0
+
+  opensearch:
+    # the JVM heap is 512 MB (OPENSEARCH_JAVA_OPTS in the base file); the rest is for the OS page cache
+    mem_limit: 1536m # measured: about 1.05 GB resident at idle with a 512 MB heap
+    cpus: 1.0
+
+  migrate:
+    mem_limit: 256m
+
+  identity-service:
+    mem_limit: 192m
+    cpus: 0.5
+
+  search-service:
+    mem_limit: 192m
+    cpus: 0.5
+
+  conversation-service:
+    mem_limit: 256m
+    cpus: 1.0
+
+  order-service:
+    mem_limit: 192m
+    cpus: 0.5
+
+  payment-service:
+    mem_limit: 192m
+    cpus: 0.5
+
+  api-gateway:
+    mem_limit: 192m
+    cpus: 0.5
+    ports: !override
+      - "127.0.0.1:${GATEWAY_LOCAL_PORT:-18080}:8080"
