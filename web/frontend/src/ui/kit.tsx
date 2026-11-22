@@ -4,8 +4,15 @@ import { Icon, type IconName } from '@/ui/Icon'
 
 /* Small shared pieces: the logo, badges, and the states every screen needs (loading, error, empty, offline). */
 
+/* The official Trezutil logo (source files in /logos): the full horizontal logo, or only its three-dot mark when compact. */
 export function Logo({ compact = false }: { compact?: boolean }) {
-  return <div className="logo"><span className="logo-mark" aria-hidden="true"><span /></span>{!compact && <span>Trezutil</span>}</div>
+  return (
+    <span className="logo">
+      {compact
+        ? <img className="logo-mark" src="/brand/trezutil-mark.svg" alt="" width={642} height={184} />
+        : <img className="logo-full" src="/brand/trezutil-logo.png" alt="Trezutil" width={1000} height={147} />}
+    </span>
+  )
 }
 
 export type Tone = 'green' | 'amber' | 'neutral' | 'blue' | 'red'

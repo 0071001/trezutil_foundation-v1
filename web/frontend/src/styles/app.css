@@ -28,12 +28,12 @@
 .sidebar { width: 276px; flex: 0 0 276px; background: #f7f8f7; border-right: 1px solid #eceeec; display: flex; flex-direction: column; padding: 14px 12px 10px; transition: .25s ease; z-index: 30; }
 .sidebar.collapsed { width: 66px; flex-basis: 66px; padding-inline: 9px; }
 .side-head { height: 44px; display: flex; align-items: center; justify-content: space-between; padding: 0 5px 0 8px; }
-.logo { display: flex; align-items: center; gap: 9px; font-family: Manrope, sans-serif; font-size: 19px; font-weight: 700; letter-spacing: -.5px; white-space: nowrap; }
-.logo-mark { width: 26px; height: 26px; border-radius: 8px; background: var(--green); display: grid; place-items: center; transform: rotate(3deg); flex: 0 0 auto; }
-.logo-mark::before, .logo-mark::after, .logo-mark span { content: ''; position: absolute; width: 11px; height: 2px; background: white; border-radius: 2px; transform: rotate(-45deg); }
-.logo-mark::before { margin: -7px 0 0 -4px; width: 7px; }
-.logo-mark::after { margin: 6px 0 0 4px; width: 7px; }
-.logo-mark span { transform: rotate(45deg); }
+.logo { display: flex; align-items: center; line-height: 0; }
+.logo img { display: block; height: auto; max-width: none; flex: 0 0 auto; }
+.logo-full { width: 128px; }
+.logo-mark { width: 30px; }
+/* Collapsed (desktop): the three-dot mark is too wide to sit beside the toggle in 48px, so stack them. */
+@media (min-width: 901px) { .collapsed .side-head { height: auto; flex-direction: column; gap: 6px; padding: 8px 0 2px; } }
 .icon-btn { width: 34px; height: 34px; border: 0; border-radius: 8px; background: transparent; display: grid; place-items: center; color: #5f6864; }
 .icon-btn:hover { background: #ecefed; color: var(--ink); }
 .side-actions { padding-top: 18px; display: grid; gap: 3px; }
@@ -80,7 +80,8 @@
 .notification-btn i { position: absolute; top: 1px; right: 0; background: var(--green); color: white; border: 2px solid white; width: 16px; height: 16px; border-radius: 50%; font: 600 8px DM Sans; display: grid; place-items: center; }
 .view-container { flex: 1; min-height: 0; overflow: hidden; }
 .welcome { height: 100%; padding: 8vh 24px 20px; display: flex; flex-direction: column; align-items: center; overflow-y: auto; }
-.welcome-mark { margin-bottom: 24px; transform: scale(1.2); }
+.welcome-mark { margin-bottom: 26px; }
+.welcome-mark .logo-mark { width: 64px; }
 .welcome h1 { margin: 0; font-family: Manrope, sans-serif; text-align: center; font-size: clamp(30px, 3vw, 43px); line-height: 1.18; letter-spacing: -1.6px; font-weight: 600; }
 .welcome > p { margin: 15px 0 35px; color: var(--muted); font-size: 16px; }
 .suggestions { width: min(760px, 100%); display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
@@ -115,8 +116,8 @@
 .messages { flex: 1; min-height: 0; overflow-y: auto; padding: 24px max(24px, calc((100% - 820px) / 2)) 30px; }
 .user-message { width: fit-content; max-width: 70%; margin: 0 0 34px auto; background: #f0f2f1; border-radius: 17px 17px 4px 17px; padding: 12px 16px; font-size: 14px; line-height: 1.55; }
 .assistant-message { display: grid; grid-template-columns: 30px 1fr; gap: 13px; }
-.assistant-mark { padding-top: 2px; }
-.assistant-mark .logo-mark { width: 27px; height: 27px; }
+.assistant-mark { padding-top: 8px; }
+.assistant-mark .logo-mark { width: 27px; }
 .message-content { min-width: 0; font-size: 14px; line-height: 1.65; }
 .message-content > p { margin: 0 0 14px; }
 .activity { border: 1px solid var(--line); border-radius: 11px; padding: 11px 13px; display: flex; align-items: center; gap: 10px; margin: 19px 0 12px; background: #fbfcfb; }
@@ -325,7 +326,7 @@
   .suggestions { grid-template-columns: 1fr; }.suggestions button { min-height: 58px; }.welcome-composer { margin-top: 18px; }
   .composer-wrap { width: calc(100% - 20px); }.disclaimer { display: none; }
   .messages { padding: 18px 13px 25px; }.user-message { max-width: 88%; margin-bottom: 25px; }
-  .assistant-message { grid-template-columns: 25px 1fr; gap: 9px; }.assistant-mark .logo-mark { width: 23px; height: 23px; }
+  .assistant-message { grid-template-columns: 25px 1fr; gap: 9px; }.assistant-mark .logo-mark { width: 23px; }
   .activity { align-items: start; flex-wrap: wrap; }.activity button { width: 100%; margin-left: 34px; }
   .supplier-card { grid-template-columns: 54px 1fr; }.product-visual { height: 52px; }.price-block { grid-column: 2; grid-row: 2; text-align: left; display: flex; align-items: center; gap: 8px; }.price-block small { margin: 0; }.price-block button { margin-left: auto; }.meta-row span:nth-child(3) { display: none; }
   .workspace-head { padding: 17px 16px; }.title-row, .operation-title { align-items: start; gap: 15px; }.title-row h1, .operation-title h1 { font-size: 21px; }.title-row > button { display: none; }
