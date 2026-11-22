@@ -97,6 +97,8 @@ services:
       WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
       WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
       WHATSAPP_OTP_TEMPLATE: ${WHATSAPP_OTP_TEMPLATE:-}
+      # The language code of that template as approved by Meta (fr, en…); it must match exactly.
+      WHATSAPP_OTP_TEMPLATE_LANG: ${WHATSAPP_OTP_TEMPLATE_LANG:-en}
       # The console's health and channel pages say which integrations are configured: only "true" or empty
       # reaches this service, never a key.
       STRIPE_CONFIGURED: ${STRIPE_SECRET_KEY:+true}
