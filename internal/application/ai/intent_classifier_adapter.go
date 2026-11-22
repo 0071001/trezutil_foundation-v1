@@ -111,33 +111,7 @@ func (a *IntentClassifierAdapter) ClassifyIntent(ctx context.Context, req *conve
 // applies. It returns a settle function (consume on true, release on false)
 // and false when the actor cannot afford the call.
 func (a *IntentClassifierAdapter) meter(ctx context.Context, req *conversation.IntentClassificationRequest, requestID string) (func(bool), bool) {
-	noop := func(bool) {}
-	usage := a.orchestrator.usageService
-	if usage == nil || !req.Actor.IsAuthenticated() {
-		return noop, true
-	}
-	policy, err := usage.ResolvePolicy(ctx, "AI_INTERPRETATION", req.Channel, req.Actor.Type)
-	if err != nil || policy == nil || !policy.IsMetered() {
-		return noop, true
-	}
-	account, err := usage.FindOrCreateCreditAccountByOwner(ctx, req.Actor.Type, req.Actor.ID, req.TenantID, "", "")
-	if err != nil {
-		return noop, false
-	}
-	if ok, err := usage.Check(ctx, account.AccountID, policy.Cost); err != nil || !ok {
-		return noop, false
-	}
-	res, err := usage.Reserve(ctx, account.AccountID, "AI_INTERPRETATION", policy.Cost, requestID, req.TenantID)
-	if err != nil {
-		return noop, false
-	}
-	return func(used bool) {
-		if used {
-			_ = usage.Consume(ctx, res.ReservationID)
-		} else {
-			_ = usage.Release(ctx, res.ReservationID)
-		}
-	}, true
+	return meterUsage(ctx, a.orchestrator.usageService, "AI_INTERPRETATION", req.Channel, req.Actor, req.TenantID, requestID)
 }
 
 // Ensure interface compliance

@@ -62,6 +62,13 @@ type AIProvider interface {
 	Generate(ctx context.Context, request AIRequest) (AIResponse, error)
 }
 
+// AITextStreamer is a provider that can stream the text it generates: onText receives each piece, in order, as the
+// model writes it, and the returned response holds the whole text. A provider that cannot stream simply does not
+// implement it; the gateway then answers in one piece.
+type AITextStreamer interface {
+	GenerateStream(ctx context.Context, request AIRequest, onText func(string)) (AIResponse, error)
+}
+
 type AITaskType string
 
 const (

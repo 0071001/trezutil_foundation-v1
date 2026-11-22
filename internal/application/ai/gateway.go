@@ -100,6 +100,64 @@ func (g *AIGateway) Generate(ctx context.Context, orgID string, request domain.A
 	return &resp, nil
 }
 
+// GenerateStream is Generate for a written answer: onText receives the text as the model writes it. A provider that
+// cannot stream answers in one piece (onText is then called once with the whole text): never a simulated stream.
+func (g *AIGateway) GenerateStream(ctx context.Context, orgID string, request domain.AIRequest, onText func(string)) (*domain.AIResponse, error) {
+	if err := g.validateRequest(request); err != nil {
+		return nil, domain.NewAIError(domain.AIErrInvalidResponse, err.Error())
+	}
+	model, provider, err := g.router.Route(ctx, orgID, request.Task)
+	if err != nil {
+		return nil, domain.NewAIError(domain.AIErrModelUnavailable, err.Error())
+	}
+	timeout := request.Timeout
+	if timeout <= 0 {
+		timeout = g.timeout
+	}
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	request.ModelID = model.ModelID
+	if request.RequestID == "" {
+		request.RequestID = generateAIRequestID()
+	}
+
+	if onText == nil {
+		onText = func(string) {}
+	}
+	startTime := time.Now()
+	var resp domain.AIResponse
+	if streamer, ok := provider.(domain.AITextStreamer); ok {
+		resp, err = streamer.GenerateStream(ctx, request, onText)
+	} else {
+		resp, err = provider.Generate(ctx, request)
+		if err == nil && onText != nil {
+			onText(resp.Content)
+		}
+	}
+	latency := time.Since(startTime)
+	if err != nil {
+		aiErr, ok := err.(domain.AIError)
+		if !ok {
+			if isContextDeadlineExceeded(err) {
+				return nil, domain.NewAIError(domain.AIErrProviderTimeout, "AI provider call timed out")
+			}
+			aiErr = domain.NewAIError(domain.AIErrUnknown, err.Error())
+		}
+		g.logger.Error().Str("provider", provider.ID()).Str("model", model.ModelID).Str("task", string(request.Task)).
+			Str("request_id", request.RequestID).Dur("latency", latency).Err(err).Msg("AI provider stream failed")
+		return nil, aiErr
+	}
+	resp.LatencyMs = latency.Milliseconds()
+	resp.ProviderID = provider.ID()
+	resp.ModelID = model.ModelID
+	if len(resp.Content) == 0 {
+		return nil, domain.NewAIError(domain.AIErrInvalidResponse, "AI provider returned empty response")
+	}
+	g.logger.Info().Str("provider", provider.ID()).Str("model", model.ModelID).Str("task", string(request.Task)).
+		Str("request_id", request.RequestID).Dur("latency", latency).Int("tokens", resp.TokensUsed).Msg("AI provider stream completed")
+	return &resp, nil
+}
+
 func (g *AIGateway) validateRequest(request domain.AIRequest) error {
 	if request.Task == "" {
 		return domain.NewAIError(domain.AIErrUnsupportedTask, "task type is required")

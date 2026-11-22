@@ -5,7 +5,7 @@ import { AppRoutes } from '@/App'
 import { I18nProvider } from '@/lib/i18n'
 import { SessionProvider } from '@/lib/session'
 
-export interface MockCall { method: string; path: string; body: unknown; headers: Record<string, string> }
+export interface MockCall { method: string; path: string; body: unknown; headers: Record<string, string>; stream?: boolean }
 type Handler = (call: MockCall) => { status?: number; body?: unknown } | Promise<{ status?: number; body?: unknown }>
 
 /**
@@ -22,11 +22,22 @@ export function mockApi(routes: Record<string, Handler>) {
     // JSON bodies arrive parsed; a file upload arrives as its form fields (the file itself under its field name).
     const raw = init?.body
     const requestBody = raw instanceof FormData ? Object.fromEntries(raw.entries()) : raw ? JSON.parse(String(raw)) : undefined
-    const call = { method, path: `${path}${url.search}`, body: requestBody, headers }
+    // The streamed message route carries the same request as POST /conversations/message: unless a test mocks the
+    // stream itself, it is served by that route's handler, recorded under that path (stream: true), and its answer
+    // comes back as the stream's final "done" event.
+    const viaMessage = method === 'POST' && path === '/conversations/message/stream' && !routes['POST /conversations/message/stream'] && !!routes['POST /conversations/message']
+    const call: MockCall = { method, path: viaMessage ? '/conversations/message' : `${path}${url.search}`, body: requestBody, headers, ...(viaMessage ? { stream: true } : {}) }
     calls.push(call)
-    const handler = routes[`${method} ${path}`]
+    const handler = routes[viaMessage ? 'POST /conversations/message' : `${method} ${path}`]
     if (!handler) return new Response(JSON.stringify({ error: { code: 'UNMOCKED', message: `${method} ${path}` } }), { status: 599 })
     const { status = 200, body = {} } = await handler(call)
+    if (viaMessage && status < 400) {
+      return new Response(`event: done
+data: ${JSON.stringify(body)}
+
+`, { status, headers: { 'Content-Type': 'text/event-stream' } })
+    }
+    if (typeof body === 'string') return new Response(body, { status, headers: { 'Content-Type': 'text/event-stream' } })
     return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
   })
   vi.stubGlobal('fetch', fetchMock)

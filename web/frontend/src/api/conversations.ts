@@ -1,4 +1,4 @@
-import { http } from '@/api/client'
+import { ApiError, http } from '@/api/client'
 import { getLang } from '@/lib/i18n'
 import { arr, num, obj, read, str } from '@/api/json'
 
@@ -28,6 +28,18 @@ export interface ConversationReply {
   suggestions: string[]
   /** Entities created or opened by the action (links in the thread). */
   refs: { order_id: string; reservation_id: string; listing_id: string }
+  /** A message sent again whose first delivery is still being answered: ask again in a moment. */
+  in_progress: boolean
+}
+
+/** What a streamed answer reports while it is produced (POST /conversations/message/stream). */
+export interface StreamHandlers {
+  /** A real step of the work: interpreting, acting (detail: the action type) or writing. */
+  onStage?: (stage: string, detail: string) => void
+  /** A piece of the answer's text, as the model writes it. */
+  onDelta?: (text: string) => void
+  /** The text received so far is withdrawn: the final answer replaces it. */
+  onReset?: () => void
 }
 
 export function mapReply(value: unknown): ConversationReply {
@@ -68,6 +80,7 @@ export function mapReply(value: unknown): ConversationReply {
     }),
     result_items: arr(read(resultData, 'items', 'Items')).map(obj),
     suggestions: arr(metadata.suggestions).map(String).map((x) => x.trim()).filter(Boolean).slice(0, 4),
+    in_progress: metadata.in_progress === true,
     refs: {
       order_id: str(resultData.order_id) || (str(metadata.action_type) === 'CREATE_ORDER' ? str(read(resultData, 'id', 'ID')) : ''),
       reservation_id: str(resultData.reservation_id) || (str(metadata.action_type) === 'CREATE_RESERVATION' ? str(read(resultData, 'id', 'ID')) : ''),
@@ -110,6 +123,34 @@ export const conversationsApi = {
       message_idempotency_key: idempotencyKey,
       locale: getLang(),
     }))
+  },
+
+  /**
+   * The same message as send(), answered as a stream: the real steps, then the text as it is written, then the whole
+   * answer (the "done" event, identical to send()'s). Rejects like send(); a broken connection rejects with status 0,
+   * and sending again with the same idempotency key returns the stored answer without running anything twice.
+   */
+  async sendStream(text: string, idempotencyKey: string, sender: string | undefined, handlers: StreamHandlers, signal?: AbortSignal): Promise<ConversationReply> {
+    let done: ConversationReply | null = null
+    let failure: { code: string; message: string } | null = null
+    await http.stream('/conversations/message/stream', {
+      message_text: text,
+      channel: 'web',
+      sender_external_id: sender || senderExternalID(),
+      message_idempotency_key: idempotencyKey,
+      locale: getLang(),
+    }, (name, data) => {
+      const d = obj(data)
+      if (name === 'stage') handlers.onStage?.(str(d.stage), str(d.detail))
+      else if (name === 'delta') handlers.onDelta?.(str(d.text))
+      else if (name === 'reset') handlers.onReset?.()
+      else if (name === 'done') done = mapReply(data)
+      else if (name === 'error') failure = { code: str(d.code), message: str(d.message) }
+    }, signal)
+    if (done) return done
+    const f = failure as { code: string; message: string } | null
+    if (f) throw new ApiError(f.message || 'Le message n’a pas pu être traité.', f.code === 'FORBIDDEN' ? 403 : 500, f.code)
+    throw new ApiError('La réponse a été interrompue.', 0, 'STREAM_INTERRUPTED')
   },
 
   async confirm(conversationId: string, token: string): Promise<ConversationReply> {

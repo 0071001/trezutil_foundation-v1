@@ -154,7 +154,6 @@ export function VoiceMode() {
       if (last.failed) { setAnswer(`Le message n’est pas parti : ${last.failed.message}`); setPhase('muted') }
       return
     }
-    conversationStore.seen(last.id)
     const reply = last.reply
     const text = last.text || 'C’est fait.'
     setAnswer(text)

@@ -78,39 +78,10 @@ func NewConversationHandler(useCases ConversationUseCases, logger zerolog.Logger
 
 // HandleProcessMessage handles POST /api/v1/conversations/message
 func (h *ConversationHandler) HandleProcessMessage(w http.ResponseWriter, r *http.Request) {
-	var httpReq conversationMessageRequest
-	if err := readJSONBody(r, &httpReq); err != nil {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request format"}}, http.StatusBadRequest)
+	req, failure, status := h.parseMessageRequest(r)
+	if failure != nil {
+		writeJSON(w, failure, status)
 		return
-	}
-
-	if httpReq.MessageText == "" {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "MISSING_MESSAGE_TEXT", Message: "message_text is required"}}, http.StatusBadRequest)
-		return
-	}
-
-	channel := domain.Channel(strings.ToLower(httpReq.Channel))
-	if channel == "" {
-		channel = domain.ChannelWeb
-	}
-	if !channel.IsValid() {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_CHANNEL", Message: "Invalid channel"}}, http.StatusBadRequest)
-		return
-	}
-
-	if len(httpReq.MessageText) > maxMessageTextLength {
-		writeJSON(w, ErrorResponse{Error: Error{Code: "MESSAGE_TOO_LONG", Message: "message_text is too long"}}, http.StatusRequestEntityTooLarge)
-		return
-	}
-
-	req := &conversation.ProcessConversationRequest{
-		Channel:               channel,
-		SenderID:              httpReq.SenderID,
-		SenderExternalID:      httpReq.SenderExternalID,
-		MessageText:           httpReq.MessageText,
-		MessageIdempotencyKey: httpReq.MessageIdempotencyKey,
-		Locale:                httpReq.Locale,
-		Actor:                 principalActor(r),
 	}
 
 	resp, err := h.useCases.ProcessMessage(r.Context(), req)
@@ -231,6 +202,9 @@ func HandleConversationRoutes(handler *ConversationHandler, w http.ResponseWrite
 	switch {
 	case path == "/api/v1/conversations/message" && method == "POST":
 		handler.HandleProcessMessage(w, r)
+		return
+	case path == "/api/v1/conversations/message/stream" && method == "POST":
+		handler.HandleProcessMessageStream(w, r)
 		return
 	case strings.HasPrefix(path, "/api/v1/conversations/") && strings.HasSuffix(path, "/confirm") && method == "POST":
 		handler.HandleConfirmAction(w, r)

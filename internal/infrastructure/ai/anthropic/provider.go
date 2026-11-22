@@ -224,6 +224,72 @@ func (p *Provider) Generate(ctx context.Context, req domain.AIRequest) (domain.A
 	return resp, nil
 }
 
+// GenerateStream performs one streamed Messages API call (domain.AITextStreamer): each text delta goes to onText as
+// the model writes it. Used for writing answers, never for structured output.
+func (p *Provider) GenerateStream(ctx context.Context, req domain.AIRequest, onText func(string)) (domain.AIResponse, error) {
+	system, messages := convertMessages(req)
+	if len(messages) == 0 {
+		return domain.AIResponse{}, domain.NewAIError(domain.AIErrInvalidResponse, "no user message to answer")
+	}
+	maxTokens := req.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = 1500
+	}
+	model := req.ModelID
+	if model == "" {
+		model = p.model
+	}
+	params := sdk.MessageNewParams{
+		Model:        sdk.Model(model),
+		MaxTokens:    int64(maxTokens),
+		Messages:     messages,
+		OutputConfig: sdk.OutputConfigParam{Effort: p.effort},
+	}
+	if system != "" {
+		params.System = []sdk.TextBlockParam{{Text: system}}
+	}
+
+	stream := p.client.Messages.NewStreaming(ctx, params)
+	defer stream.Close()
+	msg := sdk.Message{}
+	for stream.Next() {
+		event := stream.Current()
+		if err := msg.Accumulate(event); err != nil {
+			return domain.AIResponse{}, domain.NewAIError(domain.AIErrInvalidResponse, "AI stream could not be read")
+		}
+		if delta, ok := event.AsAny().(sdk.ContentBlockDeltaEvent); ok {
+			if text, ok := delta.Delta.AsAny().(sdk.TextDelta); ok && text.Text != "" && onText != nil {
+				onText(text.Text)
+			}
+		}
+	}
+	if err := stream.Err(); err != nil {
+		return domain.AIResponse{}, normalizeError(ctx, err)
+	}
+	switch msg.StopReason {
+	case sdk.StopReasonRefusal:
+		return domain.AIResponse{}, domain.NewAIError(domain.AIErrInvalidResponse, "model declined the request")
+	case sdk.StopReasonMaxTokens:
+		return domain.AIResponse{}, domain.NewAIError(domain.AIErrInvalidResponse, "model output was truncated")
+	}
+	var text strings.Builder
+	for _, block := range msg.Content {
+		if tb, ok := block.AsAny().(sdk.TextBlock); ok {
+			text.WriteString(tb.Text)
+		}
+	}
+	resp := domain.AIResponse{
+		Content:    strings.TrimSpace(text.String()),
+		TokensUsed: int(msg.Usage.InputTokens + msg.Usage.OutputTokens),
+		ProviderID: ProviderID,
+		ModelID:    string(msg.Model),
+	}
+	if resp.Content == "" {
+		return domain.AIResponse{}, domain.NewAIError(domain.AIErrInvalidResponse, "model returned no text")
+	}
+	return resp, nil
+}
+
 // convertMessages maps gateway messages to the Messages API: "system" turns
 // go to the system prompt, consecutive same-role turns are merged, and the
 // list is trimmed so it starts and ends with a user turn.
@@ -347,6 +413,9 @@ func normalizeError(ctx context.Context, err error) error {
 		return domain.NewAIError(domain.AIErrProviderTimeout, "AI provider call timed out")
 	case code >= 500:
 		return domain.NewAIError(domain.AIErrProviderUnavailable, "AI provider temporarily unavailable")
+	case code == http.StatusBadRequest && strings.Contains(strings.ToLower(apiErr.Error()), "credit balance"):
+		// The Anthropic account has run out of credit: unavailable until credit is added, not a bad request.
+		return domain.NewAIError(domain.AIErrProviderUnavailable, "AI provider account is out of credit")
 	case code == http.StatusBadRequest && strings.Contains(strings.ToLower(apiErr.Error()), "prompt is too long"):
 		return domain.NewAIError(domain.AIErrContextTooLarge, "conversation too long for the model")
 	default:
@@ -354,4 +423,7 @@ func normalizeError(ctx context.Context, err error) error {
 	}
 }
 
-var _ domain.AIProvider = (*Provider)(nil)
+var (
+	_ domain.AIProvider     = (*Provider)(nil)
+	_ domain.AITextStreamer = (*Provider)(nil)
+)

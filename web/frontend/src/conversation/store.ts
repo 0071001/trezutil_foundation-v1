@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { toApiError } from '@/api/client'
+import { toApiError, type ApiError } from '@/api/client'
 import { conversationsApi, type ConversationReply } from '@/api/conversations'
 import { newId } from '@/ui/kit'
 
@@ -30,6 +30,11 @@ export interface Turn {
   resolution?: 'confirmed' | 'rejected' | 'expired'
   /** A user turn written again: the earlier version, for the record. */
   editedFrom?: string
+  /**
+   * On an assistant turn the person stopped while it was being written: the text shown is what had arrived. The
+   * server still stored the whole answer; asking again with the same key reads it back (nothing runs twice).
+   */
+  interrupted?: { key: string; question: string }
 }
 
 export interface Conversation {
@@ -54,8 +59,8 @@ interface State {
   pending: Record<string, string>
   /** Conversation id → the turn whose confirmation is being sent. */
   confirming: Record<string, string>
-  /** Answers received during this visit (shown progressively once); never stored. */
-  fresh: Record<string, true>
+  /** Conversation id → the answer being streamed: the text received so far and the current step. Never stored. */
+  streaming: Record<string, { text: string; stage: string }>
 }
 
 const MAX_CONVERSATIONS = 80
@@ -79,7 +84,7 @@ function persist(s: State) {
   } catch { /* storage full or unavailable: the thread still works for this visit */ }
 }
 
-let state: State = { owner: '', conversations: load(''), pending: {}, confirming: {}, fresh: {} }
+let state: State = { owner: '', conversations: load(''), pending: {}, confirming: {}, streaming: {} }
 const listeners = new Set<() => void>()
 
 function set(next: Partial<State>, save = true) {
@@ -116,21 +121,82 @@ function titleFrom(text: string): string {
   return one.length > 60 ? `${one.slice(0, 57).trimEnd()}…` : one
 }
 
+/** The step the server reports, in words (shown while the answer is on its way). */
+function stageLabel(stage: string, detail: string, asked: string): string {
+  if (stage === 'interpreting') return 'Compréhension de ta demande…'
+  if (stage === 'acting') {
+    if (detail === 'SEARCH_LISTINGS') return 'Recherche des fournisseurs…'
+    if (detail === 'GET_LISTING') return 'Lecture de l’offre…'
+    return 'Préparation de l’opération…'
+  }
+  if (stage === 'writing') return 'Rédaction de la réponse…'
+  return activityLabel(asked)
+}
+
+/** Conversation id → the request in flight, so the person can stop it. */
+const inFlight = new Map<string, AbortController>()
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * Asks again with the same idempotency key after the answer could not be received: the server answers from what it
+ * stored, or says the first delivery is still being answered (then this waits and asks again). Nothing runs twice.
+ */
+async function readBack(text: string, key: string, sender: string): Promise<ConversationReply> {
+  for (let attempt = 0; ; attempt++) {
+    const reply = await conversationsApi.send(text, key, sender)
+    if (!reply.in_progress || attempt >= 12) return reply
+    await wait(2500)
+  }
+}
+
+function setStreaming(id: string, change: (s: { text: string; stage: string }) => { text: string; stage: string }) {
+  const current = state.streaming[id] ?? { text: '', stage: '' }
+  set({ streaming: { ...state.streaming, [id]: change(current) } }, false)
+}
+
 async function deliver(id: string, turnId: string, text: string, key: string) {
   const conv = state.conversations.find((c) => c.id === id)
   if (!conv) return
-  set({ pending: { ...state.pending, [id]: activityLabel(text) } }, false)
-  try {
-    const reply = await conversationsApi.send(text, key, conv.sender)
+  const controller = new AbortController()
+  inFlight.set(id, controller)
+  set({ pending: { ...state.pending, [id]: activityLabel(text) }, streaming: { ...state.streaming, [id]: { text: '', stage: '' } } }, false)
+  const answered = (reply: ConversationReply) => {
     const answer: Turn = { id: newId(), role: 'assistant', text: reply.text, at: Date.now(), reply }
-    state = { ...state, fresh: { ...state.fresh, [answer.id]: true } }
     update(id, (c) => ({ ...c, serverId: reply.conversation_id || c.serverId, updatedAt: Date.now(), turns: [...c.turns, answer] }))
-  } catch (err) {
-    const e = toApiError(err)
+  }
+  const failed = (e: ApiError) => {
     const message = e.status === 403 ? 'Cette conversation appartient à un autre compte. Commence-en une nouvelle.' : e.isNetwork ? 'Trezutil est injoignable.' : e.message || 'Le message n’a pas pu être traité.'
     update(id, (c) => ({ ...c, turns: c.turns.map((x) => (x.id === turnId ? { ...x, failed: { message, network: e.isNetwork, key } } : x)) }))
+  }
+  try {
+    let reply = await conversationsApi.sendStream(text, key, conv.sender, {
+      onStage: (stage, detail) => {
+        set({ pending: { ...state.pending, [id]: stageLabel(stage, detail, text) } }, false)
+        setStreaming(id, (s) => ({ ...s, stage }))
+      },
+      onDelta: (piece) => setStreaming(id, (s) => ({ ...s, text: s.text + piece })),
+      onReset: () => setStreaming(id, (s) => ({ ...s, text: '' })),
+    }, controller.signal)
+    if (reply.in_progress) reply = await readBack(text, key, conv.sender)
+    answered(reply)
+  } catch (err) {
+    const e = toApiError(err)
+    if (e.code === 'ABORTED') {
+      // Stopped by the person: what had arrived stays, marked; the whole answer can be read back later.
+      const partial = state.streaming[id]?.text.trim() ?? ''
+      const turn: Turn = { id: newId(), role: 'assistant', text: partial || 'Réponse interrompue.', at: Date.now(), interrupted: { key, question: text } }
+      update(id, (c) => ({ ...c, updatedAt: Date.now(), turns: [...c.turns, turn] }))
+    } else if (e.isNetwork || e.status === 404 || e.status === 405) {
+      // The connection broke (or a server without the streamed route): ask again with the same key, which returns
+      // the stored answer and never runs the action a second time.
+      try { answered(await readBack(text, key, conv.sender)) } catch (again) { failed(toApiError(again)) }
+    } else {
+      failed(e)
+    }
   } finally {
-    set({ pending: without(state.pending, id) }, false)
+    inFlight.delete(id)
+    set({ pending: without(state.pending, id), streaming: without(state.streaming, id) }, false)
   }
 }
 
@@ -149,7 +215,7 @@ export const conversationStore = {
   /** Threads belong to an account: signing in or out shows that account's threads only. */
   setOwner(owner: string) {
     if (owner === state.owner) return
-    state = { owner, conversations: load(owner), pending: {}, confirming: {}, fresh: {} }
+    state = { owner, conversations: load(owner), pending: {}, confirming: {}, streaming: {} }
     listeners.forEach((l) => l())
   },
 
@@ -253,7 +319,6 @@ export const conversationStore = {
     try {
       const reply = accept ? await conversationsApi.confirm(conv.serverId, token) : await conversationsApi.reject(conv.serverId, token)
       const answer: Turn = { id: newId(), role: 'assistant', text: reply.text || (accept ? 'C’est fait.' : 'Annulé : rien n’a été modifié.'), at: Date.now(), reply }
-      state = { ...state, fresh: { ...state.fresh, [answer.id]: true } }
       update(conversationId, (c) => ({
         ...c,
         updatedAt: Date.now(),
@@ -274,9 +339,23 @@ export const conversationStore = {
     }
   },
 
-  /** An answer has been shown progressively once: it is shown whole from now on. */
-  seen(turnId: string) {
-    if (state.fresh[turnId]) set({ fresh: without(state.fresh, turnId) }, false)
+  /** Stops the answer being written in a conversation: what arrived stays, marked as interrupted. */
+  stop(conversationId: string) {
+    inFlight.get(conversationId)?.abort()
+  },
+
+  /** Reads back the whole answer of an interrupted turn (same key: the stored answer, nothing runs again). */
+  async completeInterrupted(conversationId: string, turnId: string): Promise<'done' | 'failed'> {
+    const conv = state.conversations.find((c) => c.id === conversationId)
+    const turn = conv?.turns.find((x) => x.id === turnId)
+    if (!conv || !turn?.interrupted) return 'failed'
+    try {
+      const reply = await readBack(turn.interrupted.question, turn.interrupted.key, conv.sender)
+      update(conversationId, (c) => ({ ...c, turns: c.turns.map((x) => (x.id === turnId ? { ...x, text: reply.text, reply, interrupted: undefined } : x)) }))
+      return 'done'
+    } catch {
+      return 'failed'
+    }
   },
 
   linkOperation(conversationId: string, operationId: string) {

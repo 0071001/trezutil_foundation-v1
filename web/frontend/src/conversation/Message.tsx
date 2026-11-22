@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { conversationStore, type Turn } from '@/conversation/store'
 import { offersOf, type Offer } from '@/commerce/offers'
@@ -8,8 +8,8 @@ import { Icon, type IconName } from '@/ui/Icon'
 import { clock, Logo } from '@/ui/kit'
 
 /*
- * One message. A user message is a bubble (copy, edit and send again). An answer of Trezutil is the runtime's text,
- * shown progressively when it has just arrived, then what the runtime returned: what it did, the offers as small
+ * One message. A user message is a bubble (copy, edit and send again). An answer of Trezutil is its text (streamed
+ * live while the model writes it, see StreamingAnswer; never replayed word by word afterwards), then what the runtime returned: what it did, the offers as small
  * cards, a question, a confirmation to give, an order or a booking created, quick replies. Nothing is added here.
  */
 
@@ -31,22 +31,6 @@ export function RichText({ text }: { text: string }) {
   })
   flush()
   return <>{blocks}</>
-}
-
-/** Reveals an answer that has just arrived word by word (the server sends it whole: this is presentation only). */
-function useReveal(turn: Turn): { shown: string; done: boolean } {
-  const fresh = !!conversationStore.get().fresh[turn.id]
-  const reduce = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
-  const words = useRef(turn.text.split(/(\s+)/))
-  const [count, setCount] = useState(() => (fresh && !reduce ? 0 : words.current.length))
-  useEffect(() => {
-    if (count >= words.current.length) { conversationStore.seen(turn.id); return }
-    const step = Math.max(2, Math.ceil(words.current.length / 40))
-    const timer = window.setTimeout(() => setCount((c) => Math.min(words.current.length, c + step)), 24)
-    return () => window.clearTimeout(timer)
-  }, [count, turn.id])
-  const done = count >= words.current.length
-  return { shown: done ? turn.text : words.current.slice(0, count).join(''), done }
 }
 
 function useCopy() {
@@ -100,6 +84,23 @@ export function UserMessage({ turn, conversationId, busy }: { turn: Turn; conver
   )
 }
 
+/**
+ * The answer while it is being written: the text received so far, as it arrives from the server, and the real step
+ * the server reports. Nothing here is simulated: an empty text shows the step only.
+ */
+export function StreamingAnswer({ text, label }: { text: string; label: string }) {
+  if (!text) return <Typing label={label} />
+  return (
+    <div className="assistant-message streaming" aria-busy="true">
+      <div className="assistant-mark"><Logo compact /></div>
+      <div className="message-content">
+        <RichText text={text} />
+        <p className="working small" role="status" aria-live="polite"><span className="stream-caret" aria-hidden="true" />{label}</p>
+      </div>
+    </div>
+  )
+}
+
 export function Typing({ label }: { label: string }) {
   return (
     <div className="assistant-message compact-response" role="status" aria-live="polite">
@@ -143,7 +144,7 @@ interface AssistantProps {
 export function AssistantMessage(p: AssistantProps) {
   const { turn, latest } = p
   const reply = turn.reply
-  const { shown, done } = useReveal(turn)
+  const [reading, setReading] = useState(false)
   const { copied, copy } = useCopy()
   const offers = reply ? offersOf(reply.result_items) : []
   const trace = reply ? TRACE[reply.action_type] : undefined
@@ -155,8 +156,17 @@ export function AssistantMessage(p: AssistantProps) {
     <div className="assistant-message">
       <div className="assistant-mark"><Logo compact /></div>
       <div className="message-content">
-        <RichText text={shown} />
-        {done && reply && (
+        <RichText text={turn.text} />
+        {turn.interrupted && (
+          <div className="interrupted-note" role="status">
+            <span>Réponse interrompue.</span>
+            <button type="button" className="secondary-btn small-btn" disabled={reading || p.busy}
+              onClick={() => { setReading(true); void conversationStore.completeInterrupted(p.conversationId, turn.id).finally(() => setReading(false)) }}>
+              {reading ? 'Lecture…' : 'Afficher la réponse complète'}
+            </button>
+          </div>
+        )}
+        {reply && (
           <>
             {trace && (
               <div className="activity">
@@ -248,7 +258,7 @@ export function AssistantMessage(p: AssistantProps) {
             )}
           </>
         )}
-        {done && (
+        {(
           <div className="message-actions">
             <button type="button" onClick={() => copy(turn.text)} aria-label="Copier la réponse" title="Copier"><Icon name={copied ? 'check' : 'copy'} size={15} /></button>
             {canRegenerate && <button type="button" onClick={() => conversationStore.regenerate(p.conversationId, turn.id)} aria-label="Régénérer la réponse" title="Redemander (la recherche est relancée)"><Icon name="refresh" size={15} /></button>}

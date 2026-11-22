@@ -2,6 +2,7 @@ package conversation
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/trezutil/trezutil/internal/application/vertical"
@@ -94,6 +95,7 @@ type ConversationProcessor struct {
 	runtime            ActionRuntime
 	packResolver       domain.PackResolver
 	memory             MemoryHints
+	replyWriter        ReplyWriter
 	confirmationExpiry time.Duration
 }
 
@@ -110,6 +112,8 @@ type ProcessorConfig struct {
 	PackResolver      domain.PackResolver
 	// Memory, when set, gives the interpreter the signed-in person's commercial memory.
 	Memory MemoryHints
+	// ReplyWriter, when set, has the model word the answers that report what was found (stream.go).
+	ReplyWriter ReplyWriter
 }
 
 // NewConversationProcessor creates a new ConversationProcessor.
@@ -130,6 +134,7 @@ func NewConversationProcessor(config ProcessorConfig) *ConversationProcessor {
 		runtime:            config.Runtime,
 		packResolver:       config.PackResolver,
 		memory:             config.Memory,
+		replyWriter:        config.ReplyWriter,
 		confirmationExpiry: 10 * time.Minute,
 	}
 }
@@ -192,8 +197,47 @@ func (p *ConversationProcessor) ProcessMessage(ctx context.Context, req *Process
 	if err != nil {
 		return nil, err
 	}
-	p.persistReply(ctx, conv, messageKey, result)
+	p.writeReply(ctx, conv, req, result)
+	// The answer is stored even when the person stopped waiting (closed the stream): the action ran, and asking
+	// again must give back this answer, not run it a second time.
+	p.persistReply(context.WithoutCancel(ctx), conv, messageKey, result)
 	return result, nil
+}
+
+// writeReply has the model word an answer that reports what was found, streaming it as it is written. The drafted
+// reply stays when there is no writer, when the answer must keep the server's exact words (writingEligible), when
+// the model fails or is stopped, or when the written text states a number the server did not establish.
+func (p *ConversationProcessor) writeReply(ctx context.Context, conv *domain.Conversation, req *ProcessRequest, result *ProcessResult) {
+	if p.replyWriter == nil || !writingEligible(result) || ctx.Err() != nil {
+		return
+	}
+	sink := SinkFrom(ctx)
+	sink.Stage("writing", "")
+	draft := result.Response.Text
+	facts := replyFacts(result.Response)
+	actionType, _ := result.Response.Metadata["action_type"].(string)
+	sent := false
+	text, err := p.replyWriter.WriteReply(ctx, ReplyWritingInput{
+		OrganizationID: conv.OrganizationID, Channel: req.Channel, Actor: req.Actor,
+		Language: result.Response.Language, CustomerMessage: req.MessageText, ActionType: actionType,
+		Draft: draft, Facts: facts,
+	}, func(piece string) {
+		if piece != "" {
+			sent = true
+			sink.Delta(piece)
+		}
+	})
+	text = strings.TrimSpace(text)
+	if err != nil || text == "" || !numbersAreGrounded(text, draft, facts, req.MessageText) {
+		if err == nil && text != "" {
+			p.logger.Warn().Str("conversation_id", conv.ID).Msg("Written answer dropped: it states a number the server did not establish")
+		}
+		if sent {
+			sink.Reset()
+		}
+		return
+	}
+	result.Response.Text = text
 }
 
 // dispatch routes the message according to the persisted conversation context.
@@ -231,17 +275,40 @@ func (p *ConversationProcessor) dispatch(ctx context.Context, conv *domain.Conve
 
 // replayReply returns the reply stored for an already-processed message.
 func (p *ConversationProcessor) replayReply(ctx context.Context, conv *domain.Conversation, messageKey string) *ProcessResult {
-	text := tr(resolveLanguage("", conv.Language), "I've already got that one — no need to send it twice.", "Je l’ai déjà reçu — inutile de l’envoyer deux fois.")
+	lang := resolveLanguage("", conv.Language)
+	var stored *domain.Message
 	if p.messageStore != nil {
 		if history, err := p.messageStore.FindByConversationID(ctx, conv.ID); err == nil {
 			for _, m := range history {
 				if m != nil && m.IdempotencyKey == "reply:"+messageKey && m.Content != nil {
-					text = m.Content.Text
+					stored = m
 				}
 			}
 		}
 	}
-	resp := domain.NewConversationResponse(text, resolveLanguage("", conv.Language))
+	if stored == nil {
+		// The first delivery is still being answered (or its answer was lost): say so, so the client asks again
+		// in a moment instead of showing this as the answer.
+		resp := domain.NewConversationResponse(tr(lang, "I'm still working on that message — one moment.", "Je traite encore ce message — un instant."), lang)
+		resp.Metadata["duplicate"] = true
+		resp.Metadata["in_progress"] = true
+		return &ProcessResult{ConversationID: conv.ID, Response: resp}
+	}
+	resp := domain.NewConversationResponse(stored.Content.Text, lang)
+	if stored.Language != "" {
+		resp.Language = stored.Language
+	}
+	// The cards and results the answer showed come back with it (never a confirmation: see ReplyRecordKey).
+	if record := StoredReply(stored.Content.Data); record != nil {
+		if raw, err := json.Marshal(record["cards"]); err == nil {
+			_ = json.Unmarshal(raw, &resp.Cards)
+		}
+		if meta, ok := record["metadata"].(map[string]interface{}); ok {
+			for k, v := range meta {
+				resp.Metadata[k] = v
+			}
+		}
+	}
 	resp.Metadata["duplicate"] = true
 	return &ProcessResult{ConversationID: conv.ID, Response: resp}
 }
@@ -509,6 +576,7 @@ func (p *ConversationProcessor) interpretIntent(
 			classReq.Memory = p.memory.Hints(ctx, req.Actor.ID)
 		}
 
+		SinkFrom(ctx).Stage("interpreting", "")
 		classResult, err := p.classifier.ClassifyIntent(ctx, classReq)
 		if err != nil || classResult == nil || classResult.Fallback != nil || classResult.Intent == nil {
 			// The model is unavailable or unsure: degrade to deterministic
@@ -627,6 +695,7 @@ func (p *ConversationProcessor) executeAction(
 		return &ProcessResult{ConversationID: conv.ID, Response: resp, RequiresUserInput: true}, nil
 	}
 
+	SinkFrom(ctx).Stage("acting", string(action.ActionType))
 	execResult, err := p.runtime.Execute(ctx, action, actor)
 	if err != nil {
 		return nil, fmt.Errorf("action execution failed: %w", err)

@@ -95,4 +95,47 @@ func (p *Provider) Generate(ctx context.Context, req domain.AIRequest) (domain.A
 	return domain.AIResponse{}, last
 }
 
-var _ domain.AIProvider = (*Provider)(nil)
+// GenerateStream tries each usable streaming provider in order, like Generate, but only until one has sent text:
+// text already shown cannot be taken back, so a failure after the first piece is returned, never retried elsewhere.
+func (p *Provider) GenerateStream(ctx context.Context, req domain.AIRequest, onText func(string)) (domain.AIResponse, error) {
+	var last error
+	for i, pr := range p.providers {
+		streamer, ok := pr.(domain.AITextStreamer)
+		if !ok || !pr.IsUsable() {
+			continue
+		}
+		models := pr.Models()
+		if len(models) == 0 {
+			continue
+		}
+		attempt := req
+		attempt.ModelID = models[0].ModelID
+		sent := false
+		resp, err := streamer.GenerateStream(ctx, attempt, func(piece string) {
+			sent = true
+			if onText != nil {
+				onText(piece)
+			}
+		})
+		if err == nil {
+			if i > 0 {
+				p.logger.Warn().Str("provider", pr.ID()).Msg("AI stream answered by a fallback provider")
+			}
+			return resp, nil
+		}
+		last = err
+		if sent || ctx.Err() != nil {
+			break
+		}
+		p.logger.Warn().Err(err).Str("provider", pr.ID()).Msg("AI provider failed to stream; trying the next one")
+	}
+	if last == nil {
+		last = domain.NewAIError(domain.AIErrProviderUnavailable, "no AI provider can stream")
+	}
+	return domain.AIResponse{}, last
+}
+
+var (
+	_ domain.AIProvider     = (*Provider)(nil)
+	_ domain.AITextStreamer = (*Provider)(nil)
+)

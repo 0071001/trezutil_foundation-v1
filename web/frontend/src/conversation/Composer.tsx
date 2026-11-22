@@ -29,11 +29,13 @@ interface Props {
   onSubmit: (text: string, attachments: TurnAttachment[]) => void
   onVoice?: () => void
   busy?: boolean
+  /** Stops the answer being written (shown instead of send while busy). */
+  onStop?: () => void
   autoFocus?: boolean
   placeholder?: string
 }
 
-export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSubmit, onVoice, busy = false, autoFocus, placeholder }, ref) {
+export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSubmit, onVoice, onStop, busy = false, autoFocus, placeholder }, ref) {
   const area = useRef<HTMLTextAreaElement>(null)
   const filesInput = useRef<HTMLInputElement>(null)
   const cameraInput = useRef<HTMLInputElement>(null)
@@ -140,7 +142,9 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
                 <Icon name="mic" />
               </button>
             )}
-            {!hasText && onVoice
+            {busy && onStop
+              ? <button type="button" className="send-button stop-button" onClick={onStop} aria-label="Arrêter la réponse" title="Arrêter"><Icon name="x" size={17} /></button>
+              : !hasText && onVoice
               ? <button type="button" className="voice-button" onClick={onVoice} aria-label="Ouvrir le mode vocal" title="Mode vocal"><Icon name="voice" /></button>
               : <button type="button" className="send-button" onClick={submit} disabled={!hasText || busy} aria-label="Envoyer"><Icon name="send" size={17} /></button>}
           </div>

@@ -143,17 +143,20 @@ func main() {
 
 	// Commercial memory: kept per account on the server and read by the interpreter as hints (never instructions).
 	memorySvc := memory.NewService(postgres.NewMemoryStore(db))
+	// The same model providers interpret requests and word the answers (streamed); without AI both fall back.
+	classifier, replyWriter := buildIntentClassifier(logger, usageSvc, categoryRepo)
 	processor := conversation.NewConversationProcessor(conversation.ProcessorConfig{
 		Logger:            logger,
 		ConversationStore: postgres.NewConversationStore(db),
 		ContextStore:      postgres.NewConversationContextStore(db),
 		MessageStore:      postgres.NewMessageStore(db),
 		WebhookEventStore: postgres.NewWebhookEventStore(db),
-		IntentClassifier:  buildIntentClassifier(logger, usageSvc, categoryRepo),
+		IntentClassifier:  classifier,
 		ActionResolver:    conversation.NewActionResolver(conversation.NewDefaultIntentValidator()),
 		Runtime:           runtime,
 		PackResolver:      packResolver,
 		Memory:            memorySvc,
+		ReplyWriter:       replyWriter,
 	})
 
 	// Replies follow the locale sent with each message; this answers the channels
@@ -272,11 +275,11 @@ func buildSearch(logger zerolog.Logger) commerce.SearchUseCases {
 // Without AI_PROVIDER, or when no provider is configured, it returns the
 // deterministic keyword classifier; the processor also falls back to keywords
 // whenever the model is unsure or unavailable.
-func buildIntentClassifier(logger zerolog.Logger, usage domain.UsageService, categories domain.CategoryRepository) conversation.IntentClassifier {
+func buildIntentClassifier(logger zerolog.Logger, usage domain.UsageService, categories domain.CategoryRepository) (conversation.IntentClassifier, conversation.ReplyWriter) {
 	names := splitProviders(common.Getenv("AI_PROVIDER", ""))
 	if len(names) == 0 {
 		logger.Info().Msg("AI_PROVIDER not set; using keyword classification")
-		return &conversation.KeywordClassifier{}
+		return &conversation.KeywordClassifier{}, nil
 	}
 	var providers []domain.AIProvider
 	for _, name := range names {
@@ -286,12 +289,12 @@ func buildIntentClassifier(logger zerolog.Logger, usage domain.UsageService, cat
 	}
 	if len(providers) == 0 {
 		logger.Warn().Msg("no AI provider is usable; using keyword classification")
-		return &conversation.KeywordClassifier{}
+		return &conversation.KeywordClassifier{}, nil
 	}
 	provider, err := failoverai.New(logger, providers...)
 	if err != nil {
 		logger.Warn().Err(err).Msg("AI providers not composed; using keyword classification")
-		return &conversation.KeywordClassifier{}
+		return &conversation.KeywordClassifier{}, nil
 	}
 
 	router := aiapp.NewModelRouter(logger)
@@ -331,7 +334,7 @@ func buildIntentClassifier(logger zerolog.Logger, usage domain.UsageService, cat
 		}
 		return out, nil
 	}
-	return aiapp.NewIntentClassifierAdapter(orchestrator, aiapp.WithCategories(lister))
+	return aiapp.NewIntentClassifierAdapter(orchestrator, aiapp.WithCategories(lister)), aiapp.NewReplyWriter(gateway, usage, logger)
 }
 
 func splitProviders(list string) []string {

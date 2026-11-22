@@ -307,3 +307,11 @@ a.list-row:hover { background: #fafbfa; }
 .payment-panel { margin: 18px 0; display: grid; gap: 10px; justify-items: start; }
 .payment-form { display: grid; gap: 10px; width: min(480px, 100%); }
 .stripe-element { min-height: 60px; }
+
+/* Streamed answer: the text as it arrives, a discreet caret and the real step under it. */
+.assistant-message.streaming .working.small { display: flex; align-items: center; gap: 7px; margin-top: 6px; font-size: 11.5px; color: var(--muted); }
+.stream-caret { width: 7px; height: 13px; border-radius: 2px; background: var(--green); opacity: .75; animation: stream-blink 1s steps(2, start) infinite; }
+@keyframes stream-blink { to { visibility: hidden; } }
+@media (prefers-reduced-motion: reduce) { .stream-caret { animation: none; } }
+.interrupted-note { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
+.stop-button { background: var(--ink); color: #fff; }

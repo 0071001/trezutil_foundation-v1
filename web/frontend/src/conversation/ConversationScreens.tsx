@@ -4,7 +4,7 @@ import { toApiError, type ApiError } from '@/api/client'
 import { useSession } from '@/lib/session'
 import { conversationStore, useConversations, type TurnAttachment } from '@/conversation/store'
 import { Composer, type ComposerHandle } from '@/conversation/Composer'
-import { AssistantMessage, Typing, UserMessage } from '@/conversation/Message'
+import { AssistantMessage, StreamingAnswer, UserMessage } from '@/conversation/Message'
 import { openOperationFor } from '@/operations/operations'
 import { OfferPanel } from '@/commerce/OfferPanel'
 import type { Offer } from '@/commerce/offers'
@@ -56,7 +56,7 @@ export function Thread() {
   const { signedIn } = useSession()
   const location = useLocation()
   const navigate = useNavigate()
-  const { conversations, pending, confirming } = useConversations()
+  const { conversations, pending, confirming, streaming } = useConversations()
   const conv = conversations.find((c) => c.id === id)
   const [draft, setDraft] = useState(() => (location.state as { draft?: string } | null)?.draft ?? '')
   const [opening, setOpening] = useState(false)
@@ -148,7 +148,7 @@ export function Thread() {
             </div>
           )}
           {conv.turns.length > 0 && conv.turns.every((t) => !t.reply) && conv.turns.some((t) => t.role === 'assistant') && conv.serverId && (
-            <p className="restored-note">Conversation reprise depuis le serveur : le texte des échanges est conservé, pas les offres ni les cartes affichées à l’époque.</p>
+            <p className="restored-note">Conversation reprise depuis le serveur : les réponses enregistrées avant la conservation des offres n’ont que leur texte.</p>
           )}
           {turns.map((turn) => turn.role === 'user'
             ? <UserMessage key={turn.id} turn={turn} conversationId={id} busy={busy} />
@@ -162,7 +162,7 @@ export function Thread() {
                 onOpenOffer={(turnId, offer, latest) => setOfferOpen({ turnId, offer, latest })}
               />
             ))}
-          {busy && <Typing label={pending[id]!} />}
+          {busy && <StreamingAnswer text={streaming[id]?.text ?? ''} label={pending[id]!} />}
           {opError && <ErrorNote error={opError} onRetry={() => void openOperation()} />}
         </div>
       </div>
@@ -176,7 +176,7 @@ export function Thread() {
           onCompare={() => navigate(`/c/${id}/compare/${offerOpen.turnId}?offer=${offerOpen.offer.n}`)}
           onAsk={offerOpen.latest && !busy ? () => { send(`Parle-moi de l’offre ${offerOpen.offer.n} : ${offerOpen.offer.title}`); setOfferOpen(null) } : undefined} />
       )}
-      <Composer ref={composer} value={draft} onChange={setDraft} onSubmit={send} busy={busy} onVoice={() => navigate(`/voice?c=${id}`)} placeholder="Réponds, précise un détail ou demande une comparaison…" />
+      <Composer ref={composer} value={draft} onChange={setDraft} onSubmit={send} busy={busy} onStop={() => conversationStore.stop(id)} onVoice={() => navigate(`/voice?c=${id}`)} placeholder="Réponds, précise un détail ou demande une comparaison…" />
     </div>
   )
 }

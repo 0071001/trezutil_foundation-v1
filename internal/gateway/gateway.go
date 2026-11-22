@@ -130,6 +130,11 @@ func (g *Gateway) apiRouter(w http.ResponseWriter, r *http.Request) {
 			if to <= 0 {
 				to = g.config.UpstreamTimeout
 			}
+			if isStreamRoute(r) {
+				// A streamed answer outlives the usual upstream timeout and the server's WriteTimeout.
+				to = streamRouteTimeout
+				_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(streamRouteTimeout + 5*time.Second))
+			}
 			ctx, cancel := context.WithTimeout(r.Context(), to)
 			defer cancel()
 			g.serveProxy(up, r.WithContext(ctx), w)
@@ -310,6 +315,24 @@ func (g *Gateway) requestID(next http.Handler) http.Handler {
 type statusWriter struct {
 	http.ResponseWriter
 	status int
+}
+
+// Unwrap lets http.ResponseController (the reverse proxy's flushes, write deadlines) reach the real writer.
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
+// Flush passes a streamed response on at once (Server-Sent Events).
+func (w *statusWriter) Flush() {
+	if f, ok := w.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
+
+// streamRouteTimeout bounds a streamed conversation answer (the upstream's own budget is 90 s).
+const streamRouteTimeout = 100 * time.Second
+
+// isStreamRoute is the one route answered as Server-Sent Events.
+func isStreamRoute(r *http.Request) bool {
+	return r.Method == http.MethodPost && strings.TrimSuffix(r.URL.Path, "/") == "/api/v1/conversations/message/stream"
 }
 
 func (w *statusWriter) WriteHeader(code int) {
