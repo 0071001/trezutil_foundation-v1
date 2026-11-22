@@ -76,7 +76,7 @@ func main() {
 		postgres.NewUsagePolicyRepository(db),
 		usageReservations,
 		systemClock{},
-	)
+	).WithPersonalSpaces(postgres.NewPersonalSpaceStore(db)) // a person's own credits live in their personal space
 	go releaseOrphanedCreditReservations(logger, usageReservations)
 
 	// Commerce use cases executed by the runtime. They are the same

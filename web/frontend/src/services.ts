@@ -30,7 +30,7 @@ export const SERVICES: Service[] = [
   { id: 'payment', label: 'Paiement des commandes', status: 'partial', uses: 'POST /payments et formulaire Stripe ; la commande est relue jusqu’à la confirmation par webhook.', missing: 'Les clés Stripe (STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET) en configuration ; aucun adaptateur Mobile Money (seul Stripe est implémenté)' },
   { id: 'memory', label: 'Mémoire commerciale', status: 'connected', uses: 'GET, POST, PATCH, DELETE /memory et PUT /memory/settings : conservée sur le serveur, sur tous les appareils du compte ; l’assistant la lit comme indications, et les opérations la reçoivent comme préférences.' },
   { id: 'notifications', label: 'Notifications et suivi proactif', status: 'partial', uses: 'Le centre de notifications montre ce qui attend réellement ta décision.', missing: 'Le service notification-service (aujourd’hui un squelette), la surveillance des prix et l’envoi push' },
-  { id: 'credits', label: 'Crédits d’utilisation', status: 'partial', uses: 'Solde des organisations que tu gères : GET /sellers/usage', missing: 'Le solde d’un compte personnel' },
+  { id: 'credits', label: 'Crédits d’utilisation', status: 'connected', uses: 'GET /me/credits : le solde personnel réel (espace personnel du compte), distinct du solde des organisations que tu gères (GET /sellers/usage) ; indique si des actions sont facturées.' },
 ]
 
 export const service = (id: string) => SERVICES.find((s) => s.id === id)!

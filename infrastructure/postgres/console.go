@@ -358,6 +358,12 @@ func (r *ConsoleRepository) Capacity(ctx context.Context, organizationID string,
 
 // --- usage, plans, providers, channels ---------------------------------------------------------------------
 
+// UsagePolicies lists what each action costs (all policies, active or not). They are platform-wide, not per
+// organisation.
+func (r *ConsoleRepository) UsagePolicies(ctx context.Context) ([]domain.UsagePolicyRow, error) {
+	return r.policies(ctx)
+}
+
 func (r *ConsoleRepository) policies(ctx context.Context) ([]domain.UsagePolicyRow, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT action_type, channel, actor_type, cost, active FROM usage_policies ORDER BY action_type, channel, actor_type`)
 	if err != nil {

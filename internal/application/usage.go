@@ -16,6 +16,14 @@ type UsageService struct {
 	policyRepo      domain.UsagePolicyRepository
 	reservationRepo domain.UsageReservationRepository
 	clock           domain.Clock
+	personal        domain.PersonalSpaces
+}
+
+// WithPersonalSpaces lets a person without an organisation hold credits: their account lives in their personal
+// ('individual') organisation, so the same accounts, ledger, grants and purchases apply (migration 000033).
+func (s *UsageService) WithPersonalSpaces(personal domain.PersonalSpaces) *UsageService {
+	s.personal = personal
+	return s
 }
 
 // NewUsageService creates a new UsageService.
@@ -86,6 +94,13 @@ func (s *UsageService) Reserve(ctx context.Context, accountID string, actionType
 	}
 	if s.reservationRepo == nil {
 		return nil, domain.ErrNotImplemented
+	}
+	// The reservation and its ledger entry belong to the account's organisation, whatever the caller passed (the
+	// runtime passes the user id for a personal account, which no organisation has).
+	if s.accountRepo != nil {
+		if account, err := s.accountRepo.FindByID(ctx, accountID); err == nil && account != nil && account.TenantID != "" {
+			tenantID = account.TenantID
+		}
 	}
 	return s.reservationRepo.ReserveCreditsTx(ctx, accountID, actionType, cost, idempotencyKey, tenantID, s.clock.Now())
 }
@@ -163,6 +178,15 @@ func (s *UsageService) Grant(ctx context.Context, accountID string, amount int64
 func (s *UsageService) FindOrCreateCreditAccountByOwner(ctx context.Context, ownerType domain.ActorType, ownerID string, tenantID string, planID string, periodID string) (*domain.CreditAccount, error) {
 	if ownerID == "" {
 		return nil, fmt.Errorf("ownerID is required")
+	}
+	// A customer acting for themself has no organisation: callers pass "" or their own id (the runtime's fallback),
+	// which no organisation has. Their credits are in their personal space.
+	if ownerType == domain.ActorTypeCustomer && (tenantID == "" || tenantID == ownerID) && s.personal != nil {
+		personal, err := s.personal.Ensure(ctx, ownerID)
+		if err != nil {
+			return nil, fmt.Errorf("personal credit space: %w", err)
+		}
+		tenantID = personal
 	}
 	if tenantID == "" {
 		return nil, fmt.Errorf("tenantID is required")

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { http, SESSION_EXPIRED_EVENT, tokens, ApiError } from '@/api/client'
 import { conversationsApi, mapReply } from '@/api/conversations'
+import { creditsApi } from '@/api/credits'
 import { mapOrder } from '@/api/commerce'
 import { mapListing } from '@/api/listings'
 import { mapSearchResponse } from '@/api/search'
@@ -162,5 +163,21 @@ describe('conversation history on the server', () => {
     expect(calls.map((c) => `${c.method} ${c.body ? JSON.stringify(c.body) : ''}`.trim())).toEqual([
       'PATCH {"title":"Achat bureau","archived":true}', 'DELETE',
     ])
+  })
+})
+
+describe('personal credits', () => {
+  it('reads the real personal balance and whether actions are charged', async () => {
+    signIn('tok')
+    mockApi({ 'GET /me/credits': () => ({ body: {
+      period_id: '2026-11',
+      personal: { opened: true, granted: 100, reserved: 5, consumed: 12, balance: 83 },
+      ledger: [{ id: 'l1', action_type: 'SEARCH_LISTINGS', kind: 'consume', amount: -3, created_at: '2026-11-22T10:00:00Z' }],
+      metering: { active: true, costs: [{ action_type: 'SEARCH_LISTINGS', channel: 'web', cost: 3 }] },
+    } }) })
+    const c = await creditsApi.mine()
+    expect([c.balance, c.granted, c.reserved, c.consumed, c.opened, c.meteringActive]).toEqual([83, 100, 5, 12, true, true])
+    expect(c.ledger[0]!.amount).toBe(-3)
+    expect(c.costs).toEqual([{ actionType: 'SEARCH_LISTINGS', channel: 'web', cost: 3 }])
   })
 })

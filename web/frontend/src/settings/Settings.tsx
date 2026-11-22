@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { authApi } from '@/api/auth'
 import { toApiError, type ApiError } from '@/api/client'
 import { consoleApi } from '@/api/console'
+import { creditsApi } from '@/api/credits'
 import { MANAGER_ROLES } from '@/api/seller'
 import { getLang, setLang, useLang, type Lang } from '@/lib/i18n'
 import { useSession } from '@/lib/session'
@@ -325,14 +326,42 @@ function CreditsSection() {
   const org = orgs.find((o) => o.organization_id === profile.organizationId) ?? orgs.find((o) => MANAGER_ROLES.has(o.role))
   const managed = org && MANAGER_ROLES.has(org.role) ? org : undefined
   const usage = useAsync(() => consoleApi.usage(managed!.organization_id), [managed?.organization_id], !!managed)
+  const mine = useAsync(() => creditsApi.mine(), [signedIn], signedIn)
   const account = usage.data?.accounts[0]
+  const own = mine.data
   return (
     <>
       <Title title="Crédits et usage">Les crédits financent les actions (rechercher, comparer, vérifier, réserver, commander), pas la conversation.</Title>
-      {!signedIn ? <NeedsAccount /> : !loaded ? <Loading /> : !managed ? (
-        <NotConnected title="Solde non disponible">Le solde est visible par les personnes qui gèrent une organisation. Le solde d’un compte personnel n’est pas encore exposé par le backend.</NotConnected>
-      ) : usage.loading ? <Loading /> : usage.error ? <ErrorNote error={usage.error} onRetry={usage.reload} /> : (
+      {!signedIn ? <NeedsAccount /> : (
         <>
+          <h3 className="memory-heading">Mes crédits personnels{own ? ` · ${own.periodId}` : ''}</h3>
+          {mine.loading ? <Loading /> : mine.error ? <ErrorNote error={mine.error} onRetry={mine.reload} /> : own && (
+            <>
+              <div className="stats-row compact four">
+                <div><small>SOLDE</small><b>{own.balance}</b></div>
+                <div><small>ATTRIBUÉS</small><b>{own.granted}</b></div>
+                <div><small>UTILISÉS</small><b>{own.consumed}</b></div>
+                <div><small>RÉSERVÉS</small><b>{own.reserved}</b></div>
+              </div>
+              <p className="muted-line">
+                {own.meteringActive
+                  ? `Actions payantes pour un compte personnel : ${own.costs.map((c) => `${c.actionType} (${c.cost})`).join(', ')}.`
+                  : 'Aucune action n’est facturée aux comptes personnels pour l’instant : elles sont gratuites, quel que soit le solde.'}
+              </p>
+              {own.ledger.length > 0 && (
+                <div className="memory-list">
+                  {own.ledger.map((e) => (
+                    <div className="memory-item" key={e.id}><span><Icon name="wallet" /></span><div><b>{e.actionType || e.kind}</b><p>{new Date(e.createdAt).toLocaleString('fr-FR')}</p></div><b>{e.amount > 0 ? `+${e.amount}` : e.amount}</b></div>
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </>
+      )}
+      {signedIn && (!loaded ? <Loading /> : !managed ? null : usage.loading ? <Loading /> : usage.error ? <ErrorNote error={usage.error} onRetry={usage.reload} /> : (
+        <>
+          <h3 className="memory-heading">Crédits de l’organisation · {managed.display_name}</h3>
           <div className="stats-row compact four">
             <div><small>SOLDE</small><b>{account?.balance ?? '—'}</b></div>
             <div><small>ATTRIBUÉS</small><b>{account?.granted ?? '—'}</b></div>
@@ -348,7 +377,7 @@ function CreditsSection() {
             </div>
           )}
         </>
-      )}
+      ))}
     </>
   )
 }

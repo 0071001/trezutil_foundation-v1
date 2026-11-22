@@ -137,6 +137,8 @@ func main() {
 	consoleRepo := postgres.NewConsoleRepository(db)
 	console := api.NewConsoleHandler(consoleRepo, userRepo, orgRepo).WithTeam(team, orgUseCases)
 	mux.HandleFunc("GET /api/v1/sellers/finance", console.FinanceH())
+	// A person's own credits (personal space), distinct from the organisations' (GET /api/v1/sellers/usage).
+	mux.Handle("/api/v1/me/credits", api.NewMeCreditsHandler(postgres.NewPersonalSpaceStore(db), consoleRepo, logger))
 	mux.HandleFunc("GET /api/v1/sellers/customers", console.CustomersH())
 	mux.HandleFunc("GET /api/v1/sellers/fulfilments", console.FulfilmentsH())
 	mux.HandleFunc("GET /api/v1/sellers/capacity", console.CapacityH())

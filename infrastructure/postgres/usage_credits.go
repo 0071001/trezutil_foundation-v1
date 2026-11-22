@@ -113,7 +113,7 @@ func (r *CreditAccountRepository) Update(ctx context.Context, account *domain.Cr
 		account.Granted,
 		account.Reserved,
 		account.Consumed,
-		account.UpdatedAt,
+		toTime(account.UpdatedAt), // a Unix time; the column is a timestamp
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update credit account: %w", err)
