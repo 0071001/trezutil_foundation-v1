@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"regexp"
+	"strings"
 
 	"github.com/trezutil/trezutil/internal/domain"
 )
@@ -20,11 +21,75 @@ type HistoryService struct {
 	lister        domain.ConversationHistoryReader
 	conversations domain.ConversationStore
 	messages      domain.MessageStore
+	writer        domain.ConversationHistoryWriter
 }
 
 // NewHistoryService builds the service from the stores the conversation service already uses.
 func NewHistoryService(lister domain.ConversationHistoryReader, conversations domain.ConversationStore, messages domain.MessageStore) *HistoryService {
 	return &HistoryService{lister: lister, conversations: conversations, messages: messages}
+}
+
+// WithWriter lets the owner rename, archive and delete their conversations.
+func (s *HistoryService) WithWriter(writer domain.ConversationHistoryWriter) *HistoryService {
+	s.writer = writer
+	return s
+}
+
+// ErrHistoryReadOnly: the service was built without a writer.
+var ErrHistoryReadOnly = errors.New("conversation history is read-only")
+
+// MaxTitleLength bounds a conversation's name (the database enforces the same limit).
+const MaxTitleLength = 120
+
+// CleanTitle collapses whitespace and cuts a name to MaxTitleLength characters.
+func CleanTitle(title string) string {
+	clean := strings.Join(strings.Fields(title), " ")
+	if r := []rune(clean); len(r) > MaxTitleLength {
+		clean = strings.TrimSpace(string(r[:MaxTitleLength]))
+	}
+	return clean
+}
+
+// Rename names one of the caller's conversations; an empty title gives it back its first message as name.
+func (s *HistoryService) Rename(ctx context.Context, userID, conversationID, title string) error {
+	return s.change(userID, conversationID, func() error {
+		return s.writer.Rename(ctx, userID, conversationID, CleanTitle(title))
+	})
+}
+
+// SetArchived archives or restores one of the caller's conversations.
+func (s *HistoryService) SetArchived(ctx context.Context, userID, conversationID string, archived bool) error {
+	return s.change(userID, conversationID, func() error {
+		return s.writer.SetArchived(ctx, userID, conversationID, archived)
+	})
+}
+
+// Delete removes one of the caller's conversations and everything stored with it.
+func (s *HistoryService) Delete(ctx context.Context, userID, conversationID string) error {
+	return s.change(userID, conversationID, func() error {
+		return s.writer.Delete(ctx, userID, conversationID)
+	})
+}
+
+// change runs an owner-scoped change. Someone else's conversation and an unknown one answer the same
+// ErrConversationNotFound, so the answer never tells whether a conversation exists.
+func (s *HistoryService) change(userID, conversationID string, run func() error) error {
+	if userID == "" {
+		return domain.ErrConversationForbidden
+	}
+	if s.writer == nil {
+		return ErrHistoryReadOnly
+	}
+	if !uuidPattern.MatchString(conversationID) {
+		return ErrConversationNotFound
+	}
+	if err := run(); err != nil {
+		if errors.Is(err, domain.ErrConversationNotOwned) {
+			return ErrConversationNotFound
+		}
+		return err
+	}
+	return nil
 }
 
 // List returns the caller's conversations on a channel, most recent activity first.

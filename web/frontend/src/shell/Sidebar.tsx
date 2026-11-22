@@ -68,7 +68,7 @@ function HistoryItem({ conv, active, busy, collapsed, onNavigate }: { conv: Conv
           <button type="button" role="menuitem" onClick={() => { setMenu(false); conversationStore.archive(conv.id); if (active) navigate('/') }}><Icon name="archive" size={15} />Archiver</button>
           <button type="button" role="menuitem" className="danger" onClick={() => {
             setMenu(false)
-            if (window.confirm('Retirer cette conversation de ta liste ? Elle disparaît de cet appareil ; le serveur de Trezutil conserve l’historique de ses échanges.')) { conversationStore.remove(conv.id); if (active) navigate('/') }
+            if (window.confirm('Supprimer cette conversation ? Ses messages sont effacés de Trezutil ; les commandes et réservations qu’elle a créées restent.')) { conversationStore.remove(conv.id); if (active) navigate('/') }
           }}><Icon name="trash" size={15} />Supprimer</button>
         </div>
       )}

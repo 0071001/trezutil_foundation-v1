@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { http, SESSION_EXPIRED_EVENT, tokens, ApiError } from '@/api/client'
-import { mapReply } from '@/api/conversations'
+import { conversationsApi, mapReply } from '@/api/conversations'
 import { mapOrder } from '@/api/commerce'
 import { mapListing } from '@/api/listings'
 import { mapSearchResponse } from '@/api/search'
@@ -128,5 +128,39 @@ describe('safety helpers', () => {
     expect(safeImage('javascript:alert(1)')).toBeNull()
     expect(safeImage('data:image/svg+xml;base64,AAA')).toBeNull()
     expect(safeImage('https://cdn.example/a.jpg')).toBe('https://cdn.example/a.jpg')
+  })
+})
+
+describe('conversation history on the server', () => {
+  it('reads back the cards and results an answer showed', async () => {
+    signIn('tok')
+    mockApi({
+      'GET /conversations/c-1/messages': () => ({ body: { items: [
+        { id: 'm1', direction: 'inbound', text: 'Des ordinateurs Dell', created_at: 10 },
+        { id: 'm2', direction: 'outbound', text: 'J’ai trouvé 1 offre.', created_at: 11, response: {
+          cards: [{ id: 'lst-1', type: 'listing', title: 'Dell Latitude', description: '', data: { listing_id: 'lst-1', position: 1 } }],
+          metadata: { action_type: 'SEARCH_LISTINGS', result_data: { items: [{ id: 'lst-1' }] }, suggestions: ['Moins cher'] },
+        } },
+      ] } }),
+    })
+    const messages = await conversationsApi.messages('c-1')
+    expect(messages[0].reply).toBeUndefined()
+    expect(messages[1].reply?.cards.map((c) => c.listing_id)).toEqual(['lst-1'])
+    expect(messages[1].reply?.result_items).toHaveLength(1)
+    expect(messages[1].reply?.suggestions).toEqual(['Moins cher'])
+    expect(messages[1].reply?.confirmation).toBeUndefined()
+  })
+
+  it('renames, archives and deletes on the server', async () => {
+    signIn('tok')
+    const { calls } = mockApi({
+      'PATCH /conversations/c-1': () => ({ body: { id: 'c-1' } }),
+      'DELETE /conversations/c-1': () => ({ body: {} }),
+    })
+    await conversationsApi.update('c-1', { title: 'Achat bureau', archived: true })
+    await conversationsApi.remove('c-1')
+    expect(calls.map((c) => `${c.method} ${c.body ? JSON.stringify(c.body) : ''}`.trim())).toEqual([
+      'PATCH {"title":"Achat bureau","archived":true}', 'DELETE',
+    ])
   })
 })

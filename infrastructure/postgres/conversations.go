@@ -191,11 +191,13 @@ func (r *ConversationStore) ListByCustomer(ctx context.Context, customerID strin
 		limit = 50
 	}
 	query := `SELECT c.id, c.channel, c.external_id, c.created_at,
-	                 COALESCE((SELECT m.content->>'Text' FROM messages m
+	                 COALESCE(NULLIF(c.title, ''), (SELECT m.content->>'Text' FROM messages m
 	                           WHERE m.conversation_id = c.id AND m.direction = 'inbound'
 	                           ORDER BY m.created_at, m.xmin::text::bigint LIMIT 1), '') AS title,
 	                 COALESCE((SELECT max(m.created_at) FROM messages m WHERE m.conversation_id = c.id), c.updated_at) AS last_at,
-	                 (SELECT count(*) FROM messages m WHERE m.conversation_id = c.id) AS message_count
+	                 (SELECT count(*) FROM messages m WHERE m.conversation_id = c.id) AS message_count,
+	                 COALESCE(c.title, '') <> '' AS renamed,
+	                 c.archived_at IS NOT NULL AS archived
 	          FROM conversations c
 	          WHERE c.customer_id = $1 AND c.channel = $2
 	          ORDER BY last_at DESC
@@ -210,7 +212,7 @@ func (r *ConversationStore) ListByCustomer(ctx context.Context, customerID strin
 		var s domain.ConversationHistoryItem
 		var ch string
 		var created, last time.Time
-		if err := rows.Scan(&s.ID, &ch, &s.ExternalID, &created, &s.Title, &last, &s.MessageCount); err != nil {
+		if err := rows.Scan(&s.ID, &ch, &s.ExternalID, &created, &s.Title, &last, &s.MessageCount, &s.Renamed, &s.Archived); err != nil {
 			return nil, fmt.Errorf("failed to read conversation: %w", err)
 		}
 		s.Channel = domain.Channel(ch)
@@ -218,4 +220,38 @@ func (r *ConversationStore) ListByCustomer(ctx context.Context, customerID strin
 		out = append(out, s)
 	}
 	return out, rows.Err()
+}
+
+// Rename names one of the customer's conversations; an empty title clears the name (domain.ConversationHistoryWriter).
+func (r *ConversationStore) Rename(ctx context.Context, customerID, conversationID, title string) error {
+	return r.ownedExec(ctx, `UPDATE conversations SET title = NULLIF($3, '') WHERE id = $1 AND customer_id = $2`,
+		conversationID, customerID, title)
+}
+
+// SetArchived archives or restores one of the customer's conversations (domain.ConversationHistoryWriter).
+func (r *ConversationStore) SetArchived(ctx context.Context, customerID, conversationID string, archived bool) error {
+	return r.ownedExec(ctx, `UPDATE conversations SET archived_at = CASE WHEN $3 THEN COALESCE(archived_at, NOW()) ELSE NULL END
+	                         WHERE id = $1 AND customer_id = $2`, conversationID, customerID, archived)
+}
+
+// Delete removes one of the customer's conversations; its messages, context and confirmations go with it (ON DELETE
+// CASCADE) (domain.ConversationHistoryWriter).
+func (r *ConversationStore) Delete(ctx context.Context, customerID, conversationID string) error {
+	return r.ownedExec(ctx, `DELETE FROM conversations WHERE id = $1 AND customer_id = $2`, conversationID, customerID)
+}
+
+// ownedExec runs a statement scoped by "id = $1 AND customer_id = $2": no row touched means not theirs (or gone).
+func (r *ConversationStore) ownedExec(ctx context.Context, query string, args ...interface{}) error {
+	res, err := r.db.ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("failed to change conversation: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to change conversation: %w", err)
+	}
+	if n == 0 {
+		return domain.ErrConversationNotOwned
+	}
+	return nil
 }

@@ -2,6 +2,7 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, configure } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { setLang } from '@/lib/i18n'
+import { setMemoryOwner } from '@/memory/memory'
 
 // Several journeys chain many awaited steps; under a loaded machine the 1 s default made two of them flaky.
 configure({ asyncUtilTimeout: 3000 })
@@ -34,6 +35,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  // A memory synchronisation still running stops before the mocked fetch is taken away.
+  setMemoryOwner('')
   vi.unstubAllGlobals()
   vi.useRealTimers()
 })

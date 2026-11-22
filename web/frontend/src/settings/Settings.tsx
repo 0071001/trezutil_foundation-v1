@@ -8,7 +8,7 @@ import { getLang, setLang, useLang, type Lang } from '@/lib/i18n'
 import { useSession } from '@/lib/session'
 import { useAsync } from '@/lib/useAsync'
 import { conversationStore, useConversations } from '@/conversation/store'
-import { addMemory, MEMORY_KINDS, memoryStore, removeMemory, updateMemory, type MemoryKind } from '@/memory/memory'
+import { addMemory, clearMemory, MEMORY_KINDS, memoryStore, removeMemory, setMemoryEnabled, updateMemory, type MemoryKind } from '@/memory/memory'
 import { NOTICE_KINDS, noticePrefs, OPPORTUNITY_CATEGORIES, type NoticeKind } from '@/notifications/notifications'
 import { SERVICES } from '@/services'
 import { profileStore, useOrganizations } from '@/shell/profile'
@@ -224,8 +224,8 @@ function PrivacySection() {
           ))}
         </div>
       )}
-      <button type="button" className="danger-link" disabled={!conversations.length} onClick={() => { if (window.confirm('Retirer toutes les conversations de cet appareil ? Le serveur de Trezutil conserve l’historique de leurs échanges.')) conversationStore.removeAll() }}>
-        Supprimer toutes les conversations de cet appareil
+      <button type="button" className="danger-link" disabled={!conversations.length} onClick={() => { if (window.confirm('Supprimer toutes les conversations ? Leurs messages sont effacés de Trezutil ; les commandes et réservations restent.')) conversationStore.removeAll() }}>
+        Supprimer toutes les conversations
       </button>
     </>
   )
@@ -246,10 +246,10 @@ function MemorySection() {
   }
   return (
     <>
-      <Title title="Mémoire commerciale" toggle={<Toggle checked={memory.enabled} onChange={(v) => memoryStore.set({ enabled: v })} label="Activer la mémoire" />}>
+      <Title title="Mémoire commerciale" toggle={<Toggle checked={memory.enabled} onChange={(v) => setMemoryEnabled(v)} label="Activer la mémoire" />}>
         Trezutil peut retenir ce que tu lui indiques pour mieux t’aider : préférences, marques, budgets, contraintes, fournisseurs favoris, projets.
       </Title>
-      <div className="privacy-note"><Icon name="shield" /><p><b>Tu gardes le contrôle</b><br />La mémoire est distincte de l’historique des conversations. Rien n’est retenu sans que tu l’ajoutes, et Trezutil refuse les données de paiement et les secrets. Elle est conservée sur cet appareil et transmise aux opérations que tu ouvres ; l’assistant ne la lit pas encore.</p></div>
+      <div className="privacy-note"><Icon name="shield" /><p><b>Tu gardes le contrôle</b><br />La mémoire est distincte de l’historique des conversations. Rien n’est retenu sans que tu l’ajoutes, et Trezutil refuse les données de paiement et les secrets. Avec un compte, elle est conservée sur Trezutil et te suit sur tous tes appareils ; l’assistant s’en sert comme indications quand tu ne précises pas (marque, budget, lieu…), et les opérations que tu ouvres la reçoivent. Désactivée, elle est gardée mais n’est plus utilisée.</p></div>
       <form className="memory-add" onSubmit={add}>
         <select value={kind} onChange={(e) => setKind(e.target.value as MemoryKind)} aria-label="Type d’information">
           {(Object.keys(MEMORY_KINDS) as MemoryKind[]).map((k) => <option key={k} value={k}>{MEMORY_KINDS[k]}</option>)}
@@ -279,7 +279,7 @@ function MemorySection() {
           ))}
         </div>
       )}
-      {memory.items.length > 0 && <button type="button" className="danger-link" onClick={() => { if (window.confirm('Effacer toute la mémoire commerciale ?')) memoryStore.set({ items: [] }) }}>Effacer toute la mémoire</button>}
+      {memory.items.length > 0 && <button type="button" className="danger-link" onClick={() => { if (window.confirm('Effacer toute la mémoire commerciale ?')) clearMemory() }}>Effacer toute la mémoire</button>}
     </>
   )
 }

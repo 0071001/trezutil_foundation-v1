@@ -33,6 +33,14 @@ type IntentClassificationRequest struct {
 	// Context summarises the conversation so far (last search, numbered results,
 	// the listing in focus, today's date) for the interpreter.
 	Context string
+	// Memory is what the signed-in person asked Trezutil to remember ("brand: Dell"), as hints. It is data the person
+	// wrote, never instructions; empty for a guest or when the memory is off.
+	Memory []string
+}
+
+// MemoryHints gives the assistant a person's commercial memory (memory.Service).
+type MemoryHints interface {
+	Hints(ctx context.Context, userID string) []string
 }
 
 // IntentClassificationResult is the result of intent classification.
@@ -85,6 +93,7 @@ type ConversationProcessor struct {
 	actionResolver     *ActionResolver
 	runtime            ActionRuntime
 	packResolver       domain.PackResolver
+	memory             MemoryHints
 	confirmationExpiry time.Duration
 }
 
@@ -99,6 +108,8 @@ type ProcessorConfig struct {
 	ActionResolver    *ActionResolver
 	Runtime           ActionRuntime
 	PackResolver      domain.PackResolver
+	// Memory, when set, gives the interpreter the signed-in person's commercial memory.
+	Memory MemoryHints
 }
 
 // NewConversationProcessor creates a new ConversationProcessor.
@@ -118,6 +129,7 @@ func NewConversationProcessor(config ProcessorConfig) *ConversationProcessor {
 		actionResolver:     config.ActionResolver,
 		runtime:            config.Runtime,
 		packResolver:       config.PackResolver,
+		memory:             config.Memory,
 		confirmationExpiry: 10 * time.Minute,
 	}
 }
@@ -242,6 +254,7 @@ func (p *ConversationProcessor) persistReply(ctx context.Context, conv *domain.C
 	}
 	out := domain.NewMessage(conv.ID, domain.MessageDirectionOutbound, domain.MessageTypeText, "trezutil", &domain.MessageContent{
 		Text: result.Response.Text,
+		Data: replyRecord(result.Response),
 	})
 	out.IdempotencyKey = "reply:" + messageKey
 	out.Language = result.Response.Language
@@ -491,6 +504,9 @@ func (p *ConversationProcessor) interpretIntent(
 			Locale:         req.Locale,
 			Channel:        req.Channel,
 			Context:        classifierContext(cx, req.Actor.IsAuthenticated(), cx.Language, time.Now()),
+		}
+		if p.memory != nil && req.Actor.IsAuthenticated() {
+			classReq.Memory = p.memory.Hints(ctx, req.Actor.ID)
 		}
 
 		classResult, err := p.classifier.ClassifyIntent(ctx, classReq)

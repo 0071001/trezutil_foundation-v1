@@ -20,6 +20,7 @@ import (
 	"github.com/trezutil/trezutil/internal/application/commerce"
 	"github.com/trezutil/trezutil/internal/application/conversation"
 	"github.com/trezutil/trezutil/internal/application/hotel"
+	"github.com/trezutil/trezutil/internal/application/memory"
 	"github.com/trezutil/trezutil/internal/application/missionexec"
 	"github.com/trezutil/trezutil/internal/application/missionorch"
 	"github.com/trezutil/trezutil/internal/application/missionplanning"
@@ -140,6 +141,8 @@ func main() {
 		PackRepo: &allPacksEnabledRepo{},
 	})
 
+	// Commercial memory: kept per account on the server and read by the interpreter as hints (never instructions).
+	memorySvc := memory.NewService(postgres.NewMemoryStore(db))
 	processor := conversation.NewConversationProcessor(conversation.ProcessorConfig{
 		Logger:            logger,
 		ConversationStore: postgres.NewConversationStore(db),
@@ -150,6 +153,7 @@ func main() {
 		ActionResolver:    conversation.NewActionResolver(conversation.NewDefaultIntentValidator()),
 		Runtime:           runtime,
 		PackResolver:      packResolver,
+		Memory:            memorySvc,
 	})
 
 	// Replies follow the locale sent with each message; this answers the channels
@@ -158,7 +162,7 @@ func main() {
 
 	convStore := postgres.NewConversationStore(db)
 	convHandler := api.NewConversationHandler(conversation.NewProcessorService(processor), logger).
-		WithHistory(conversation.NewHistoryService(convStore, convStore, postgres.NewMessageStore(db)))
+		WithHistory(conversation.NewHistoryService(convStore, convStore, postgres.NewMessageStore(db)).WithWriter(convStore))
 	packHandler := api.NewVerticalPackHandler(api.NewVerticalPackService(packRegistry, packResolver, policyEngine))
 
 	// WhatsApp channel
@@ -190,6 +194,9 @@ func main() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/conversations/message", convHandler.HandleProcessMessage)
+	memoryHandler := api.NewMemoryHandler(memorySvc, logger)
+	mux.Handle("/api/v1/memory", memoryHandler)
+	mux.Handle("/api/v1/memory/", memoryHandler)
 	mux.HandleFunc("/api/v1/conversations", func(w http.ResponseWriter, r *http.Request) {
 		api.HandleConversationRoutes(convHandler, w, r)
 	})

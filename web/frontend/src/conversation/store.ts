@@ -4,8 +4,9 @@ import { conversationsApi, type ConversationReply } from '@/api/conversations'
 import { newId } from '@/ui/kit'
 
 /*
- * The conversations. The gateway has no endpoint to list or read back a conversation (see services.ts → history), so
- * the threads are kept on this device, per account. Each thread has its own channel identity (`sender`): the server
+ * The conversations. They are kept on this device, per account, and for a signed-in account also on the server
+ * (GET /conversations, the transcript with its cards, rename, archive, delete), so they follow the person on every
+ * device. Each thread has its own channel identity (`sender`): the server
  * keeps one conversation, with its context, per sender, so an older thread continues on the server where it stopped.
  *
  * The assistant only interprets. Every action runs in the backend's Commerce Action Runtime, which checks identity,
@@ -282,28 +283,37 @@ export const conversationStore = {
     update(conversationId, (c) => ({ ...c, operationId }))
   },
 
+  /** Renames a thread here and, for a signed-in account, on the server (PATCH /conversations/{id}): every device sees it. */
   rename(conversationId: string, title: string) {
     const clean = titleFrom(title)
-    if (clean) update(conversationId, (c) => ({ ...c, title: clean }))
+    if (!clean) return
+    const conv = state.conversations.find((c) => c.id === conversationId)
+    update(conversationId, (c) => ({ ...c, title: clean }))
+    if (state.owner && conv?.serverId) void conversationsApi.update(conv.serverId, { title: clean }).catch(() => { /* kept on this device */ })
   },
 
+  /** Archives (or restores) a thread here and on the server. */
   archive(conversationId: string, archived = true) {
+    const conv = state.conversations.find((c) => c.id === conversationId)
     update(conversationId, (c) => ({ ...c, archived }))
+    if (state.owner && conv?.serverId) void conversationsApi.update(conv.serverId, { archived }).catch(() => { /* kept on this device */ })
   },
 
   /**
-   * Removes a thread from this device. The server keeps its conversations (there is no delete endpoint): a thread it
-   * knows is remembered as hidden, so the next synchronisation does not bring it back.
+   * Deletes a thread: on the server for a signed-in account (DELETE /conversations/{id}: its messages go with it;
+   * orders and bookings it created stay), and from this device. If the server cannot be reached, the thread is
+   * remembered as hidden so the next synchronisation does not bring it back.
    */
   remove(conversationId: string) {
     const conv = state.conversations.find((c) => c.id === conversationId)
-    if (conv?.serverId) hide([conv.serverId])
     set({ conversations: state.conversations.filter((c) => c.id !== conversationId) })
+    if (conv?.serverId) deleteOnServer([conv.serverId])
   },
 
   removeAll() {
-    hide(state.conversations.map((c) => c.serverId).filter(Boolean))
+    const ids = state.conversations.map((c) => c.serverId).filter(Boolean)
     set({ conversations: [] })
+    deleteOnServer(ids)
   },
 
   /**
@@ -321,16 +331,20 @@ export const conversationStore = {
       const bySender = new Map(state.conversations.map((c) => [c.sender, c]))
       const added: Conversation[] = []
       let changed = false
+      // The server holds the name and the archive of a conversation it knows: another device may have changed them.
       const conversations = state.conversations.map((c) => {
-        const server = items.find((s) => s.externalId === c.sender)
-        if (server && c.serverId !== server.id) { changed = true; return { ...c, serverId: server.id } }
-        return c
+        const server = items.find((s) => s.externalId === c.sender || (c.serverId && s.id === c.serverId))
+        if (!server) return c
+        const title = server.renamed ? titleFrom(server.title) : c.title
+        if (c.serverId === server.id && c.title === title && !!c.archived === server.archived) return c
+        changed = true
+        return { ...c, serverId: server.id, title, archived: server.archived }
       })
       for (const s of items) {
         if (bySender.has(s.externalId) || hidden.has(s.id) || state.conversations.some((c) => c.serverId === s.id)) continue
         added.push({
           id: s.id, sender: s.externalId, serverId: s.id, title: titleFrom(s.title) || 'Conversation', turns: [],
-          createdAt: s.createdAt * 1000, updatedAt: (s.lastActivityAt || s.createdAt) * 1000, remote: true,
+          createdAt: s.createdAt * 1000, updatedAt: (s.lastActivityAt || s.createdAt) * 1000, remote: true, archived: s.archived,
         })
       }
       if (changed || added.length) {
@@ -343,13 +357,16 @@ export const conversationStore = {
     }
   },
 
-  /** Reads the transcript of a thread known only from the server (text only: the server keeps no offers or cards). */
+  /** Reads the transcript of a thread known only from the server, with the offers and cards its answers showed. */
   async loadTranscript(conversationId: string): Promise<'loaded' | 'failed'> {
     const conv = state.conversations.find((c) => c.id === conversationId)
     if (!conv?.remote || !conv.serverId) return 'loaded'
     try {
       const messages = await conversationsApi.messages(conv.serverId)
-      const turns: Turn[] = messages.map((m) => ({ id: m.id, role: m.direction === 'inbound' ? 'user' as const : 'assistant' as const, text: m.text, at: m.createdAt * 1000 }))
+      const turns: Turn[] = messages.map((m) => ({
+        id: m.id, role: m.direction === 'inbound' ? 'user' as const : 'assistant' as const, text: m.text, at: m.createdAt * 1000,
+        ...(m.reply ? { reply: m.reply } : {}),
+      }))
       update(conversationId, (c) => ({ ...c, remote: false, turns: turns.length ? turns : c.turns }))
       return 'loaded'
     } catch {
@@ -367,6 +384,17 @@ function loadHidden(owner: string): Set<string> {
     return new Set(Array.isArray(list) ? list : [])
   } catch {
     return new Set()
+  }
+}
+
+/** Deletes conversations on the server (signed-in account); one that could not be deleted is hidden here instead. */
+function deleteOnServer(serverIds: string[]) {
+  if (!serverIds.length) return
+  if (!state.owner) { hide(serverIds); return }
+  for (const id of serverIds) {
+    void conversationsApi.remove(id).catch((err) => {
+      if (toApiError(err).status !== 404) hide([id]) // 404: already gone
+    })
   }
 }
 

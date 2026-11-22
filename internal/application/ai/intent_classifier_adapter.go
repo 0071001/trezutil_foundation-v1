@@ -63,7 +63,7 @@ func (a *IntentClassifierAdapter) ClassifyIntent(ctx context.Context, req *conve
 	aiReq2 := domain.AIRequest{
 		Task:             domain.AITaskIntentClassification,
 		Messages:         sanitized.messages,
-		SystemPrompt:     a.requestPrompt(ctx, req.Context),
+		SystemPrompt:     a.requestPrompt(ctx, req.Context, req.Memory...),
 		StructuredOutput: true,
 		OutputSchema:     intentOutputSchema(),
 		RequestID:        requestID,

@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -28,6 +29,9 @@ type ConversationHistoryItem struct {
 	MessageCount   int
 	CreatedAt      int64
 	LastActivityAt int64
+	// Renamed: Title is the name the owner gave it, not their first message.
+	Renamed  bool
+	Archived bool
 }
 
 // ConversationHistoryReader lists a customer's conversations. It is a read-only companion of ConversationStore,
@@ -35,3 +39,16 @@ type ConversationHistoryItem struct {
 type ConversationHistoryReader interface {
 	ListByCustomer(ctx context.Context, customerID string, channel Channel, limit int) ([]ConversationHistoryItem, error)
 }
+
+// ConversationHistoryWriter applies an owner's own changes to their conversation. Every method is scoped by the
+// customer: it changes nothing and returns ErrConversationNotOwned when the conversation is not theirs or is gone.
+type ConversationHistoryWriter interface {
+	// Rename sets the conversation's name; an empty title gives it back its first message as name.
+	Rename(ctx context.Context, customerID, conversationID, title string) error
+	SetArchived(ctx context.Context, customerID, conversationID string, archived bool) error
+	// Delete removes the conversation and everything stored with it (messages, context, confirmations).
+	Delete(ctx context.Context, customerID, conversationID string) error
+}
+
+// ErrConversationNotOwned: no conversation with that id belongs to that customer (it may not exist at all).
+var ErrConversationNotOwned = errors.New("conversation not found for this customer")

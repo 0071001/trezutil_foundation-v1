@@ -48,6 +48,9 @@ type conversationActorJSON struct {
 type ConversationHistory interface {
 	List(ctx context.Context, userID string, channel domain.Channel, limit int) ([]domain.ConversationHistoryItem, error)
 	Transcript(ctx context.Context, userID, conversationID string) (*domain.Conversation, []*domain.Message, error)
+	Rename(ctx context.Context, userID, conversationID, title string) error
+	SetArchived(ctx context.Context, userID, conversationID string, archived bool) error
+	Delete(ctx context.Context, userID, conversationID string) error
 }
 
 // ConversationHandler handles conversation HTTP requests.
@@ -244,6 +247,12 @@ func HandleConversationRoutes(handler *ConversationHandler, w http.ResponseWrite
 	case strings.HasPrefix(path, "/api/v1/conversations/") && strings.HasSuffix(path, "/messages") && method == "GET":
 		handler.HandleConversationMessages(w, r)
 		return
+	case conversationIDFromPath(path) != "" && method == "PATCH":
+		handler.HandleUpdateConversation(w, r)
+		return
+	case conversationIDFromPath(path) != "" && method == "DELETE":
+		handler.HandleDeleteConversation(w, r)
+		return
 	}
 
 	writeJSON(w, ErrorResponse{Error: Error{Code: "NOT_FOUND", Message: fmt.Sprintf("Route not found: %s %s", method, path)}}, http.StatusNotFound)
@@ -258,15 +267,111 @@ type conversationSummaryJSON struct {
 	MessageCount   int    `json:"message_count"`
 	CreatedAt      int64  `json:"created_at"`
 	LastActivityAt int64  `json:"last_activity_at"`
+	Renamed        bool   `json:"renamed"`
+	Archived       bool   `json:"archived"`
 }
 
-// transcriptMessageJSON is one message of GET /api/v1/conversations/{id}/messages: its text only, never the
-// internal data the processor keeps with it.
+// transcriptMessageJSON is one message of GET /api/v1/conversations/{id}/messages: its text and, for an answer, the
+// cards and results it showed (conversation.ReplyRecordKey). Never the other data the processor keeps with a message.
 type transcriptMessageJSON struct {
-	ID        string `json:"id"`
-	Direction string `json:"direction"`
-	Text      string `json:"text"`
-	CreatedAt int64  `json:"created_at"`
+	ID        string                 `json:"id"`
+	Direction string                 `json:"direction"`
+	Text      string                 `json:"text"`
+	CreatedAt int64                  `json:"created_at"`
+	Response  map[string]interface{} `json:"response,omitempty"`
+}
+
+// conversationIDFromPath returns {id} of /api/v1/conversations/{id} (nothing after it), or "".
+func conversationIDFromPath(path string) string {
+	id := strings.TrimPrefix(path, "/api/v1/conversations/")
+	if id == path || id == "" || strings.Contains(id, "/") || id == "message" {
+		return ""
+	}
+	return id
+}
+
+// writeHistoryChangeError answers a failed rename, archive or delete.
+func (h *ConversationHandler) writeHistoryChangeError(w http.ResponseWriter, err error) {
+	switch {
+	case errors.Is(err, conversation.ErrConversationNotFound):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "NOT_FOUND", Message: "Conversation not found"}}, http.StatusNotFound)
+	case errors.Is(err, conversation.ErrHistoryReadOnly):
+		writeJSON(w, ErrorResponse{Error: Error{Code: "NOT_AVAILABLE", Message: "Conversations cannot be changed here"}}, http.StatusServiceUnavailable)
+	default:
+		h.logger.Error().Err(err).Msg("Failed to change a conversation")
+		writeJSON(w, ErrorResponse{Error: Error{Code: "HISTORY_FAILED", Message: "The conversation could not be changed"}}, http.StatusInternalServerError)
+	}
+}
+
+// HandleUpdateConversation handles PATCH /api/v1/conversations/{id} with {"title": "…"} and/or {"archived": true}:
+// the owner renames or archives their conversation. An empty title gives it back its first message as name.
+// 404 for an unknown id and for somebody else's conversation alike.
+func (h *ConversationHandler) HandleUpdateConversation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	userID, ok := auth.RequireUser(w, r)
+	if !ok {
+		return
+	}
+	if h.history == nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "NOT_AVAILABLE", Message: "Conversation history is not available"}}, http.StatusServiceUnavailable)
+		return
+	}
+	var req struct {
+		Title    *string `json:"title"`
+		Archived *bool   `json:"archived"`
+	}
+	if err := readJSONBody(r, &req); err != nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "INVALID_REQUEST", Message: "Invalid request format"}}, http.StatusBadRequest)
+		return
+	}
+	if req.Title == nil && req.Archived == nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "NOTHING_TO_CHANGE", Message: "Send title and/or archived"}}, http.StatusBadRequest)
+		return
+	}
+	if req.Title != nil && len([]rune(*req.Title)) > 4*conversation.MaxTitleLength {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "TITLE_TOO_LONG", Message: "title is too long"}}, http.StatusBadRequest)
+		return
+	}
+	id := conversationIDFromPath(r.URL.Path)
+	if req.Title != nil {
+		if err := h.history.Rename(r.Context(), userID, id, *req.Title); err != nil {
+			h.writeHistoryChangeError(w, err)
+			return
+		}
+	}
+	if req.Archived != nil {
+		if err := h.history.SetArchived(r.Context(), userID, id, *req.Archived); err != nil {
+			h.writeHistoryChangeError(w, err)
+			return
+		}
+	}
+	out := map[string]interface{}{"id": id}
+	if req.Title != nil {
+		out["title"] = conversation.CleanTitle(*req.Title)
+	}
+	if req.Archived != nil {
+		out["archived"] = *req.Archived
+	}
+	writeJSON(w, out, http.StatusOK)
+}
+
+// HandleDeleteConversation handles DELETE /api/v1/conversations/{id}: the owner deletes their conversation and
+// everything stored with it. Orders and reservations it created are not deleted. 204 on success.
+func (h *ConversationHandler) HandleDeleteConversation(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	userID, ok := auth.RequireUser(w, r)
+	if !ok {
+		return
+	}
+	if h.history == nil {
+		writeJSON(w, ErrorResponse{Error: Error{Code: "NOT_AVAILABLE", Message: "Conversation history is not available"}}, http.StatusServiceUnavailable)
+		return
+	}
+	if err := h.history.Delete(r.Context(), userID, conversationIDFromPath(r.URL.Path)); err != nil {
+		h.writeHistoryChangeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // HandleListConversations handles GET /api/v1/conversations?channel=web&limit=50: the caller's own conversations,
@@ -309,6 +414,7 @@ func (h *ConversationHandler) HandleListConversations(w http.ResponseWriter, r *
 		items = append(items, conversationSummaryJSON{
 			ID: c.ID, Channel: string(c.Channel), ExternalID: c.ExternalID, Title: c.Title,
 			MessageCount: c.MessageCount, CreatedAt: c.CreatedAt, LastActivityAt: c.LastActivityAt,
+			Renamed: c.Renamed, Archived: c.Archived,
 		})
 	}
 	writeJSON(w, map[string]interface{}{"items": items}, http.StatusOK)
@@ -345,7 +451,11 @@ func (h *ConversationHandler) HandleConversationMessages(w http.ResponseWriter, 
 		if m == nil || m.Content == nil || strings.TrimSpace(m.Content.Text) == "" {
 			continue
 		}
-		items = append(items, transcriptMessageJSON{ID: m.ID, Direction: string(m.Direction), Text: m.Content.Text, CreatedAt: m.CreatedAt})
+		item := transcriptMessageJSON{ID: m.ID, Direction: string(m.Direction), Text: m.Content.Text, CreatedAt: m.CreatedAt}
+		if m.Direction == domain.MessageDirectionOutbound {
+			item.Response = conversation.StoredReply(m.Content.Data)
+		}
+		items = append(items, item)
 	}
 	writeJSON(w, map[string]interface{}{"conversation_id": conv.ID, "external_id": conv.ExternalID, "items": items}, http.StatusOK)
 }

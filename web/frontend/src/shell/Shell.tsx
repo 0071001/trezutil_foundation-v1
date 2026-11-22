@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { useSession } from '@/lib/session'
 import { conversationStore, useConversations } from '@/conversation/store'
-import { memoryStore } from '@/memory/memory'
+import { setMemoryOwner } from '@/memory/memory'
 import { NotificationsDrawer } from '@/notifications/NotificationsDrawer'
 import { noticePrefs, useNotices } from '@/notifications/notifications'
 import { profileStore } from '@/shell/profile'
@@ -52,7 +52,7 @@ function ConversationMenu({ id, title, operationId }: { id: string; title: strin
           <button type="button" role="menuitem" onClick={() => { setOpen(false); const next = window.prompt('Nouveau titre', title); if (next) conversationStore.rename(id, next) }}><Icon name="edit" size={15} />Renommer</button>
           {operationId && <button type="button" role="menuitem" onClick={() => { setOpen(false); navigate(`/operations/${operationId}`) }}><Icon name="flow" size={15} />Voir l’opération</button>}
           <button type="button" role="menuitem" onClick={() => { setOpen(false); conversationStore.archive(id); navigate('/') }}><Icon name="archive" size={15} />Archiver</button>
-          <button type="button" role="menuitem" className="danger" onClick={() => { setOpen(false); if (window.confirm('Retirer cette conversation de ta liste ? Le serveur de Trezutil conserve l’historique de ses échanges.')) { conversationStore.remove(id); navigate('/') } }}><Icon name="trash" size={15} />Supprimer</button>
+          <button type="button" role="menuitem" className="danger" onClick={() => { setOpen(false); if (window.confirm('Supprimer cette conversation ? Ses messages sont effacés de Trezutil ; les commandes et réservations qu’elle a créées restent.')) { conversationStore.remove(id); navigate('/') } }}><Icon name="trash" size={15} />Supprimer</button>
         </div>
       )}
     </div>
@@ -74,7 +74,7 @@ function Frame() {
     if (user === undefined) return
     const owner = user?.id ?? ''
     conversationStore.setOwner(owner)
-    memoryStore.setOwner(owner)
+    setMemoryOwner(owner)
     noticePrefs.setOwner(owner)
     profileStore.setOwner(owner)
     // The account's conversations held on the server (other devices, earlier visits) join the list.

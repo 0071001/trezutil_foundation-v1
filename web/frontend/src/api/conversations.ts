@@ -127,20 +127,38 @@ export const conversationsApi = {
       const c = obj(v)
       return {
         id: str(c.id), externalId: str(c.external_id), title: str(c.title), messageCount: num(c.message_count),
-        createdAt: num(c.created_at), lastActivityAt: num(c.last_activity_at),
+        createdAt: num(c.created_at), lastActivityAt: num(c.last_activity_at), renamed: c.renamed === true, archived: c.archived === true,
       }
     }).filter((c) => c.id && c.externalId)
   },
 
-  /** GET /conversations/{id}/messages: the transcript (text only) of one of the user's conversations, oldest first. */
+  /**
+   * GET /conversations/{id}/messages: the transcript of one of the user's conversations, oldest first. An answer
+   * comes back with the cards and results it showed (never a confirmation: it has expired by then).
+   */
   async messages(conversationId: string): Promise<ServerMessage[]> {
     const raw = obj(await http.get<unknown>(`/conversations/${encodeURIComponent(conversationId)}/messages`))
     return arr(raw.items).map((v) => {
       const m = obj(v)
-      return { id: str(m.id), direction: str(m.direction) === 'inbound' ? 'inbound' as const : 'outbound' as const, text: str(m.text), createdAt: num(m.created_at) }
+      const response = obj(m.response)
+      const outbound = str(m.direction) !== 'inbound'
+      return {
+        id: str(m.id), direction: outbound ? 'outbound' as const : 'inbound' as const, text: str(m.text), createdAt: num(m.created_at),
+        reply: outbound && Object.keys(response).length ? mapReply({ conversation_id: conversationId, response: { ...response, text: str(m.text) } }) : undefined,
+      }
     }).filter((m) => m.id && m.text)
+  },
+
+  /** PATCH /conversations/{id}: renames (an empty title gives back the first message as name) and/or archives. */
+  async update(conversationId: string, change: { title?: string; archived?: boolean }): Promise<void> {
+    await http.patch<unknown>(`/conversations/${encodeURIComponent(conversationId)}`, change)
+  },
+
+  /** DELETE /conversations/{id}: deletes the conversation and its messages on the server (orders are kept). */
+  async remove(conversationId: string): Promise<void> {
+    await http.del<unknown>(`/conversations/${encodeURIComponent(conversationId)}`)
   },
 }
 
-export interface ServerConversation { id: string; externalId: string; title: string; messageCount: number; createdAt: number; lastActivityAt: number }
-export interface ServerMessage { id: string; direction: 'inbound' | 'outbound'; text: string; createdAt: number }
+export interface ServerConversation { id: string; externalId: string; title: string; messageCount: number; createdAt: number; lastActivityAt: number; renamed: boolean; archived: boolean }
+export interface ServerMessage { id: string; direction: 'inbound' | 'outbound'; text: string; createdAt: number; reply?: ConversationReply }
