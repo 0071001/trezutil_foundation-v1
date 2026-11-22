@@ -30,6 +30,9 @@ export function errorText(error: ApiError): string {
   if (error.status === 401) return 'Ta session a expiré. Reconnecte-toi pour continuer.'
   if (error.status === 403) return 'Ce contenu n’est pas accessible avec ce compte.'
   if (error.status === 404) return 'Introuvable : il a peut-être été supprimé.'
+  if (error.code === 'OTP_DELIVERY_FAILED') return 'Le code n’a pas pu être envoyé sur WhatsApp pour le moment. Réessaie dans quelques minutes.'
+  // The server never explains a 5xx (its text is a generic English notice): say it plainly, in French.
+  if (error.status >= 500) return 'Trezutil rencontre un problème de son côté. Réessaie dans un instant.'
   return error.message || 'Une erreur est survenue.'
 }
 
