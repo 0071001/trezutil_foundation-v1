@@ -42,7 +42,8 @@ for reserved in 80 443 5432 8069 8072; do
 done
 if command -v ss >/dev/null; then
   holder=$(ss -ltnp "sport = :$port" 2>/dev/null | tail -n +2 || true)
-  if [ -n "$holder" ] && ! echo "$holder" | grep -q docker; then fail "port $port is already used by another program: $holder"; fi
+  # Trezutil's own gateway holds it through docker-proxy (rootful Docker) or rootlesskit (rootless Docker).
+  if [ -n "$holder" ] && ! echo "$holder" | grep -qE 'docker|rootlesskit'; then fail "port $port is already used by another program: $holder"; fi
 fi
 
 if command -v free >/dev/null; then

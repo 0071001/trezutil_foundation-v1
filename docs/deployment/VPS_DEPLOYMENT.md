@@ -44,6 +44,29 @@ afficher l'adresse du VPS. La propagation prend de quelques minutes à quelques 
 - Les ports 80 et 443 ouverts vers nginx. Ne jamais ouvrir 18080 vers l'extérieur.
 - `git`, `curl`.
 
+### Docker rootless pour le compte `trezutil-deploy` (installé le 22/11/2026)
+
+Trezutil tourne dans le Docker « rootless » du compte `trezutil-deploy`. Le compte n'a aucun droit root, et les
+conteneurs ne peuvent pas agir sur l'hôte, ni sur Odoo, ni sur sa base. Le démon Docker système (root) est installé
+mais désactivé : il ne touche pas au pare-feu et ne crée pas de pont `docker0`.
+
+Ce qui a été fait, en root, pour mémoire ou pour refaire l'opération sur un autre serveur :
+
+1. Création de `trezutil-deploy` : clé SSH seule, mot de passe inutilisable (`*`), sans sudo.
+2. Dépôt officiel Docker (clé `9DC8 5822 9FC7 DD38 854A E2D8 8D81 803C 0EBF CD88`) et installation de `docker-ce`,
+   `docker-ce-cli`, `containerd.io`, `docker-buildx-plugin`, `docker-compose-plugin`, `docker-ce-rootless-extras`,
+   `uidmap` et `slirp4netns`. Pendant l'installation, `policy-rc.d` empêche tout démarrage de service, et
+   `NEEDRESTART_MODE=l` empêche le redémarrage automatique d'Odoo.
+3. `systemctl disable --now docker.service docker.socket containerd.service`.
+4. Profil AppArmor `/etc/apparmor.d/usr.bin.rootlesskit`, chargé par `apparmor_parser -r`. Ubuntu 24.04 restreint
+   les espaces de noms utilisateur.
+5. `/etc/systemd/system/user@.service.d/delegate.conf` (`Delegate=cpu cpuset io memory pids`), puis
+   `systemctl daemon-reload` : les plafonds CPU et mémoire du fichier compose s'appliquent.
+6. `loginctl enable-linger trezutil-deploy` : le Docker du compte démarre au boot.
+
+Puis, en tant que `trezutil-deploy` : `dockerd-rootless-setuptool.sh install`, `systemctl --user enable docker`,
+`docker context use rootless`. Les commandes `docker` du compte visent son propre démon.
+
 Avant toute installation, inventaire en lecture seule :
 
 ```bash
@@ -55,8 +78,8 @@ ls /etc/nginx/sites-enabled/
 ## 4. Installation
 
 ```bash
-sudo mkdir -p /opt/trezutil && sudo chown "$USER" /opt/trezutil
-git clone <dépôt> /opt/trezutil && cd /opt/trezutil
+# En tant que trezutil-deploy (ssh trezutil-vps) : le dépôt vit dans son répertoire, sans aucun droit root.
+git clone <dépôt> ~/trezutil && cd ~/trezutil
 cp deployments/docker/app.env.example deployments/docker/app.env
 chmod 600 deployments/docker/app.env
 ```
@@ -102,7 +125,7 @@ Pour vérifier : `curl -I https://trezutil.com` doit répondre `200`, et `https:
 ## 6. Mises à jour
 
 ```bash
-cd /opt/trezutil && git pull
+cd ~/trezutil && git pull
 bash scripts/ops/deploy.sh
 ```
 
@@ -129,10 +152,10 @@ bash scripts/ops/rollback.sh
 ## 8. Sauvegardes
 
 Il faut une sauvegarde quotidienne, copiée hors du VPS : une sauvegarde sur le même disque n'en est pas une. Avec
-crontab, en tant qu'utilisateur propriétaire de `/opt/trezutil` :
+crontab de `trezutil-deploy` (`crontab -e`) :
 
 ```
-15 3 * * * cd /opt/trezutil && PG_CONTAINER=trezutil-postgres-1 BACKUP_DIR=/opt/trezutil/backups scripts/ops/backup.sh >> /var/log/trezutil-backup.log 2>&1
+15 3 * * * cd $HOME/trezutil && PG_CONTAINER=trezutil-postgres-1 BACKUP_DIR=$HOME/trezutil/backups scripts/ops/backup.sh >> $HOME/trezutil-backup.log 2>&1
 ```
 
 Une restauration se répète régulièrement : `scripts/ops/restore-check.sh backups/<dump>`. Le script restaure dans
