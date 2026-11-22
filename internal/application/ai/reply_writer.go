@@ -91,6 +91,10 @@ func (w *ReplyWriter) WriteReply(ctx context.Context, in conversation.ReplyWriti
 	return resp.Content, nil
 }
 
+// Ready is false while writing is paused after a provider failure (the processor then keeps the draft without
+// announcing a writing step).
+func (w *ReplyWriter) Ready() bool { return w != nil && w.gateway != nil && !w.paused() }
+
 func (w *ReplyWriter) paused() bool {
 	w.mu.Lock()
 	defer w.mu.Unlock()

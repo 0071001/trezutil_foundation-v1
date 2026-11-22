@@ -211,6 +211,11 @@ func (p *ConversationProcessor) writeReply(ctx context.Context, conv *domain.Con
 	if p.replyWriter == nil || !writingEligible(result) || ctx.Err() != nil {
 		return
 	}
+	// A writer that knows it cannot write now (paused after a provider failure) is not asked, so the stream does not
+	// announce a "writing" step that will not happen.
+	if r, ok := p.replyWriter.(interface{ Ready() bool }); ok && !r.Ready() {
+		return
+	}
 	sink := SinkFrom(ctx)
 	sink.Stage("writing", "")
 	draft := result.Response.Text

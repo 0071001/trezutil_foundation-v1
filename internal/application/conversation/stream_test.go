@@ -151,6 +151,24 @@ func TestStoppingTheStreamStillStoresTheAnswer(t *testing.T) {
 	}
 }
 
+type pausedWriter struct{ fakeWriter }
+
+func (w *pausedWriter) Ready() bool { return false }
+
+func TestAPausedWriterIsNotAnnounced(t *testing.T) {
+	sink := &recordingSink{}
+	w := &pausedWriter{fakeWriter{pieces: []string{"x"}}}
+	streamSay(t, WithStreamSink(context.Background(), sink), streamProcessor(w, &mockMessageStore{}), "k7")
+	for _, e := range sink.events {
+		if strings.HasPrefix(e, "stage:writing") {
+			t.Fatalf("a paused writer must not be announced: %v", sink.events)
+		}
+	}
+	if w.calls != 0 {
+		t.Fatal("a paused writer must not be called")
+	}
+}
+
 func TestAConfirmationIsNeverWordedByTheModel(t *testing.T) {
 	for _, result := range []*ProcessResult{
 		{Response: &domain.ConversationResponse{Text: "Confirmer ?", Metadata: map[string]interface{}{"action_type": "CREATE_ORDER"}}, IsConfirmation: true},
