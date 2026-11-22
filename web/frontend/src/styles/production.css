@@ -315,3 +315,25 @@ a.list-row:hover { background: #fafbfa; }
 @media (prefers-reduced-motion: reduce) { .stream-caret { animation: none; } }
 .interrupted-note { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 8px; font-size: 12.5px; color: var(--muted); }
 .stop-button { background: var(--ink); color: #fff; }
+
+/* Supplier registration */
+.supplier-steps { list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0; margin: 0 0 16px; }
+.supplier-steps li { display: flex; gap: 9px; align-items: flex-start; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: white; color: var(--muted); }
+.supplier-steps li > span { flex: 0 0 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--soft); font-size: 12px; font-weight: 700; }
+.supplier-steps li.done { color: var(--ink); border-color: var(--green); }
+.supplier-steps li.done > span { background: var(--green); color: #fff; }
+.supplier-steps b { display: block; font-size: 13px; }.supplier-steps small { font-size: 11.5px; color: var(--muted); }
+.supplier-status { border-radius: 10px; padding: 12px 14px; margin-bottom: 18px; background: var(--green-soft); font-size: 13px; }
+.supplier-status p { margin: 4px 0 0; color: var(--muted); }
+.supplier-status.changes_requested, .supplier-status.rejected { background: #fdf1e8; }
+.supplier-form h3 { margin: 12px 0 0; font-size: 14px; }
+.supplier-form small { font-weight: 400; color: var(--muted); }
+.form-actions { display: flex; align-items: center; gap: 12px; }
+.supplier-upload { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 10px 0; }
+.supplier-upload select { border: 1px solid #dce0de; border-radius: 7px; min-height: 38px; padding: 8px 10px; background: white; }
+.supplier-submit { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--line); display: grid; gap: 10px; justify-items: start; }
+@media (max-width: 640px) { .supplier-steps { grid-template-columns: 1fr; } }
+.review-item > div { min-width: 0; }
+.review-detail { display: grid; gap: 8px; margin-top: 8px; justify-items: start; }
+.review-detail textarea { width: 100%; min-height: 70px; border: 1px solid #dce0de; border-radius: 7px; padding: 8px 10px; font: inherit; }
+.supplier-form > .full { grid-column: 1 / -1; }

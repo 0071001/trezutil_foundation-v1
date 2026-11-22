@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { http, SESSION_EXPIRED_EVENT, tokens, ApiError } from '@/api/client'
 import { conversationsApi, mapReply } from '@/api/conversations'
 import { creditsApi } from '@/api/credits'
+import { supplierApi } from '@/api/supplier'
 import { mapOrder } from '@/api/commerce'
 import { mapListing } from '@/api/listings'
 import { mapSearchResponse } from '@/api/search'
@@ -179,5 +180,23 @@ describe('personal credits', () => {
     expect([c.balance, c.granted, c.reserved, c.consumed, c.opened, c.meteringActive]).toEqual([83, 100, 5, 12, true, true])
     expect(c.ledger[0]!.amount).toBe(-3)
     expect(c.costs).toEqual([{ actionType: 'SEARCH_LISTINGS', channel: 'web', cost: 3 }])
+  })
+})
+
+describe('supplier registration', () => {
+  it('reads an application with what is missing, and sends a document as multipart with its kind', async () => {
+    signIn('tok')
+    const { calls } = mockApi({
+      'GET /supplier/applications': () => ({ body: { items: [{ organization_id: 'org-1', status: 'draft', editable: true, legal_name: 'Ciment SARL',
+        sectors: ['Matériaux'], service_areas: [], missing: ['service_areas', 'legal_document'], documents: [] }] } }),
+      'POST /supplier/applications/org-1/documents': () => ({ status: 201, body: { id: 'd-1' } }),
+    })
+    const [app] = await supplierApi.mine()
+    expect(app!.status).toBe('draft')
+    expect(app!.missing).toEqual(['service_areas', 'legal_document'])
+    await supplierApi.upload('org-1', 'rccm', new File(['%PDF-1.4'], 'rccm.pdf', { type: 'application/pdf' }))
+    const upload = calls.find((c) => c.method === 'POST')!
+    expect((upload.body as Record<string, unknown>).kind).toBe('rccm')
+    expect(upload.headers['Content-Type']).toBeUndefined() // the browser sets the multipart boundary
   })
 })

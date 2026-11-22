@@ -4,6 +4,7 @@ import { authApi } from '@/api/auth'
 import { toApiError, type ApiError } from '@/api/client'
 import { consoleApi } from '@/api/console'
 import { creditsApi } from '@/api/credits'
+import { DOCUMENT_LABEL, STATUS_LABEL, supplierApi, type ApplicationStatus } from '@/api/supplier'
 import { MANAGER_ROLES } from '@/api/seller'
 import { getLang, setLang, useLang, type Lang } from '@/lib/i18n'
 import { useSession } from '@/lib/session'
@@ -41,14 +42,18 @@ function NeedsAccount() {
 export function Settings() {
   const { section = 'profile' } = useParams()
   const navigate = useNavigate()
-  const active = SECTIONS.some(([id]) => id === section) ? section : 'profile'
+  const { user } = useSession()
+  // Trezutil staff also see the supplier review (the server checks the role again on every call).
+  const staff = !!user?.roles?.some((r) => r === 'admin' || r === 'operator')
+  const sections: [string, string][] = staff ? [...SECTIONS, ['supplier-review', 'Vérification fournisseurs']] : SECTIONS
+  const active = sections.some(([id]) => id === section) ? section : 'profile'
   useEffect(() => { document.title = 'Paramètres — Trezutil' }, [])
   return (
     <div className="settings-page">
       <div className="settings-header"><h1>Paramètres</h1><p>Gère ton compte, tes préférences et la manière dont Trezutil travaille pour toi.</p></div>
       <div className="settings-layout">
         <nav className="settings-nav" aria-label="Rubriques">
-          {SECTIONS.map(([id, label]) => (
+          {sections.map(([id, label]) => (
             <button type="button" key={id} className={active === id ? 'active' : ''} aria-current={active === id ? 'page' : undefined} onClick={() => navigate(`/settings/${id}`)}>
               {label}{id === 'memory' && <Badge>Nouveau</Badge>}<Icon name="chevron" size={14} />
             </button>
@@ -65,6 +70,7 @@ export function Settings() {
           {active === 'security' && <SecuritySection />}
           {active === 'services' && <ServicesSection />}
           {active === 'credits' && <CreditsSection />}
+          {active === 'supplier-review' && <SupplierReviewSection />}
         </section>
       </div>
     </div>
@@ -131,9 +137,7 @@ function CompanySection() {
       )}
       {loaded && !orgs.length && <p className="muted-line">{failed ? 'Les organisations n’ont pas pu être lues.' : 'Ton compte n’est membre d’aucune organisation.'}</p>}
       <p className="muted-line">Le serveur identifie toujours ton compte par ta session : ce choix n’accorde aucun droit supplémentaire.</p>
-      <NotConnected title="Devenir fournisseur">
-        La création d’une organisation fournisseur n’est pas encore en libre-service : elle est réalisée par l’équipe Trezutil (administrateurs), qui t’ajoute ensuite comme propriétaire. Une fois membre, ton organisation apparaît ici.
-      </NotConnected>
+      <div className="privacy-note"><Icon name="building" /><p><b>Devenir fournisseur</b><br />Inscris ton entreprise, envoie ses documents et soumets-la : l’équipe Trezutil la vérifie. Une fois inscrite, elle apparaît ici.<br /><Link to="/supplier">Inscrire mon entreprise →</Link></p></div>
     </>
   )
 }
@@ -281,6 +285,66 @@ function MemorySection() {
         </div>
       )}
       {memory.items.length > 0 && <button type="button" className="danger-link" onClick={() => { if (window.confirm('Effacer toute la mémoire commerciale ?')) clearMemory() }}>Effacer toute la mémoire</button>}
+    </>
+  )
+}
+
+/** Staff: the supplier applications waiting for a decision. Verifying is a decision, never automatic. */
+function SupplierReviewSection() {
+  const [status, setStatus] = useState<ApplicationStatus>('submitted')
+  const queue = useAsync(() => supplierApi.queue(status), [status])
+  const [open, setOpen] = useState<string | null>(null)
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<ApiError | null>(null)
+  const decide = async (org: string, decision: 'verify' | 'reject' | 'request_changes') => {
+    setBusy(true); setError(null)
+    try { await supplierApi.review(org, decision, note); setNote(''); setOpen(null); queue.reload() } catch (err) { setError(toApiError(err)) } finally { setBusy(false) }
+  }
+  return (
+    <>
+      <Title title="Vérification fournisseurs">Les entreprises inscrites ne sont vérifiées que par une décision de l’équipe. Tu ne peux pas vérifier une entreprise dont tu es membre.</Title>
+      <label className="select-line">Dossiers
+        <select value={status} onChange={(e) => setStatus(e.target.value as ApplicationStatus)}>
+          {(Object.keys(STATUS_LABEL) as ApplicationStatus[]).map((k) => <option key={k} value={k}>{STATUS_LABEL[k]}</option>)}
+        </select>
+      </label>
+      {queue.loading ? <Loading /> : queue.error ? <ErrorNote error={queue.error} onRetry={queue.reload} /> : !queue.data?.length ? <p className="muted-line">Aucun dossier.</p> : (
+        <div className="memory-list">
+          {queue.data.map((a) => (
+            <div key={a.organization_id} className="memory-item review-item">
+              <span><Icon name="building" /></span>
+              <div>
+                <b>{a.display_name}</b>
+                <p>{a.legal_name} · {a.city || '—'} · {a.phone}{a.rccm ? ` · RCCM ${a.rccm}` : ''}</p>
+                <p>Secteurs : {a.sectors.join(', ') || '—'} · Zones : {a.service_areas.join(', ') || '—'}</p>
+                {open === a.organization_id && (
+                  <div className="review-detail">
+                    <p>{a.capabilities}</p>
+                    {a.documents.map((d) => (
+                      <button type="button" key={d.id} className="secondary-btn small-btn" onClick={() => void supplierApi.open(d).catch((err) => setError(toApiError(err)))}>
+                        {DOCUMENT_LABEL[d.kind] ?? d.kind} · {d.filename}
+                      </button>
+                    ))}
+                    {a.status === 'submitted' && (
+                      <>
+                        <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Message au fournisseur (obligatoire pour refuser ou demander des modifications)" aria-label="Message au fournisseur" />
+                        <div className="form-actions">
+                          <button type="button" className="primary-btn small-btn" disabled={busy} onClick={() => void decide(a.organization_id, 'verify')}>Vérifier</button>
+                          <button type="button" className="secondary-btn small-btn" disabled={busy || !note.trim()} onClick={() => void decide(a.organization_id, 'request_changes')}>Demander des modifications</button>
+                          <button type="button" className="secondary-btn small-btn" disabled={busy || !note.trim()} onClick={() => void decide(a.organization_id, 'reject')}>Refuser</button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+              <button type="button" className="icon-btn" aria-expanded={open === a.organization_id} aria-label={`Détails de ${a.display_name}`} onClick={() => { setOpen(open === a.organization_id ? null : a.organization_id); setNote('') }}><Icon name="chevron" size={16} /></button>
+            </div>
+          ))}
+        </div>
+      )}
+      {error && <p className="form-error" role="alert">{errorText(error)}</p>}
     </>
   )
 }

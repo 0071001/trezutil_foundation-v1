@@ -23,6 +23,7 @@ function titleOf(pathname: string, conversationTitle: string | undefined): strin
   if (pathname.startsWith('/operations')) return 'Opérations'
   if (pathname.startsWith('/purchases')) return 'Achats et réservations'
   if (pathname.startsWith('/suppliers')) return 'Fournisseurs'
+  if (pathname === '/supplier') return 'Devenir fournisseur'
   if (pathname.startsWith('/overview')) return 'Vue d’ensemble'
   if (pathname.startsWith('/settings')) return 'Paramètres'
   return 'Nouvelle conversation'

@@ -13,6 +13,7 @@ import (
 
 	"github.com/trezutil/trezutil/infrastructure/postgres"
 	"github.com/trezutil/trezutil/internal/api"
+	"github.com/trezutil/trezutil/internal/application/supplieronboarding"
 	"github.com/trezutil/trezutil/internal/application"
 	"github.com/trezutil/trezutil/internal/application/identity"
 	"github.com/trezutil/trezutil/internal/domain"
@@ -118,6 +119,8 @@ func main() {
 		Memberships: orgRepo, Orgs: orgRepo, Sellers: postgres.NewSellerRepository(db), Stores: postgres.NewStoreRepository(db),
 	}))
 	mux.HandleFunc("POST /api/v1/stores", stores.CreateStoreH)
+	// Supplier self-registration and its review by staff (never verified automatically).
+	api.NewSupplierOnboardingHandler(supplieronboarding.NewService(postgres.NewSupplierOnboardingStore(db), orgRepo, userRepo, auditLog), logger).Register(mux)
 	mux.HandleFunc("GET /api/v1/stores", stores.GetStoreH)
 	// Administration console API: every route checks the caller's role itself.
 	adminRepo := postgres.NewAdminRepository(db)

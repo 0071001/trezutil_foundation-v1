@@ -7,6 +7,7 @@ import { Thread, Welcome } from '@/conversation/ConversationScreens'
 import { OperationView } from '@/operations/OperationView'
 import { OperationsList, OrderView, Overview, Purchases, Suppliers } from '@/pages/Lists'
 import { Settings } from '@/settings/Settings'
+import { SupplierOnboarding } from '@/pages/SupplierOnboarding'
 import { Shell } from '@/shell/Shell'
 import { VoiceMode } from '@/voice/VoiceMode'
 
@@ -29,6 +30,7 @@ export function AppRoutes() {
         <Route path="purchases" element={<Purchases />} />
         <Route path="purchases/:orderId" element={<OrderView />} />
         <Route path="suppliers" element={<Suppliers />} />
+        <Route path="supplier" element={<SupplierOnboarding />} />
         <Route path="overview" element={<Overview />} />
         <Route path="settings" element={<Settings />} />
         <Route path="settings/:section" element={<Settings />} />
