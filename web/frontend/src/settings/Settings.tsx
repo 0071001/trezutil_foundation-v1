@@ -98,10 +98,10 @@ function ProfileSection() {
   }
   return (
     <>
-      <Title title="Profil personnel">Ton nom apparaît dans tes échanges avec les fournisseurs. Ton numéro de téléphone est ton identifiant.</Title>
+      <Title title="Profil personnel">Ton nom apparaît dans tes échanges avec les fournisseurs. {user.phone ? 'Tu te connectes avec ton numéro de téléphone.' : 'Tu te connectes avec ton compte Google.'}</Title>
       <form className="form-grid settings-form" onSubmit={(e) => void save(e)}>
         <label className="full">Nom affiché<input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required /></label>
-        <label>Téléphone<input value={user.phone} disabled /></label>
+        {user.phone && <label>Téléphone<input value={user.phone} disabled /></label>}
         <label>E-mail<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="facultatif" /></label>
         <div className="full form-actions">
           {error && <span className="form-error" role="alert">{errorText(error)}</span>}

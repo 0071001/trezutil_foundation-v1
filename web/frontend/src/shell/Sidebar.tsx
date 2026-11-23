@@ -25,6 +25,71 @@ interface Props {
 
 interface CommercialItem { icon: IconName; label: string; to?: string; action?: () => void; soon?: boolean; count?: number }
 
+/**
+ * The account menu, like ChatGPT's: who is signed in, the profile in use (personal or a business), quick links, and
+ * "change account" / "sign out". Signing out clears this device's session (and Google's automatic re-selection).
+ */
+function ProfileMenu({ name, subtitle, account, orgs, activeOrg, collapsed, onNavigate }: {
+  name: string; subtitle: string; account: string; orgs: { organization_id: string; display_name: string; role?: string }[]
+  activeOrg: string; collapsed: boolean; onNavigate: () => void
+}) {
+  const navigate = useNavigate()
+  const { signOut } = useSession()
+  const [open, setOpen] = useState(false)
+  const box = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!open) return
+    const close = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false) }
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', close)
+    document.addEventListener('keydown', esc)
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc) }
+  }, [open])
+  const go = (to: string) => { setOpen(false); onNavigate(); navigate(to) }
+  const leave = (to: string) => { setOpen(false); onNavigate(); signOut(); navigate(to) }
+  const choose = (organizationId: string) => {
+    profileStore.set(organizationId ? { kind: 'company', organizationId } : { kind: 'personal', organizationId: '' })
+    setOpen(false)
+  }
+  return (
+    <div className="profile-box" ref={box}>
+      <button type="button" className={`profile ${open ? 'open' : ''}`} aria-haspopup="menu" aria-expanded={open} aria-label={`Compte : ${name}`} onClick={() => setOpen((o) => !o)}>
+        <span className="avatar">{initials(name)}</span>
+        <span className="profile-copy"><b>{name}</b><small>{subtitle}</small></span>
+        <Icon name="more" size={16} />
+      </button>
+      {open && (
+        <div className={`menu up profile-menu ${collapsed ? 'beside' : ''}`} role="menu" aria-label="Compte">
+          <div className="profile-menu-head" role="presentation">
+            <span className="avatar">{initials(name)}</span>
+            <span><b>{name}</b>{account && <small>{account}</small>}</span>
+          </div>
+          {orgs.length > 0 && (
+            <>
+              <div className="menu-sep" role="separator" />
+              <button type="button" role="menuitemradio" aria-checked={!activeOrg} onClick={() => choose('')}><Icon name="user" size={15} />Profil personnel{!activeOrg && <Icon name="check" size={15} />}</button>
+              {orgs.map((o) => (
+                <button type="button" role="menuitemradio" key={o.organization_id} aria-checked={activeOrg === o.organization_id} onClick={() => choose(o.organization_id)}>
+                  <Icon name="building" size={15} />{o.display_name}{activeOrg === o.organization_id && <Icon name="check" size={15} />}
+                </button>
+              ))}
+            </>
+          )}
+          <div className="menu-sep" role="separator" />
+          <button type="button" role="menuitem" onClick={() => go('/settings/profile')}><Icon name="user" size={15} />Mon profil</button>
+          <button type="button" role="menuitem" onClick={() => go('/settings/credits')}><Icon name="wallet" size={15} />Crédits et usage</button>
+          <button type="button" role="menuitem" onClick={() => go('/settings')}><Icon name="settings" size={15} />Paramètres</button>
+          <button type="button" role="menuitem" onClick={() => go('/supplier')}><Icon name="building" size={15} />Devenir fournisseur</button>
+          <button type="button" role="menuitem" onClick={() => go('/legal')}><Icon name="shield" size={15} />Informations légales</button>
+          <div className="menu-sep" role="separator" />
+          <button type="button" role="menuitem" onClick={() => leave('/login')}><Icon name="refresh" size={15} />Changer de compte</button>
+          <button type="button" role="menuitem" className="danger" onClick={() => leave('/')}><Icon name="logout" size={15} />Se déconnecter</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function norm(s: string) { return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') }
 
 function HistoryItem({ conv, active, busy, collapsed, onNavigate }: { conv: Conversation; active: boolean; busy: boolean; collapsed: boolean; onNavigate: () => void }) {
@@ -172,11 +237,8 @@ export function Sidebar({ collapsed, onCollapse, mobileOpen, onClose, conversati
       <div className="side-bottom">
         <NavLink to="/settings" onClick={onClose} className={({ isActive }) => `side-action ${isActive ? 'active' : ''}`} title="Paramètres"><Icon name="settings" /><span>Paramètres</span></NavLink>
         {user === undefined ? null : user ? (
-          <Link to="/settings/profile" onClick={onClose} className="profile" aria-label={`Profil : ${name}`}>
-            <span className="avatar">{initials(name)}</span>
-            <span className="profile-copy"><b>{name}</b><small>{org ? `Entreprise · ${org.role || 'membre'}` : 'Profil personnel'}</small></span>
-            <Icon name="chevron" size={14} />
-          </Link>
+          <ProfileMenu name={name} subtitle={org ? `Entreprise · ${org.role || 'membre'}` : 'Profil personnel'} account={user.email || user.phone}
+            orgs={orgs} activeOrg={profile.kind !== 'personal' ? profile.organizationId : ''} collapsed={collapsed} onNavigate={onClose} />
         ) : (
           <Link to={`/login?returnTo=${encodeURIComponent(pathname)}`} onClick={onClose} className="side-action sign-in"><Icon name="user" /><span>Se connecter</span><Icon name="arrow" size={15} /></Link>
         )}

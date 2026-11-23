@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { toApiError, type ApiError } from '@/api/client'
 import { useSession } from '@/lib/session'
@@ -9,7 +9,7 @@ import { openOperationFor } from '@/operations/operations'
 import { OfferPanel } from '@/commerce/OfferPanel'
 import type { Offer } from '@/commerce/offers'
 import { Icon, type IconName } from '@/ui/Icon'
-import { Empty, ErrorNote, Loading, Logo } from '@/ui/kit'
+import { Empty, ErrorNote, Loading } from '@/ui/kit'
 
 /*
  * The conversation: where every operation starts. "/" asks the open question; "/c/:id" is a thread with the composer
@@ -23,6 +23,17 @@ const PROMPTS: [IconName, string, string, string][] = [
   ['calendar', 'Organiser un événement', 'Coordonner prestataires et budget', 'J’organise un événement : '],
 ]
 
+/** The logo's three dots, appearing one after the other (the green one last, then breathing once). */
+function BrandDots() {
+  return <span className="brand-dots" aria-hidden="true"><i /><i /><i /></span>
+}
+
+/** Words of the welcome title, each rising in turn; the three verbs get the logo's green underline. */
+const TITLE: { w: string; verb?: boolean; br?: boolean; tail?: string }[] = [
+  { w: 'Qu’est-ce' }, { w: 'que' }, { w: 'tu' }, { w: 'souhaites', br: true },
+  { w: 'acheter', verb: true, tail: ',' }, { w: 'vendre', verb: true }, { w: 'ou' }, { w: 'faire réaliser', verb: true }, { w: '?' },
+]
+
 export function Welcome() {
   const navigate = useNavigate()
   const [draft, setDraft] = useState('')
@@ -33,9 +44,17 @@ export function Welcome() {
     if (id) navigate(`/c/${id}`)
   }
   return (
-    <div className="welcome">
-      <div className="welcome-mark"><Logo compact /></div>
-      <h1>Qu’est-ce que tu souhaites<br />acheter, vendre ou faire réaliser&nbsp;?</h1>
+    <div className="welcome welcome-anim">
+      <div className="welcome-mark"><BrandDots /></div>
+      <h1 aria-label="Qu’est-ce que tu souhaites acheter, vendre ou faire réaliser ?">
+        {TITLE.map((t, i) => (
+          <span key={t.w} aria-hidden="true">
+            <span className={`welcome-word${t.verb ? ' verb' : ''}`} style={{ '--i': i } as CSSProperties}>{t.w}</span>
+            {t.tail && <span className="welcome-word" style={{ '--i': i } as CSSProperties}>{t.tail}</span>}
+            {t.br ? <br /> : i < TITLE.length - 1 ? (TITLE[i + 1]!.w === '?' ? ' ' : ' ') : null}
+          </span>
+        ))}
+      </h1>
       <p>Trezutil t’aide à trouver les bons fournisseurs, comparer les offres, négocier et concrétiser tes opérations commerciales.</p>
       <div className="suggestions" role="group" aria-label="Pour commencer">
         {PROMPTS.map(([icon, title, desc, start]) => (
