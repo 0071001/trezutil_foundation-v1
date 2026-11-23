@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router'
 import { useSession } from '@/lib/session'
+import { setTheme, useTheme, type Theme } from '@/lib/theme'
 import { conversationStore, type Conversation } from '@/conversation/store'
 import { profileStore, useOrganizations } from '@/shell/profile'
 import { Icon, type IconName } from '@/ui/Icon'
@@ -35,6 +36,7 @@ function ProfileMenu({ name, subtitle, account, orgs, activeOrg, collapsed, onNa
 }) {
   const navigate = useNavigate()
   const { signOut } = useSession()
+  const theme = useTheme()
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -81,6 +83,14 @@ function ProfileMenu({ name, subtitle, account, orgs, activeOrg, collapsed, onNa
           <button type="button" role="menuitem" onClick={() => go('/settings')}><Icon name="settings" size={15} />Paramètres</button>
           <button type="button" role="menuitem" onClick={() => go('/supplier')}><Icon name="building" size={15} />Devenir fournisseur</button>
           <button type="button" role="menuitem" onClick={() => go('/legal')}><Icon name="shield" size={15} />Informations légales</button>
+          <div className="menu-sep" role="separator" />
+          <div className="theme-switch" role="radiogroup" aria-label="Thème">
+            {(['system', 'light', 'dark'] as Theme[]).map((t) => (
+              <button type="button" key={t} role="radio" aria-checked={theme === t} className={theme === t ? 'on' : ''} onClick={() => setTheme(t)}>
+                {t === 'system' ? 'Auto' : t === 'light' ? 'Clair' : 'Sombre'}
+              </button>
+            ))}
+          </div>
           <div className="menu-sep" role="separator" />
           <button type="button" role="menuitem" onClick={() => leave('/login')}><Icon name="refresh" size={15} />Changer de compte</button>
           <button type="button" role="menuitem" className="danger" onClick={() => leave('/')}><Icon name="logout" size={15} />Se déconnecter</button>

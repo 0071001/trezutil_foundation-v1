@@ -7,6 +7,7 @@ import { creditsApi } from '@/api/credits'
 import { DOCUMENT_LABEL, STATUS_LABEL, supplierApi, type ApplicationStatus } from '@/api/supplier'
 import { MANAGER_ROLES } from '@/api/seller'
 import { renderGoogleButton } from '@/lib/google'
+import { setTheme, useTheme, type Theme } from '@/lib/theme'
 import { getLang, setLang, useLang, type Lang } from '@/lib/i18n'
 import { useSession } from '@/lib/session'
 import { useAsync } from '@/lib/useAsync'
@@ -21,7 +22,7 @@ import { Badge, Empty, ErrorNote, Loading, NotConnected, errorText } from '@/ui/
 /* Settings: the account, the profiles, the preferences, the memory, the notifications, privacy and the services. */
 
 const SECTIONS: [string, string][] = [
-  ['profile', 'Profil personnel'], ['company', 'Profil entreprise'], ['preferences', 'Préférences'], ['language', 'Langue'],
+  ['profile', 'Profil personnel'], ['company', 'Profil entreprise'], ['preferences', 'Préférences'], ['appearance', 'Apparence'], ['language', 'Langue'],
   ['notifications', 'Notifications'], ['privacy', 'Confidentialité'], ['memory', 'Mémoire'], ['security', 'Sécurité'],
   ['services', 'Services connectés'], ['credits', 'Crédits et usage'],
 ]
@@ -64,6 +65,7 @@ export function Settings() {
           {active === 'profile' && <ProfileSection />}
           {active === 'company' && <CompanySection />}
           {active === 'preferences' && <PreferencesSection />}
+          {active === 'appearance' && <AppearanceSection />}
           {active === 'language' && <LanguageSection />}
           {active === 'notifications' && <NotificationsSection />}
           {active === 'privacy' && <PrivacySection />}
@@ -349,6 +351,29 @@ function SupplierReviewSection() {
         </div>
       )}
       {error && <p className="form-error" role="alert">{errorText(error)}</p>}
+    </>
+  )
+}
+
+/** Light, dark, or the device's choice. */
+export const THEMES: [Theme, string, string, IconName][] = [
+  ['system', 'Système', 'Suit le réglage de ton appareil (clair le jour, sombre la nuit si tu l’as configuré).', 'settings'],
+  ['light', 'Clair', 'Fond blanc, texte sombre.', 'eye'],
+  ['dark', 'Sombre', 'Fond sombre, plus reposant le soir.', 'eye'],
+]
+
+function AppearanceSection() {
+  const theme = useTheme()
+  return (
+    <>
+      <Title title="Apparence">Le thème de Trezutil sur cet appareil.</Title>
+      <div className="memory-list spaced" role="radiogroup" aria-label="Thème">
+        {THEMES.map(([code, label, copy, icon]) => (
+          <button type="button" key={code} role="radio" aria-checked={theme === code} className={`memory-item selectable ${theme === code ? 'on' : ''}`} onClick={() => setTheme(code)}>
+            <span><Icon name={icon} /></span><div><b>{label}</b><p>{copy}</p></div>{theme === code && <Icon name="check" />}
+          </button>
+        ))}
+      </div>
     </>
   )
 }

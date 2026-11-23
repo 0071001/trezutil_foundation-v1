@@ -8,9 +8,17 @@ import { Icon, type IconName } from '@/ui/Icon'
 export function Logo({ compact = false }: { compact?: boolean }) {
   return (
     <span className="logo">
-      {compact
-        ? <img className="logo-mark" src="/brand/trezutil-mark.svg" alt="" width={642} height={184} />
-        : <img className="logo-full" src="/brand/trezutil-logo.png" alt="Trezutil" width={1000} height={147} />}
+      {compact ? (
+        <>
+          <img className="logo-mark on-light" src="/brand/trezutil-mark.svg" alt="" width={642} height={184} />
+          <img className="logo-mark on-dark" src="/brand/trezutil-mark-white.svg" alt="" width={642} height={184} />
+        </>
+      ) : (
+        <>
+          <img className="logo-full on-light" src="/brand/trezutil-logo.png" alt="Trezutil" width={1000} height={147} />
+          <img className="logo-full on-dark" src="/brand/trezutil-logo-white.png" alt="Trezutil" width={1000} height={147} />
+        </>
+      )}
     </span>
   )
 }

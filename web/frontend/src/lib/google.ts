@@ -4,6 +4,8 @@
  * expiry and the nonce it issued). The browser never holds any secret: the client id is public.
  */
 
+import { isDark } from '@/lib/theme'
+
 interface GoogleCredentialResponse { credential?: string }
 interface GoogleIdApi {
   initialize(config: Record<string, unknown>): void
@@ -48,7 +50,7 @@ export async function renderGoogleButton(parent: HTMLElement, opts: { clientId: 
   })
   parent.replaceChildren()
   api.renderButton(parent, {
-    type: 'standard', theme: 'outline', size: 'large', shape: 'pill', text: opts.text ?? 'continue_with',
+    type: 'standard', theme: isDark() ? 'filled_black' : 'outline', size: 'large', shape: 'pill', text: opts.text ?? 'continue_with',
     logo_alignment: 'left', locale: 'fr', width: Math.min(400, Math.max(220, parent.clientWidth || 320)),
   })
 }
