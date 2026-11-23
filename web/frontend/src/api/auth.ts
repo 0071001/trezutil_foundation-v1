@@ -1,4 +1,5 @@
 import { http, tokens } from '@/api/client'
+import { forgetGoogleSelection } from '@/lib/google'
 import { arr, obj, read, str, strOrNull } from '@/api/json'
 import type { Session, User } from '@/types'
 
@@ -43,11 +44,47 @@ export const authApi = {
     return mapUser(await http.patch<unknown>('/auth/users/me', patch))
   },
 
+  /** Which sign-in methods the server offers; Google's public client id when it is on. */
+  async providers(): Promise<{ google: { enabled: boolean; clientId: string } }> {
+    const raw = obj(await http.get<unknown>('/auth/providers'))
+    const g = obj(raw.google)
+    return { google: { enabled: g.enabled === true && !!str(g.client_id), clientId: str(g.client_id) } }
+  },
+
+  /** A one-time nonce for the next Google sign-in (the server checks it is in the ID token). */
+  async googleNonce(): Promise<string> {
+    return str(obj(await http.post<unknown>('/auth/google/nonce', {})).nonce)
+  },
+
+  /** Signs in (or creates the account) with a Google ID token and stores the session. */
+  async signInWithGoogle(credential: string, nonce: string): Promise<User> {
+    const data = await http.post<Session>('/auth/google', { credential, nonce })
+    tokens.save(data)
+    return mapUser(data.user)
+  },
+
+  /** The signed-in account's sign-in methods. */
+  async identities(): Promise<{ phone: string; googleEnabled: boolean; google?: { email: string; name: string } }> {
+    const raw = obj(await http.get<unknown>('/auth/identities'))
+    const g = arr(raw.items).map(obj).find((i) => str(i.provider) === 'google')
+    return { phone: str(raw.phone), googleEnabled: raw.google_enabled === true, ...(g ? { google: { email: str(g.email), name: str(g.name) } } : {}) }
+  },
+
+  /** Links a Google account to the signed-in account (a fresh Google sign-in proves it). */
+  async linkGoogle(credential: string, nonce: string): Promise<void> {
+    await http.post<unknown>('/auth/google/link', { credential, nonce })
+  },
+
+  async unlinkGoogle(): Promise<void> {
+    await http.del<unknown>('/auth/identities/google')
+  },
+
   /**
    * Signs out on this device. The backend issues stateless refresh tokens and
    * has no revocation endpoint, so this clears the stored tokens only.
    */
   signOut() {
     tokens.clear()
+    forgetGoogleSelection()
   },
 }

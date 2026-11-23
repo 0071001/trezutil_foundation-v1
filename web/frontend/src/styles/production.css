@@ -152,7 +152,7 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .flow-canvas.real { height: auto; min-height: 320px; display: flex; overflow: hidden; }
 .flow-scroll { position: relative; flex: 1; min-width: 0; overflow: auto; min-height: 320px; }
 .flow-edges { position: absolute; left: 0; top: 0; pointer-events: none; }
-.flow-lane { font: 600 9px "DM Sans", sans-serif; letter-spacing: .08em; fill: #8a928e; }
+.flow-lane { font: 600 9px var(--font-ui); letter-spacing: .08em; fill: #8a928e; }
 .flow-edge { fill: none; stroke: #cfd5d2; stroke-width: 1.5; }
 .flow-edge.done { stroke: #9fc2b5; }
 .flow-box { position: absolute; border: 1px solid #dbe0dd; background: white; border-radius: 10px; padding: 9px 11px; text-align: left; display: grid; align-content: start; gap: 3px; box-shadow: 0 2px 6px rgb(20 40 32 / 4%); transition: border-color .15s, box-shadow .15s; }
@@ -260,7 +260,7 @@ a.list-row:hover { background: #fafbfa; }
 .voice-transcript { margin-top: 26px; width: min(560px, 100%); display: grid; gap: 10px; }
 .voice-transcript p { margin: 0; background: rgba(255, 255, 255, .75); border: 1px solid #e1e7e3; border-radius: 12px; padding: 10px 13px; font-size: 13px; line-height: 1.5; color: #3c4541; text-align: left; }
 .voice-transcript p.you { background: #eef3f0; }
-.voice-transcript small { display: block; font-size: 10px; font-weight: 700; color: var(--green); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 3px; }
+.voice-transcript small { display: block; font-size: 10px; font-weight: 600; color: var(--green); letter-spacing: .06em; text-transform: uppercase; margin-bottom: 3px; }
 .voice-center .primary-btn { margin-top: 18px; }
 .voice-note { text-align: center; color: #8a928e; font-size: 10.5px; margin: 16px 0 0; }
 
@@ -300,7 +300,7 @@ a.list-row:hover { background: #fafbfa; }
 .offer-pictures img { width: 100%; height: 120px; object-fit: cover; border-radius: 9px; background: var(--soft); }
 .offer-line { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: #4e5853; }
 .offer-price { display: flex; align-items: baseline; gap: 8px; }
-.offer-price strong { font: 700 22px Manrope, sans-serif; }
+.offer-price strong { font: 600 22px var(--font-ui); }
 .offer-price s { color: #8b928e; font-size: 13px; }
 .offer-description { margin: 0; font-size: 13px; line-height: 1.6; color: #3c4541; white-space: pre-line; }
 .offer-actions { display: flex; gap: 8px; justify-content: flex-end; }
@@ -319,7 +319,7 @@ a.list-row:hover { background: #fafbfa; }
 /* Supplier registration */
 .supplier-steps { list-style: none; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; padding: 0; margin: 0 0 16px; }
 .supplier-steps li { display: flex; gap: 9px; align-items: flex-start; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: white; color: var(--muted); }
-.supplier-steps li > span { flex: 0 0 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--soft); font-size: 12px; font-weight: 700; }
+.supplier-steps li > span { flex: 0 0 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--soft); font-size: 12px; font-weight: 600; }
 .supplier-steps li.done { color: var(--ink); border-color: var(--green); }
 .supplier-steps li.done > span { background: var(--green); color: #fff; }
 .supplier-steps b { display: block; font-size: 13px; }.supplier-steps small { font-size: 11.5px; color: var(--muted); }
@@ -337,3 +337,10 @@ a.list-row:hover { background: #fafbfa; }
 .review-detail { display: grid; gap: 8px; margin-top: 8px; justify-items: start; }
 .review-detail textarea { width: 100%; min-height: 70px; border: 1px solid #dce0de; border-radius: 7px; padding: 8px 10px; font: inherit; }
 .supplier-form > .full { grid-column: 1 / -1; }
+
+/* Sign in with Google */
+.google-signin { display: grid; gap: 10px; margin: 18px 0 4px; }
+.google-button { min-height: 44px; display: flex; justify-content: center; }
+.google-link .google-button { justify-content: flex-start; margin-top: 8px; }
+.or-divider { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 12.5px; margin-top: 6px; }
+.or-divider::before, .or-divider::after { content: ''; flex: 1; height: 1px; background: var(--line); }

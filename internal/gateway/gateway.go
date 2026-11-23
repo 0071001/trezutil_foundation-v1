@@ -411,18 +411,18 @@ func securityHeaders(next http.Handler) http.Handler {
 // violations are reported to /csp-report and logged, nothing is blocked) or "off".
 //
 // The web app is a single-page app served from this origin. The wide allowances are the ones it needs:
-// Stripe.js and its payment frame, Google Fonts, and listing photos from any https address (sellers paste
+// Stripe.js and its payment frame, Google Identity Services (the "Sign in with Google" button), Google Fonts, and listing photos from any https address (sellers paste
 // links, there is no media upload yet). No inline script is allowed.
 func contentSecurityPolicy(mode string) (header, value string) {
 	policy := strings.Join([]string{
 		"default-src 'self'",
-		"script-src 'self' https://js.stripe.com",
-		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+		"script-src 'self' https://js.stripe.com https://accounts.google.com/gsi/client",
+		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://accounts.google.com/gsi/style",
 		"font-src 'self' https://fonts.gstatic.com",
 		"img-src 'self' data: blob: https:",
 		"media-src 'self' blob:",
-		"connect-src 'self' https://*.stripe.com https://*.stripe.network",
-		"frame-src https://*.stripe.com https://*.stripe.network",
+		"connect-src 'self' https://*.stripe.com https://*.stripe.network https://accounts.google.com/gsi/",
+		"frame-src https://*.stripe.com https://*.stripe.network https://accounts.google.com/gsi/",
 		"object-src 'none'",
 		"base-uri 'self'",
 		"form-action 'self'",

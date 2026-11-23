@@ -86,7 +86,7 @@ const inflightGets = new Map<string, Promise<unknown>>()
 
 /** The calls that open a session. They go out without a token: an access token is short-lived, and one left in the
  *  browser by an earlier visit makes the server answer 401 to the sign-in itself, which looked like a wrong password. */
-const SIGN_IN_PATHS = new Set(['/auth/request-otp', '/auth/verify-otp', '/auth/staff/login'])
+const SIGN_IN_PATHS = new Set(['/auth/request-otp', '/auth/verify-otp', '/auth/staff/login', '/auth/providers', '/auth/google/nonce', '/auth/google'])
 
 async function send<T>(method: string, path: string, body: unknown, options: RequestOptions, retried: boolean): Promise<T> {
   const headers: Record<string, string> = { Accept: 'application/json' }

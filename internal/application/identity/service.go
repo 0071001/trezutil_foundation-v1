@@ -59,6 +59,9 @@ type Config struct {
 	Lockout          time.Duration
 	Clock            Clock
 	Logger           zerolog.Logger
+	// Google enables "Sign in with Google" (with Identities); nil disables it. No secret: only the public client id.
+	Google     GoogleVerifier
+	Identities domain.ExternalIdentityRepository
 	// OnPhoneSignIn runs after a successful one-time-code sign-in (team invitations become memberships). Its
 	// failure is logged and never fails the sign-in. Optional.
 	OnPhoneSignIn func(ctx context.Context, userID, phone string) error

@@ -1,12 +1,60 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { authApi } from '@/api/auth'
 import { toApiError, type ApiError } from '@/api/client'
+import { renderGoogleButton } from '@/lib/google'
 import { safeReturnTo, useSession } from '@/lib/session'
 import { Icon } from '@/ui/Icon'
 import { errorText, Logo } from '@/ui/kit'
 
-/* Sign-in with a one-time code sent to the phone (POST /auth/request-otp, /auth/verify-otp), in the design's card. */
+/*
+ * Sign-in: with Google (POST /auth/google, the official Google button) when the server offers it, or with a one-time
+ * code sent to the phone (POST /auth/request-otp, /auth/verify-otp). Both open the same kind of account; signing in
+ * the first time creates it.
+ */
+
+/** Google's button. Hidden when the server does not offer Google; each sign-in uses a fresh nonce from the server. */
+export function GoogleSignIn({ onSignedIn }: { onSignedIn: () => Promise<void> }) {
+  const holder = useRef<HTMLDivElement>(null)
+  const nonce = useRef('')
+  const [state, setState] = useState<'loading' | 'off' | 'ready' | 'busy' | 'unavailable'>('loading')
+  const [error, setError] = useState('')
+  const setup = useCallback(async () => {
+    try {
+      const providers = await authApi.providers()
+      if (!providers.google.enabled) { setState('off'); return }
+      nonce.current = await authApi.googleNonce()
+      if (!holder.current) return
+      await renderGoogleButton(holder.current, {
+        clientId: providers.google.clientId, nonce: nonce.current, text: 'continue_with',
+        onCredential: (credential) => {
+          setState('busy'); setError('')
+          void authApi.signInWithGoogle(credential, nonce.current).then(onSignedIn, (err) => {
+            const e = toApiError(err)
+            setError(e.code === 'ACCOUNT_EXISTS'
+              ? 'Un compte Trezutil utilise déjà cette adresse e-mail. Connecte-toi avec ton numéro, puis lie Google dans Paramètres → Sécurité.'
+              : e.code === 'ACCOUNT_SUSPENDED' ? 'Ce compte est suspendu.' : 'La connexion avec Google n’a pas abouti. Réessaie.')
+            void setup() // a fresh nonce for the next try
+          })
+        },
+      })
+      setState('ready')
+    } catch {
+      setState('unavailable')
+    }
+  }, [onSignedIn])
+  useEffect(() => { void setup() }, [setup])
+  if (state === 'off') return null
+  return (
+    <div className="google-signin">
+      <div ref={holder} className="google-button" aria-busy={state === 'busy'} />
+      {state === 'busy' && <p className="muted-line" role="status">Connexion avec Google…</p>}
+      {state === 'unavailable' && <p className="muted-line">La connexion avec Google n’est pas disponible pour le moment.</p>}
+      {error && <p className="form-error" role="alert">{error}</p>}
+      <div className="or-divider" role="separator"><span>ou avec ton numéro</span></div>
+    </div>
+  )
+}
 
 function normalisePhone(raw: string): string {
   const digits = raw.replace(/[^\d+]/g, '')
@@ -60,7 +108,8 @@ export function Login() {
           <form onSubmit={(e) => void request(e)}>
             <p className="eyebrow">BIENVENUE</p>
             <h1>Connecte-toi à Trezutil</h1>
-            <p>Saisis ton numéro : tu recevras un code de connexion sur WhatsApp. Pas de mot de passe.</p>
+            <p>Avec ton compte Google, ou avec ton numéro : tu recevras alors un code de connexion sur WhatsApp. Pas de mot de passe. La première connexion crée ton compte.</p>
+            <GoogleSignIn onSignedIn={async () => { await refreshUser(); navigate(returnTo, { replace: true }) }} />
             <div className="form-grid single">
               <label>Numéro de téléphone<input type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+243 81 234 5678" required autoFocus /></label>
             </div>

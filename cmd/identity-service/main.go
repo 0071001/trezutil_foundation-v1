@@ -13,6 +13,7 @@ import (
 
 	"github.com/trezutil/trezutil/infrastructure/postgres"
 	"github.com/trezutil/trezutil/internal/api"
+	googleauth "github.com/trezutil/trezutil/internal/infrastructure/google"
 	"github.com/trezutil/trezutil/internal/application/supplieronboarding"
 	"github.com/trezutil/trezutil/internal/application"
 	"github.com/trezutil/trezutil/internal/application/identity"
@@ -80,6 +81,9 @@ func main() {
 		Lockout:          time.Duration(common.GetenvInt("STAFF_LOGIN_LOCKOUT_MINUTES", int(identity.DefaultLockout/time.Minute))) * time.Minute,
 		Logger:           logger,
 		OnPhoneSignIn:    team.AcceptInvitations,
+		// Sign in with Google: on when GOOGLE_CLIENT_ID is set (public OAuth client id; no secret is used).
+		Google:     googleVerifier(),
+		Identities: postgres.NewExternalIdentityRepository(db),
 	})
 	if err != nil {
 		log.Fatalf("identity-service: %v", err)
@@ -102,6 +106,7 @@ func main() {
 	mux.HandleFunc("POST /api/v1/auth/verify-otp", h.VerifyOTPH)
 	mux.HandleFunc("POST /api/v1/auth/staff/login", h.StaffLoginH)
 	mux.HandleFunc("POST /api/v1/auth/refresh", h.RefreshH)
+	api.NewGoogleAuthHandler(svc, svc, common.GetenvInt("GOOGLE_SIGN_IN_MAX_PER_IP_10MIN", 30)).Register(mux)
 	mux.HandleFunc("GET /api/v1/auth/users/me", h.MeH)
 	mux.HandleFunc("PATCH /api/v1/auth/users/me", h.UpdateMeH)
 	mux.HandleFunc("POST /api/v1/organizations", orgs.CreateOrganizationH)
@@ -260,4 +265,13 @@ func organizationStaffOnly(orgs domain.OrganizationRepository, users domain.User
 			next(w, r)
 		}
 	}
+}
+
+// googleVerifier returns the Google ID token verifier, or nil (sign-in with Google off) without GOOGLE_CLIENT_ID.
+func googleVerifier() identity.GoogleVerifier {
+	clientID := strings.TrimSpace(common.Getenv("GOOGLE_CLIENT_ID", ""))
+	if clientID == "" {
+		return nil
+	}
+	return googleauth.NewVerifier(clientID)
 }

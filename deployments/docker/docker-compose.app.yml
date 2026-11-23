@@ -93,6 +93,8 @@ services:
       <<: *service-env
       HTTP_PORT: "8086"
       OTP_CODE_SECRET: ${OTP_CODE_SECRET:?OTP_CODE_SECRET is required (32+ random chars, different from JWT_SECRET)}
+      # Sign in with Google: the public OAuth client id (Google Cloud Console). Empty: the Google button is hidden.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
       WHATSAPP_API_BASE_URL: ${WHATSAPP_API_BASE_URL:-https://graph.facebook.com/v20.0}
       WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
       WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}

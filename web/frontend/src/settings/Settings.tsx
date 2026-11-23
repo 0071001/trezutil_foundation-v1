@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { authApi } from '@/api/auth'
 import { toApiError, type ApiError } from '@/api/client'
@@ -6,6 +6,7 @@ import { consoleApi } from '@/api/console'
 import { creditsApi } from '@/api/credits'
 import { DOCUMENT_LABEL, STATUS_LABEL, supplierApi, type ApplicationStatus } from '@/api/supplier'
 import { MANAGER_ROLES } from '@/api/seller'
+import { renderGoogleButton } from '@/lib/google'
 import { getLang, setLang, useLang, type Lang } from '@/lib/i18n'
 import { useSession } from '@/lib/session'
 import { useAsync } from '@/lib/useAsync'
@@ -355,13 +356,67 @@ function SecuritySection() {
   if (!user) return <><Title title="Sécurité" />{user === undefined ? <Loading /> : <NeedsAccount />}</>
   return (
     <>
-      <Title title="Sécurité">Tu te connectes avec un code envoyé à ton numéro de téléphone.</Title>
+      <Title title="Sécurité">Tes moyens de connexion : ton numéro (code par WhatsApp) et, si tu l’as lié, ton compte Google.</Title>
       <div className="memory-list spaced">
-        <div className="memory-item"><span><Icon name="lock" /></span><div><b>Numéro de connexion</b><p>{user.phone}{user.verified_at ? ' · vérifié' : ''}</p></div>{user.verified_at && <Badge tone="green">Vérifié</Badge>}</div>
+        {user.phone && <div className="memory-item"><span><Icon name="lock" /></span><div><b>Numéro de connexion</b><p>{user.phone}{user.verified_at ? ' · vérifié' : ''}</p></div>{user.verified_at && <Badge tone="green">Vérifié</Badge>}</div>}
+        <GoogleLinkItem />
         <div className="memory-item"><span><Icon name="user" /></span><div><b>Compte</b><p>Créé le {user.created_at ? new Date(user.created_at).toLocaleDateString('fr-FR') : '—'} · statut : {user.status || '—'}</p></div></div>
       </div>
       <button type="button" className="secondary-btn" onClick={() => { signOut(); navigate('/') }}><Icon name="logout" size={15} />Se déconnecter de cet appareil</button>
     </>
+  )
+}
+
+/** Google as a way to sign in: shows the linked account, links one (a fresh Google sign-in proves it), or unlinks it. */
+function GoogleLinkItem() {
+  const ids = useAsync(() => authApi.identities(), [])
+  const holder = useRef<HTMLDivElement>(null)
+  const nonce = useRef('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const linked = ids.data?.google
+  const enabled = ids.data?.googleEnabled
+  useEffect(() => {
+    if (!enabled || linked || !holder.current) return
+    let alive = true
+    void (async () => {
+      try {
+        const providers = await authApi.providers()
+        nonce.current = await authApi.googleNonce()
+        if (!alive || !holder.current) return
+        await renderGoogleButton(holder.current, {
+          clientId: providers.google.clientId, nonce: nonce.current, text: 'signin_with',
+          onCredential: (credential) => {
+            setBusy(true); setError('')
+            void authApi.linkGoogle(credential, nonce.current).then(() => ids.reload(), (err) => {
+              const e = toApiError(err)
+              setError(e.code === 'GOOGLE_LINKED_ELSEWHERE' ? 'Ce compte Google est déjà lié à un autre compte Trezutil.' : 'Google n’a pas pu être lié. Réessaie.')
+            }).finally(() => setBusy(false))
+          },
+        })
+      } catch { if (alive) setError('Google n’est pas disponible pour le moment.') }
+    })()
+    return () => { alive = false }
+  }, [enabled, linked]) // eslint-disable-line react-hooks/exhaustive-deps
+  if (ids.loading || (!enabled && !linked)) return null
+  const unlink = async () => {
+    setBusy(true); setError('')
+    try { await authApi.unlinkGoogle(); ids.reload() } catch (err) {
+      const e = toApiError(err)
+      setError(e.code === 'LAST_SIGN_IN_METHOD' ? 'Google est ton seul moyen de connexion : ajoute d’abord ton numéro.' : 'Google n’a pas pu être délié.')
+    } finally { setBusy(false) }
+  }
+  return (
+    <div className="memory-item google-link">
+      <span><Icon name="user" /></span>
+      <div>
+        <b>Compte Google</b>
+        {linked ? <p>Lié · {linked.email || linked.name || 'compte Google'}</p> : <p>Non lié. Lie ton compte Google pour te connecter sans code WhatsApp.</p>}
+        {!linked && <div ref={holder} className="google-button" aria-busy={busy} />}
+        {error && <p className="form-error" role="alert">{error}</p>}
+      </div>
+      {linked && <button type="button" className="secondary-btn small-btn" disabled={busy} onClick={() => void unlink()}>Délier</button>}
+    </div>
   )
 }
 
