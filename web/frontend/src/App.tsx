@@ -7,6 +7,7 @@ import { Thread, Welcome } from '@/conversation/ConversationScreens'
 import { OperationView } from '@/operations/OperationView'
 import { OperationsList, OrderView, Overview, Purchases, Suppliers } from '@/pages/Lists'
 import { Settings } from '@/settings/Settings'
+import { Legal } from '@/pages/Legal'
 import { SupplierOnboarding } from '@/pages/SupplierOnboarding'
 import { Shell } from '@/shell/Shell'
 import { VoiceMode } from '@/voice/VoiceMode'
@@ -21,6 +22,8 @@ export function AppRoutes() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/voice" element={<VoiceMode />} />
+      <Route path="/legal" element={<Legal />} />
+      <Route path="/legal/:doc" element={<Legal />} />
       <Route element={<Shell />}>
         <Route index element={<Welcome />} />
         <Route path="c/:id" element={<Thread />} />

@@ -1,18 +1,26 @@
 # Legal pages: what is done, what only the company can supply
 
-*Written 2026-10-05.* Four pages exist on the site, in French and English: **Terms of use**, **Privacy policy**, **Cancellations and refunds** and **Legal notice** (`/legal/terms`, `/legal/privacy`, `/legal/refunds`, `/legal/notice`; `src/pages/Legal.tsx`, texts in `src/pages/legalContent.tsx`).
+*Rewritten 2026-11-23* (the redesign of `473461b` had removed the first version). Six pages, in French, public and
+outside the app shell: `/legal` (index), `/legal/conditions` (terms of use), `/legal/confidentialite` (privacy policy),
+`/legal/cookies`, `/legal/remboursements` (cancellations and refunds), `/legal/fournisseurs` (supplier terms),
+`/legal/mentions` (legal notice). Code: `src/pages/Legal.tsx`, texts in `src/pages/legalContent.tsx`, facts in
+`src/lib/legal.ts`, tests in `src/pages/legal.test.tsx`.
 
-They are **drafts**. They describe what the product really does (what it collects, who receives it, how orders, bookings and refunds work) and leave a **highlighted marker** for every fact the repository cannot know. Nothing was invented: no company name, address, registration number, retention period, refund delay or governing law.
+They are **drafts**. They describe what the product really does (Google sign-in, conversations kept on the server,
+commercial memory, credits, AI providers, supplier registration and documents) and leave a **highlighted marker** for
+every fact the repository cannot know. Nothing was invented: no company name, address, registration number,
+retention period, refund delay, fee or governing law. The one fact known from the server itself is the host
+(Contabo GmbH, server in Lauterbourg, France).
 
 ## How they stay honest until they are reviewed
 
 | Mechanism | Effect |
 |---|---|
-| `LEGAL.reviewed` is `false` (`src/lib/legal.ts`) | each page shows a banner "this text is a draft…"; the footer links to the pages **only on staging** (placeholders on); the sign-in form does **not** say people accept the terms |
-| A missing fact | shown as `[To complete: …]` / `[À compléter : …]` on a yellow dashed highlight, never as a made-up value |
-| `LEGAL.reviewed` set to `true` | the banner goes, the footer links the pages on the live site, and the sign-in form adds "By continuing you accept the Terms of use and the Privacy policy" with links |
+| `LEGAL.reviewed` is `false` | each page shows a banner "ce texte est un projet…"; the sign-in screen says "Consulte les conditions…", not that people accept them |
+| A missing fact | shown as `[À compléter : …]` on a yellow dashed highlight, never as a made-up value |
+| `LEGAL.reviewed` set to `true` | the banner goes and the sign-in screen says "En continuant, tu acceptes les conditions…" |
 
-**To publish:** fill the facts below in `src/lib/legal.ts`, have a lawyer review both languages, set `reviewed: true`, rebuild. A test (`src/pages/legal.test.tsx`) pins this behaviour.
+**To publish:** fill the facts below in `src/lib/legal.ts`, have a lawyer review the texts, set `reviewed: true`, rebuild.
 
 ## Facts to fill in (`LEGAL` in `src/lib/legal.ts`)
 
@@ -22,13 +30,13 @@ They are **drafts**. They describe what the product really does (what it collect
 | `entity.address`, `entity.registration` | registered address; trade register, national and tax numbers |
 | `entity.director` | the person responsible for the publication of the site |
 | `entity.email`, `entity.phone` | where people write about anything legal or about their data |
-| `entity.hosting` | the hosting company and country |
 | `entity.jurisdiction` | the governing law and the competent courts |
 | `minimumAge` | the minimum age to hold an account |
 | `retention` | how long accounts, conversations and orders are kept after the last activity |
 | `authority` | the data-protection authority people may complain to |
 | `refundWindow`, `refundDelay` | the time to ask for a refund, and the time before the money arrives |
 | `prohibitedItems` | what may not be sold on Trezutil |
+| `supplierFees` | what Trezutil charges suppliers (commission, subscription), if anything |
 
 Also left as markers inside the texts, because they are legal judgements: the **legal basis** of each processing, the **countries** where data is hosted and the **safeguards** for transfers, the **extent of the limitation of liability**, and the **complaint procedure**.
 

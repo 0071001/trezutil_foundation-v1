@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router'
 import { authApi } from '@/api/auth'
 import { toApiError, type ApiError } from '@/api/client'
 import { renderGoogleButton } from '@/lib/google'
+import { LEGAL } from '@/lib/legal'
 import { safeReturnTo, useSession } from '@/lib/session'
 import { Icon } from '@/ui/Icon'
 import { errorText, Logo } from '@/ui/kit'
@@ -136,6 +137,10 @@ export function Login() {
         )}
       </div>
       <p className="login-note"><Icon name="shield" size={14} />Rien n’est commandé, réservé ou payé sans ta confirmation explicite.</p>
+      <p className="login-legal">
+        {LEGAL.reviewed ? 'En continuant, tu acceptes les ' : 'Consulte les '}
+        <Link to="/legal/conditions">conditions d’utilisation</Link> et la <Link to="/legal/confidentialite">politique de confidentialité</Link>.
+      </p>
     </div>
   )
 }

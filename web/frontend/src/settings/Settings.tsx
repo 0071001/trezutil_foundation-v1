@@ -216,7 +216,10 @@ function PrivacySection() {
   const archived = conversations.filter((c) => c.archived)
   return (
     <>
-      <Title title="Confidentialité">Tes conversations sont conservées sur cet appareil, pour ton compte. La mémoire commerciale est distincte de cet historique.</Title>
+      <Title title="Confidentialité">Avec un compte, tes conversations sont conservées sur Trezutil et te suivent sur tes appareils ; tu peux les renommer, les archiver ou les supprimer. La mémoire commerciale est distincte de cet historique.</Title>
+      <p className="muted-line legal-links">
+        <Link to="/legal/confidentialite">Politique de confidentialité</Link> · <Link to="/legal/conditions">Conditions d’utilisation</Link> · <Link to="/legal/cookies">Cookies</Link> · <Link to="/legal">Toutes les informations légales</Link>
+      </p>
       <h3 className="memory-heading">Conversations archivées <Badge>{archived.length}</Badge></h3>
       {!archived.length ? <p className="muted-line">Aucune conversation archivée.</p> : (
         <div className="memory-list spaced">

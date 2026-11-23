@@ -150,7 +150,7 @@ export function SupplierOnboarding() {
   return (
     <div className="settings-page">
       <div className="settings-header page-head">
-        <div><p className="eyebrow">Fournisseurs</p><h1>Devenir fournisseur</h1><p>Inscris ton entreprise pour recevoir des demandes d’acheteurs sur Trezutil. L’inscription ne vaut pas vérification : l’équipe Trezutil vérifie chaque dossier.</p></div>
+        <div><p className="eyebrow">Fournisseurs</p><h1>Devenir fournisseur</h1><p>Inscris ton entreprise pour recevoir des demandes d’acheteurs sur Trezutil. L’inscription ne vaut pas vérification : l’équipe Trezutil vérifie chaque dossier. En t’inscrivant, tu acceptes les <Link to="/legal/fournisseurs">conditions fournisseurs</Link>.</p></div>
       </div>
       <div className="page-body">
         {user === undefined || mine.loading ? <Loading /> : !user ? (
