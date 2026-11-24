@@ -14,6 +14,7 @@ import (
 	"github.com/trezutil/trezutil/infrastructure/postgres"
 	"github.com/trezutil/trezutil/internal/api"
 	googleauth "github.com/trezutil/trezutil/internal/infrastructure/google"
+	"github.com/trezutil/trezutil/internal/application/exchangerate"
 	"github.com/trezutil/trezutil/internal/application/supplieronboarding"
 	"github.com/trezutil/trezutil/internal/application"
 	"github.com/trezutil/trezutil/internal/application/identity"
@@ -126,6 +127,8 @@ func main() {
 	mux.HandleFunc("POST /api/v1/stores", stores.CreateStoreH)
 	// Supplier self-registration and its review by staff (never verified automatically).
 	api.NewSupplierOnboardingHandler(supplieronboarding.NewService(postgres.NewSupplierOnboardingStore(db), orgRepo, userRepo, auditLog), logger).Register(mux)
+	// The CDF / USD rate: entered by an administrator, read by everyone (indicative conversions only).
+	api.NewExchangeRateHandler(exchangerate.NewService(postgres.NewExchangeRateStore(db), userRepo, auditLog), logger).Register(mux)
 	mux.HandleFunc("GET /api/v1/stores", stores.GetStoreH)
 	// Administration console API: every route checks the caller's role itself.
 	adminRepo := postgres.NewAdminRepository(db)

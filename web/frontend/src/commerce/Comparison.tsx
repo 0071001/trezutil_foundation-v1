@@ -6,6 +6,7 @@ import { rememberSupplier } from '@/memory/memory'
 import { Icon } from '@/ui/Icon'
 import { Badge, Empty, NotConnected } from '@/ui/kit'
 import { t, tn } from '@/lib/i18n'
+import { approx, useExchangeRate, type ExchangeRate } from '@/lib/exchangeRate'
 
 /*
  * The comparison of the offers one answer returned, opened from the thread without losing it. Every cell is a value
@@ -18,10 +19,11 @@ const NOT_GIVEN = t('Non communiqué')
 
 type Row = [label: string, value: (o: Offer) => string, strong?: boolean]
 
-function rows(offers: Offer[]): Row[] {
+function rows(offers: Offer[], rate: ExchangeRate | null): Row[] {
   const all: Row[] = [
     [t('Produit ou service'), (o) => o.title],
     [t('Prix affiché'), (o) => o.price, true],
+    [t('Équivalent indicatif'), (o) => approx(o.priceValue, o.currency, rate) || '—'],
     [t('Prix avant promotion'), (o) => (o.wasPrice ? `${o.wasPrice} (−${o.discount} %)` : '—')],
     [t('Disponibilité'), (o) => o.availability || NOT_GIVEN],
     [t('Localisation'), (o) => o.place || NOT_GIVEN],
@@ -29,11 +31,12 @@ function rows(offers: Offer[]): Row[] {
     [t('Livraison'), () => NOT_GIVEN],
     [t('Garantie'), () => NOT_GIVEN],
   ]
-  return all.filter(([label]) => label !== 'Prix avant promotion' || offers.some((o) => o.wasPrice))
+  return all.filter(([label]) => (label !== t('Prix avant promotion') || offers.some((o) => o.wasPrice))
+    && (label !== t('Équivalent indicatif') || offers.some((o) => approx(o.priceValue, o.currency, rate))))
 }
 
-function csv(offers: Offer[]): string {
-  const table = rows(offers)
+function csv(offers: Offer[], rate: ExchangeRate | null): string {
+  const table = rows(offers, rate)
   const esc = (v: string) => `"${v.replace(/"/g, '""')}"`
   const lines = [[t('Critère'), ...offers.map((o) => o.supplier)], ...table.map(([label, get]) => [label, ...offers.map(get)])]
   return lines.map((l) => l.map(esc).join(';')).join('\n')
@@ -62,13 +65,14 @@ export function Comparison() {
     )
   }
   const pick = offers[Math.min(selected, offers.length - 1)]!
-  const table = rows(offers)
+  const rate = useExchangeRate()
+  const table = rows(offers, rate)
   const choose = () => {
     conversationStore.send(id, t('Je retiens l’offre {n} : {title} ({supplier}). Quelles sont les prochaines étapes ?', { n: pick.n, title: pick.title, supplier: pick.supplier }))
     back()
   }
   const exportCsv = () => {
-    const blob = new Blob([`﻿${csv(offers)}`], { type: 'text/csv;charset=utf-8' })
+    const blob = new Blob([`﻿${csv(offers, rate)}`], { type: 'text/csv;charset=utf-8' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url

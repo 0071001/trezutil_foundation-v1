@@ -3,10 +3,12 @@ import { trustLabel } from '@/commerce/offers'
 import { Icon } from '@/ui/Icon'
 import { Badge } from '@/ui/kit'
 import { t } from '@/lib/i18n'
+import { approx, useExchangeRate } from '@/lib/exchangeRate'
 
 /* A small commercial card in the thread: picture, supplier and trust, product, availability, place, price. */
 
 export function SupplierCard({ offer, onOpen, onAsk }: { offer: Offer; onOpen: () => void; onAsk?: () => void }) {
+  const rate = useExchangeRate()
   return (
     <article className="supplier-card" aria-label={t('Offre {n} : {title}', { n: offer.n, title: offer.title })}>
       <div className="product-visual" style={{ background: offer.image ? '#eef1ef' : offer.color }}>
@@ -27,6 +29,7 @@ export function SupplierCard({ offer, onOpen, onAsk }: { offer: Offer; onOpen: (
       <div className="price-block">
         <strong>{offer.price}</strong>
         <small>{offer.wasPrice ? <s>{offer.wasPrice}</s> : t('prix affiché')}</small>
+        {approx(offer.priceValue, offer.currency, rate) && <small className="price-approx" title={t('Conversion indicative au taux fixé par Trezutil. Le prix et le paiement restent dans la devise du fournisseur.')}>{approx(offer.priceValue, offer.currency, rate)}</small>}
         <span className="price-actions">
           {onAsk && <button type="button" onClick={onAsk}>{t('Demander')}</button>}
           <button type="button" onClick={onOpen}>{t('Voir l’offre')} <Icon name="arrow" size={14} /></button>

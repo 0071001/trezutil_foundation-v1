@@ -91,6 +91,7 @@ func (g *Gateway) routes() []apiRoute {
 		{"/api/v1/memory", "conversation"},
 		{"/api/v1/supplier/", "identity"},
 		{"/api/v1/me/", "identity"}, // trailing slash: never captures /api/v1/memory
+		{"/api/v1/exchange-rate", "identity"},
 		{"/api/v1/packs", "conversation"},
 		{"/api/v1/missions", "conversation"},
 		{"/api/v1/webhooks/whatsapp", "conversation"},

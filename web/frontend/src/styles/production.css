@@ -444,3 +444,8 @@ a.list-row:hover { background: var(--soft); }
 .lang-toggle:hover { background: var(--soft); color: var(--ink); }
 .onboarding-brand .lang-toggle { margin-left: auto; }
 .legal-head-actions { display: flex; align-items: center; gap: 8px; }
+
+/* Indicative conversion beside a price, at the administrator's rate. */
+.price-approx { display: block; color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+.offer-price .price-approx { margin-top: 2px; }
+.settings-subtitle { font-size: 15px; font-weight: 600; margin: 24px 0 8px; }

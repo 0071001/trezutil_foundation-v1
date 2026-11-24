@@ -91,3 +91,22 @@ func TestRequestPromptFramesTheCustomerMemoryAsData(t *testing.T) {
 		t.Error("no memory, no memory section")
 	}
 }
+
+func TestBudgetInFrancsUsesTheAdministratorsRateOrIsNotConverted(t *testing.T) {
+	if strings.Contains(buildStaticPrompt(), "2800") {
+		t.Fatal("the instructions still carry a hard-coded franc rate")
+	}
+	set := NewIntentClassifierAdapter(&AIOrchestrator{}, WithExchangeRate(func(context.Context) (float64, bool, error) { return 2850, true, nil }))
+	if got := set.requestPrompt(context.Background(), ""); !strings.Contains(got, "at 2850 FC for 1 USD") {
+		t.Errorf("the rate entered by the administrator is not given:\n%s", got[len(got)-300:])
+	}
+	for name, read := range map[string]RateReader{
+		"none set": func(context.Context) (float64, bool, error) { return 0, false, nil },
+		"failure":  func(context.Context) (float64, bool, error) { return 0, false, context.DeadlineExceeded },
+	} {
+		got := NewIntentClassifierAdapter(&AIOrchestrator{}, WithExchangeRate(read)).requestPrompt(context.Background(), "")
+		if !strings.Contains(got, "no franc / dollar rate is set") || strings.Contains(got, "FC for 1 USD") {
+			t.Errorf("%s: the interpreter may guess a conversion:\n%s", name, got[len(got)-300:])
+		}
+	}
+}

@@ -10,6 +10,7 @@ import { renderGoogleButton } from '@/lib/google'
 import { setTheme, useTheme, type Theme } from '@/lib/theme'
 import { locale, switchLanguage, useLang, type Lang, t, tn } from '@/lib/i18n'
 import { useSession } from '@/lib/session'
+import { exchangeRateApi, loadExchangeRate, useExchangeRate } from '@/lib/exchangeRate'
 import { useAsync } from '@/lib/useAsync'
 import { conversationStore, useConversations } from '@/conversation/store'
 import { addMemory, clearMemory, MEMORY_KINDS, memoryStore, removeMemory, setMemoryEnabled, updateMemory, type MemoryKind } from '@/memory/memory'
@@ -47,7 +48,7 @@ export function Settings() {
   const { user } = useSession()
   // Trezutil staff also see the supplier review (the server checks the role again on every call).
   const staff = !!user?.roles?.some((r) => r === 'admin' || r === 'operator')
-  const sections: [string, string][] = staff ? [...SECTIONS, ['supplier-review', t('Vérification fournisseurs')]] : SECTIONS
+  const sections: [string, string][] = staff ? [...SECTIONS, ['supplier-review', t('Vérification fournisseurs')], ['exchange-rate', t('Taux de change')]] : SECTIONS
   const active = sections.some(([id]) => id === section) ? section : 'profile'
   useEffect(() => { document.title = t('Paramètres — Trezutil') }, [])
   return (
@@ -73,6 +74,7 @@ export function Settings() {
           {active === 'security' && <SecuritySection />}
           {active === 'services' && <ServicesSection />}
           {active === 'credits' && <CreditsSection />}
+          {active === 'exchange-rate' && <ExchangeRateSection admin={!!user?.roles?.includes('admin')} />}
           {active === 'supplier-review' && <SupplierReviewSection />}
         </section>
       </div>
@@ -299,6 +301,60 @@ function MemorySection() {
 }
 
 /** Staff: the supplier applications waiting for a decision. Verifying is a decision, never automatic. */
+/**
+ * The CDF / USD rate (staff). Only an administrator enters it; it only adds an indicative "≈" beside prices and lets
+ * the assistant read a budget in francs. Prices, orders and payments stay in the supplier's currency.
+ */
+function ExchangeRateSection({ admin }: { admin: boolean }) {
+  const current = useExchangeRate()
+  const history = useAsync(() => exchangeRateApi.history(), [])
+  const [rate, setRate] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<ApiError | null>(null)
+  const [saved, setSaved] = useState(false)
+  useEffect(() => { void loadExchangeRate(true) }, [])
+  const save = async (e: FormEvent) => {
+    e.preventDefault()
+    const value = Number(rate.replace(/\s/g, '').replace(',', '.'))
+    setBusy(true); setError(null); setSaved(false)
+    try { await exchangeRateApi.set(value, note); setRate(''); setNote(''); setSaved(true); history.reload() } catch (err) { setError(toApiError(err)) } finally { setBusy(false) }
+  }
+  const fmt = (n: number) => n.toLocaleString(locale(), { maximumFractionDigits: 2 })
+  return (
+    <>
+      <Title title={t('Taux de change')}>{t('Le taux CDF / USD saisi par un administrateur. Il sert uniquement à afficher un équivalent indicatif « ≈ » à côté des prix et à lire un budget donné en francs : les prix, commandes et paiements restent dans la devise du fournisseur.')}</Title>
+      <div className="memory-item">
+        <span><Icon name="wallet" /></span>
+        <div>
+          <b>{current ? t('1 USD = {rate} CDF', { rate: fmt(current.rate) }) : t('Aucun taux saisi')}</b>
+          <p>{current ? t('Saisi le {date}', { date: new Date(current.setAt).toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' }) }) : t('Sans taux, aucune conversion n’est affichée.')}</p>
+        </div>
+      </div>
+      {admin ? (
+        <form className="settings-form" onSubmit={save}>
+          <label>{t('Nouveau taux (francs congolais pour 1 USD)')}<input inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="2850" required /></label>
+          <label>{t('Source ou remarque')} <small>{t('facultatif')}</small><input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder={t('Ex. : taux BCC du jour')} /></label>
+          {error && <p className="form-error" role="alert">{error.code === 'INVALID_RATE' ? t('Le taux doit être compris entre 100 et 100 000 francs pour 1 USD.') : errorText(error)}</p>}
+          {saved && <p className="muted-line" role="status">{t('Taux enregistré.')}</p>}
+          <button type="submit" className="primary-btn" disabled={busy || !rate.trim()}>{busy ? t('Enregistrement…') : t('Enregistrer le taux')}</button>
+        </form>
+      ) : <p className="muted-line">{t('Seul un administrateur peut modifier le taux.')}</p>}
+      <h3 className="settings-subtitle">{t('Historique')}</h3>
+      {history.loading ? <Loading /> : history.error ? <ErrorNote error={history.error} onRetry={history.reload} /> : !history.data?.length ? <p className="muted-line">{t('Aucun taux saisi')}</p> : (
+        <div className="memory-list">
+          {history.data.map((h) => (
+            <div key={h.setAt + h.rate} className="memory-item">
+              <span><Icon name="clock" /></span>
+              <div><b>{t('1 USD = {rate} CDF', { rate: fmt(h.rate) })}</b><p>{new Date(h.setAt).toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' })}{h.note ? ` · ${h.note}` : ''}</p></div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  )
+}
+
 function SupplierReviewSection() {
   const [status, setStatus] = useState<ApplicationStatus>('submitted')
   const queue = useAsync(() => supplierApi.queue(status), [status])

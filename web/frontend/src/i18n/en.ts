@@ -880,4 +880,23 @@ export const en: Record<string, string> = {
   "Compte : {name}": "Account: {name}",
   "Entreprise · {role}": "Business · {role}",
   "membre": "member",
+
+  // exchange rate
+  "Taux de change": "Exchange rate",
+  "Le taux CDF / USD saisi par un administrateur. Il sert uniquement à afficher un équivalent indicatif « ≈ » à côté des prix et à lire un budget donné en francs : les prix, commandes et paiements restent dans la devise du fournisseur.": "The CDF / USD rate entered by an administrator. It is only used to show an indicative “≈” equivalent beside prices and to read a budget given in francs: prices, orders and payments stay in the supplier’s currency.",
+  "1 USD = {rate} CDF": "1 USD = {rate} CDF",
+  "Aucun taux saisi": "No rate entered",
+  "Saisi le {date}": "Entered on {date}",
+  "Sans taux, aucune conversion n’est affichée.": "Without a rate, no conversion is shown.",
+  "Nouveau taux (francs congolais pour 1 USD)": "New rate (Congolese francs for 1 USD)",
+  "Source ou remarque": "Source or note",
+  "Ex. : taux BCC du jour": "E.g. today’s BCC rate",
+  "Le taux doit être compris entre 100 et 100 000 francs pour 1 USD.": "The rate must be between 100 and 100,000 francs for 1 USD.",
+  "Taux enregistré.": "Rate saved.",
+  "Enregistrement…": "Saving…",
+  "Enregistrer le taux": "Save the rate",
+  "Seul un administrateur peut modifier le taux.": "Only an administrator can change the rate.",
+  "Historique": "History",
+  "Équivalent indicatif": "Indicative equivalent",
+  "Conversion indicative au taux fixé par Trezutil. Le prix et le paiement restent dans la devise du fournisseur.": "Indicative conversion at the rate set by Trezutil. The price and the payment stay in the supplier’s currency.",
 }

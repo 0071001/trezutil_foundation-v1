@@ -144,7 +144,7 @@ func main() {
 	// Commercial memory: kept per account on the server and read by the interpreter as hints (never instructions).
 	memorySvc := memory.NewService(postgres.NewMemoryStore(db))
 	// The same model providers interpret requests and word the answers (streamed); without AI both fall back.
-	classifier, replyWriter := buildIntentClassifier(logger, usageSvc, categoryRepo)
+	classifier, replyWriter := buildIntentClassifier(logger, usageSvc, categoryRepo, postgres.NewExchangeRateStore(db))
 	processor := conversation.NewConversationProcessor(conversation.ProcessorConfig{
 		Logger:            logger,
 		ConversationStore: postgres.NewConversationStore(db),
@@ -275,7 +275,7 @@ func buildSearch(logger zerolog.Logger) commerce.SearchUseCases {
 // Without AI_PROVIDER, or when no provider is configured, it returns the
 // deterministic keyword classifier; the processor also falls back to keywords
 // whenever the model is unsure or unavailable.
-func buildIntentClassifier(logger zerolog.Logger, usage domain.UsageService, categories domain.CategoryRepository) (conversation.IntentClassifier, conversation.ReplyWriter) {
+func buildIntentClassifier(logger zerolog.Logger, usage domain.UsageService, categories domain.CategoryRepository, rates domain.ExchangeRateStore) (conversation.IntentClassifier, conversation.ReplyWriter) {
 	names := splitProviders(common.Getenv("AI_PROVIDER", ""))
 	if len(names) == 0 {
 		logger.Info().Msg("AI_PROVIDER not set; using keyword classification")
@@ -334,7 +334,18 @@ func buildIntentClassifier(logger zerolog.Logger, usage domain.UsageService, cat
 		}
 		return out, nil
 	}
-	return aiapp.NewIntentClassifierAdapter(orchestrator, aiapp.WithCategories(lister)), aiapp.NewReplyWriter(gateway, usage, logger)
+	// It reads a budget in francs at the rate an administrator entered (none: it does not convert).
+	rate := func(ctx context.Context) (float64, bool, error) {
+		r, err := rates.Latest(ctx)
+		if errors.Is(err, domain.ErrNoExchangeRate) {
+			return 0, false, nil
+		}
+		if err != nil {
+			return 0, false, err
+		}
+		return r.Rate, true, nil
+	}
+	return aiapp.NewIntentClassifierAdapter(orchestrator, aiapp.WithCategories(lister), aiapp.WithExchangeRate(rate)), aiapp.NewReplyWriter(gateway, usage, logger)
 }
 
 func splitProviders(list string) []string {

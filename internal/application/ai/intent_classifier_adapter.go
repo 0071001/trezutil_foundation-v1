@@ -13,6 +13,7 @@ import (
 type IntentClassifierAdapter struct {
 	orchestrator *AIOrchestrator
 	categories   *categoryCache
+	rate         *rateCache
 }
 
 // AdapterOption configures an IntentClassifierAdapter.
@@ -21,6 +22,11 @@ type AdapterOption func(*IntentClassifierAdapter)
 // WithCategories lets the interpreter name the category a person means.
 func WithCategories(list CategoryLister) AdapterOption {
 	return func(a *IntentClassifierAdapter) { a.categories = newCategoryCache(list) }
+}
+
+// WithExchangeRate lets the interpreter read a budget given in Congolese francs, at the rate an administrator set.
+func WithExchangeRate(read RateReader) AdapterOption {
+	return func(a *IntentClassifierAdapter) { a.rate = newRateCache(read) }
 }
 
 // NewIntentClassifierAdapter creates an adapter wrapping the AIOrchestrator.

@@ -6,6 +6,7 @@ import { trustLabel, type Offer } from '@/commerce/offers'
 import { Icon } from '@/ui/Icon'
 import { Badge, ErrorNote, Loading } from '@/ui/kit'
 import { locale, t } from '@/lib/i18n'
+import { approx, useExchangeRate } from '@/lib/exchangeRate'
 
 /*
  * The detail of one offer, read from the catalogue (GET /listings?listing_id=) beside the conversation: pictures,
@@ -22,6 +23,7 @@ function facts(metadata: Record<string, unknown>): [string, string][] {
 }
 
 export function OfferPanel({ offer, onClose, onAsk, onCompare }: { offer: Offer; onClose: () => void; onAsk?: () => void; onCompare: () => void }) {
+  const rate = useExchangeRate()
   const listing = useAsync(() => listingsApi.get(offer.id), [offer.id])
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -49,6 +51,7 @@ export function OfferPanel({ offer, onClose, onAsk, onCompare }: { offer: Offer;
           <div className="offer-price">
             <strong>{l && l.price_amount > 0 ? formatMoney(l.price_amount, l.price_currency) : offer.price}</strong>
             {offer.wasPrice && <s>{offer.wasPrice}</s>}
+            {approx(l && l.price_amount > 0 ? l.price_amount : offer.priceValue, l && l.price_amount > 0 ? l.price_currency : offer.currency, rate) && <small className="price-approx" title={t('Conversion indicative au taux fixé par Trezutil. Le prix et le paiement restent dans la devise du fournisseur.')}>{approx(l && l.price_amount > 0 ? l.price_amount : offer.priceValue, l && l.price_amount > 0 ? l.price_currency : offer.currency, rate)}</small>}
           </div>
           <dl>
             {offer.availability && <div><dt>{t('Disponibilité')}</dt><dd>{offer.availability}</dd></div>}

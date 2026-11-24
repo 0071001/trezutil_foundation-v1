@@ -2,7 +2,9 @@ package ai
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -28,7 +30,7 @@ Parameters (omit any you cannot read from the conversation; never invent identif
 - vertical: the kind of place or offer when the person names one or it is obvious (a plumber is SERVICES, a phone is RETAIL), as one of these codes:
 %VERTICALS%- location: a place name (neighbourhood, commune or city), e.g. "Gombe", "Limete", "Ngaliema", "Kintambo"
 - text: the search words left after taking out the vertical, the place, dates, party size, budget and ordering, e.g. "samsung", "2 bedroom", "sea view", "congolais"; omit it when nothing is left
-- price_max: the budget ceiling in US dollars ("moins de 600 $", "under 50 dollars", "pas plus de 20"); price_min: a floor ("plus de 100 $"); "around 500" is price_min 400 and price_max 600. Amounts in francs congolais (FC, CDF) are converted at about 2800 FC for 1 USD.
+- price_max: the budget ceiling in US dollars ("moins de 600 $", "under 50 dollars", "pas plus de 20"); price_min: a floor ("plus de 100 $"); "around 500" is price_min 400 and price_max 600. For an amount in Congolese francs (FC, CDF), see Currency below.
 - sort: price_asc for "pas cher", "les moins chers", "cheapest", "bon marché", "budget"; price_desc for "haut de gamme", "luxe", "le plus cher"; newest for "nouveautés", "les plus récents"; otherwise omit it
 - category_id: a category from the list at the end when the person clearly means one; never invent one
 - nights: number of nights of a stay; party_size: number of people
@@ -132,12 +134,50 @@ func (c *categoryCache) Section(ctx context.Context) string {
 	return c.section
 }
 
+// RateReader returns how many Congolese francs make one US dollar, as a Trezutil administrator entered it; ok is
+// false when no rate has been entered.
+type RateReader func(ctx context.Context) (rate float64, ok bool, err error)
+
+// rateCache keeps the rate for a minute: it is read on every message and changes rarely.
+type rateCache struct {
+	read    RateReader
+	ttl     time.Duration
+	mu      sync.Mutex
+	loaded  time.Time
+	section string
+}
+
+func newRateCache(read RateReader) *rateCache { return &rateCache{read: read, ttl: time.Minute} }
+
+const noRateSection = "\nCurrency: no franc / dollar rate is set. When a budget is given in Congolese francs (FC, CDF), leave price_min and price_max out rather than guess a conversion.\n"
+
+// Section tells the interpreter how to read a budget in francs: with the administrator's rate, or not at all.
+func (c *rateCache) Section(ctx context.Context) string {
+	if c == nil || c.read == nil {
+		return noRateSection
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.loaded.IsZero() && time.Since(c.loaded) < c.ttl {
+		return c.section
+	}
+	rate, ok, err := c.read(ctx)
+	c.loaded = time.Now()
+	if err != nil || !ok || rate <= 0 {
+		c.section = noRateSection
+		return c.section
+	}
+	c.section = fmt.Sprintf("\nCurrency: convert an amount in Congolese francs (FC, CDF) to US dollars for price_min and price_max at %s FC for 1 USD (the rate Trezutil set).\n", strconv.FormatFloat(rate, 'f', -1, 64))
+	return c.section
+}
+
 // requestPrompt is the full instructions for one request: the static part, the
 // categories, the conversation state and, for a signed-in person, their commercial memory.
 func (a *IntentClassifierAdapter) requestPrompt(ctx context.Context, conversationState string, memory ...string) string {
 	var b strings.Builder
 	b.WriteString(a.orchestrator.buildSystemPrompt())
 	b.WriteString(a.categories.Section(ctx))
+	b.WriteString(a.rate.Section(ctx))
 	if s := strings.TrimSpace(conversationState); s != "" {
 		b.WriteString("\nConversation state:\n" + s + "\n")
 	}
