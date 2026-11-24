@@ -2,6 +2,7 @@ import { toApiError } from '@/api/client'
 import { memoryApi, type ServerMemoryItem } from '@/api/memory'
 import { createLocalStore } from '@/lib/localStore'
 import { newId } from '@/ui/kit'
+import { t } from '@/lib/i18n'
 
 /*
  * Commercial memory: what the person chose to let Trezutil remember (buying preferences, brands, usual budgets,
@@ -17,12 +18,12 @@ import { newId } from '@/ui/kit'
 export type MemoryKind = 'preference' | 'brand' | 'budget' | 'constraint' | 'supplier' | 'project'
 
 export const MEMORY_KINDS: Record<MemoryKind, string> = {
-  preference: 'Préférences d’achat',
-  brand: 'Marques préférées',
-  budget: 'Budgets habituels',
-  constraint: 'Contraintes commerciales',
-  supplier: 'Fournisseurs favoris',
-  project: 'Projets récurrents',
+  preference: t('Préférences d’achat'),
+  brand: t('Marques préférées'),
+  budget: t('Budgets habituels'),
+  constraint: t('Contraintes commerciales'),
+  supplier: t('Fournisseurs favoris'),
+  project: t('Projets récurrents'),
 }
 
 export interface MemoryItem {
@@ -50,9 +51,9 @@ let account = ''
 
 /** Payment data, codes and secrets are never remembered. */
 const SENSITIVE: [RegExp, string][] = [
-  [/\b(?:\d[ -]?){13,19}\b/, 'un numéro de carte'],
-  [/\b(cvv|cvc|code pin|\bpin\b|mot de passe|password|otp|code de vérification)\b/i, 'un code ou un mot de passe'],
-  [/\b(iban|swift|bic)\b/i, 'des coordonnées bancaires'],
+  [/\b(?:\d[ -]?){13,19}\b/, t('un numéro de carte')],
+  [/\b(cvv|cvc|code pin|\bpin\b|mot de passe|password|otp|code de vérification)\b/i, t('un code ou un mot de passe')],
+  [/\b(iban|swift|bic)\b/i, t('des coordonnées bancaires')],
 ]
 
 export function sensitiveReason(text: string): string | null {
@@ -63,9 +64,9 @@ export function sensitiveReason(text: string): string | null {
 function clean(text: string): string { return text.replace(/\s+/g, ' ').trim().slice(0, 400) }
 
 function check(text: string): string | null {
-  if (!text) return 'Écris ce qu’il faut retenir.'
+  if (!text) return t('Écris ce qu’il faut retenir.')
   const reason = sensitiveReason(text)
-  return reason ? `Trezutil ne mémorise pas ${reason}.` : null
+  return reason ? t('Trezutil ne mémorise pas {reason}.', { reason }) : null
 }
 
 const isKind = (k: string): k is MemoryKind => k in MEMORY_KINDS

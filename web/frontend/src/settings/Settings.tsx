@@ -8,7 +8,7 @@ import { DOCUMENT_LABEL, STATUS_LABEL, supplierApi, type ApplicationStatus } fro
 import { MANAGER_ROLES } from '@/api/seller'
 import { renderGoogleButton } from '@/lib/google'
 import { setTheme, useTheme, type Theme } from '@/lib/theme'
-import { getLang, setLang, useLang, type Lang } from '@/lib/i18n'
+import { locale, switchLanguage, useLang, type Lang, t, tn } from '@/lib/i18n'
 import { useSession } from '@/lib/session'
 import { useAsync } from '@/lib/useAsync'
 import { conversationStore, useConversations } from '@/conversation/store'
@@ -22,9 +22,9 @@ import { Badge, Empty, ErrorNote, Loading, NotConnected, errorText } from '@/ui/
 /* Settings: the account, the profiles, the preferences, the memory, the notifications, privacy and the services. */
 
 const SECTIONS: [string, string][] = [
-  ['profile', 'Profil personnel'], ['company', 'Profil entreprise'], ['preferences', 'Préférences'], ['appearance', 'Apparence'], ['language', 'Langue'],
-  ['notifications', 'Notifications'], ['privacy', 'Confidentialité'], ['memory', 'Mémoire'], ['security', 'Sécurité'],
-  ['services', 'Services connectés'], ['credits', 'Crédits et usage'],
+  ['profile', t('Profil personnel')], ['company', t('Profil entreprise')], ['preferences', t('Préférences')], ['appearance', t('Apparence')], ['language', t('Langue')],
+  ['notifications', t('Notifications')], ['privacy', t('Confidentialité')], ['memory', t('Mémoire')], ['security', t('Sécurité')],
+  ['services', t('Services connectés')], ['credits', t('Crédits et usage')],
 ]
 
 const MEMORY_ICONS: Record<MemoryKind, IconName> = { preference: 'check', brand: 'building', budget: 'target', constraint: 'orders', supplier: 'star', project: 'flow' }
@@ -38,7 +38,7 @@ function Title({ title, children, toggle }: { title: string; children?: ReactNod
 }
 
 function NeedsAccount() {
-  return <Empty icon="lock" title="Connecte-toi" action={<Link className="primary-btn" to={`/login?returnTo=${encodeURIComponent(window.location.pathname)}`}>Se connecter</Link>}>Cette rubrique concerne ton compte.</Empty>
+  return <Empty icon="lock" title={t('Connecte-toi')} action={<Link className="primary-btn" to={`/login?returnTo=${encodeURIComponent(window.location.pathname)}`}>{t('Se connecter')}</Link>}>{t('Cette rubrique concerne ton compte.')}</Empty>
 }
 
 export function Settings() {
@@ -47,17 +47,17 @@ export function Settings() {
   const { user } = useSession()
   // Trezutil staff also see the supplier review (the server checks the role again on every call).
   const staff = !!user?.roles?.some((r) => r === 'admin' || r === 'operator')
-  const sections: [string, string][] = staff ? [...SECTIONS, ['supplier-review', 'Vérification fournisseurs']] : SECTIONS
+  const sections: [string, string][] = staff ? [...SECTIONS, ['supplier-review', t('Vérification fournisseurs')]] : SECTIONS
   const active = sections.some(([id]) => id === section) ? section : 'profile'
-  useEffect(() => { document.title = 'Paramètres — Trezutil' }, [])
+  useEffect(() => { document.title = t('Paramètres — Trezutil') }, [])
   return (
     <div className="settings-page">
-      <div className="settings-header"><h1>Paramètres</h1><p>Gère ton compte, tes préférences et la manière dont Trezutil travaille pour toi.</p></div>
+      <div className="settings-header"><h1>{t('Paramètres')}</h1><p>{t('Gère ton compte, tes préférences et la manière dont Trezutil travaille pour toi.')}</p></div>
       <div className="settings-layout">
-        <nav className="settings-nav" aria-label="Rubriques">
+        <nav className="settings-nav" aria-label={t('Rubriques')}>
           {sections.map(([id, label]) => (
             <button type="button" key={id} className={active === id ? 'active' : ''} aria-current={active === id ? 'page' : undefined} onClick={() => navigate(`/settings/${id}`)}>
-              {label}{id === 'memory' && <Badge>Nouveau</Badge>}<Icon name="chevron" size={14} />
+              {label}{id === 'memory' && <Badge>{t('Nouveau')}</Badge>}<Icon name="chevron" size={14} />
             </button>
           ))}
         </nav>
@@ -88,7 +88,7 @@ function ProfileSection() {
   const [error, setError] = useState<ApiError | null>(null)
   const [saved, setSaved] = useState(false)
   useEffect(() => { setName(user?.display_name ?? ''); setEmail(user?.email ?? '') }, [user])
-  if (!user) return <><Title title="Profil personnel" />{user === undefined ? <Loading /> : <NeedsAccount />}</>
+  if (!user) return <><Title title={t('Profil personnel')} />{user === undefined ? <Loading /> : <NeedsAccount />}</>
   const save = async (e: FormEvent) => {
     e.preventDefault()
     setSaving(true); setError(null); setSaved(false)
@@ -100,15 +100,15 @@ function ProfileSection() {
   }
   return (
     <>
-      <Title title="Profil personnel">Ton nom apparaît dans tes échanges avec les fournisseurs. {user.phone ? 'Tu te connectes avec ton numéro de téléphone.' : 'Tu te connectes avec ton compte Google.'}</Title>
+      <Title title={t('Profil personnel')}>{t('Ton nom apparaît dans tes échanges avec les fournisseurs.')} {user.phone ? t('Tu te connectes avec ton numéro de téléphone.') : t('Tu te connectes avec ton compte Google.')}</Title>
       <form className="form-grid settings-form" onSubmit={(e) => void save(e)}>
-        <label className="full">Nom affiché<input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required /></label>
-        {user.phone && <label>Téléphone<input value={user.phone} disabled /></label>}
-        <label>E-mail<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="facultatif" /></label>
+        <label className="full">{t('Nom affiché')}<input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} required /></label>
+        {user.phone && <label>{t('Téléphone')}<input value={user.phone} disabled /></label>}
+        <label>{t('E-mail')}<input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('facultatif')} /></label>
         <div className="full form-actions">
           {error && <span className="form-error" role="alert">{errorText(error)}</span>}
-          {saved && <span className="form-ok" role="status"><Icon name="check" size={14} />Enregistré</span>}
-          <button type="submit" className="primary-btn" disabled={saving || !name.trim()} aria-busy={saving}>{saving ? 'Enregistrement…' : 'Enregistrer'}</button>
+          {saved && <span className="form-ok" role="status"><Icon name="check" size={14} />{t('Enregistré')}</span>}
+          <button type="submit" className="primary-btn" disabled={saving || !name.trim()} aria-busy={saving}>{saving ? 'Enregistrement…' : t('Enregistrer')}</button>
         </div>
       </form>
     </>
@@ -119,28 +119,28 @@ function CompanySection() {
   const { signedIn } = useSession()
   const { orgs, loaded, failed } = useOrganizations(signedIn)
   const profile = profileStore.use()
-  if (!signedIn) return <><Title title="Profil entreprise" /><NeedsAccount /></>
+  if (!signedIn) return <><Title title={t('Profil entreprise')} /><NeedsAccount /></>
   return (
     <>
-      <Title title="Profil entreprise">Choisis pour qui tu agis : toi-même, ou une organisation dont tu es membre.</Title>
+      <Title title={t('Profil entreprise')}>{t('Choisis pour qui tu agis : toi-même, ou une organisation dont tu es membre.')}</Title>
       {!loaded ? <Loading /> : (
         <div className="memory-list">
           <button type="button" className={`memory-item selectable ${profile.kind === 'personal' ? 'on' : ''}`} aria-pressed={profile.kind === 'personal'} onClick={() => profileStore.set({ kind: 'personal', organizationId: '' })}>
-            <span><Icon name="user" /></span><div><b>Profil personnel</b><p>Tes achats et opérations à titre personnel.</p></div>{profile.kind === 'personal' && <Icon name="check" />}
+            <span><Icon name="user" /></span><div><b>{t('Profil personnel')}</b><p>{t('Tes achats et opérations à titre personnel.')}</p></div>{profile.kind === 'personal' && <Icon name="check" />}
           </button>
           {orgs.map((o) => (
             <button type="button" key={o.organization_id} className={`memory-item selectable ${profile.organizationId === o.organization_id ? 'on' : ''}`} aria-pressed={profile.organizationId === o.organization_id}
               onClick={() => profileStore.set({ kind: 'company', organizationId: o.organization_id })}>
               <span><Icon name="building" /></span>
-              <div><b>{o.display_name}</b><p>{o.role ? `Rôle : ${o.role}` : 'Membre'}{o.verification_status ? ` · vérification : ${o.verification_status}` : ''}</p></div>
+              <div><b>{o.display_name}</b><p>{o.role ? t('Rôle : {role}', { role: o.role }) : t('Membre')}{o.verification_status ? t(' · vérification : {verification_status}', { verification_status: o.verification_status }) : ''}</p></div>
               {profile.organizationId === o.organization_id && <Icon name="check" />}
             </button>
           ))}
         </div>
       )}
-      {loaded && !orgs.length && <p className="muted-line">{failed ? 'Les organisations n’ont pas pu être lues.' : 'Ton compte n’est membre d’aucune organisation.'}</p>}
-      <p className="muted-line">Le serveur identifie toujours ton compte par ta session : ce choix n’accorde aucun droit supplémentaire.</p>
-      <div className="privacy-note"><Icon name="building" /><p><b>Devenir fournisseur</b><br />Inscris ton entreprise, envoie ses documents et soumets-la : l’équipe Trezutil la vérifie. Une fois inscrite, elle apparaît ici.<br /><Link to="/supplier">Inscrire mon entreprise →</Link></p></div>
+      {loaded && !orgs.length && <p className="muted-line">{failed ? t('Les organisations n’ont pas pu être lues.') : t('Ton compte n’est membre d’aucune organisation.')}</p>}
+      <p className="muted-line">{t('Le serveur identifie toujours ton compte par ta session : ce choix n’accorde aucun droit supplémentaire.')}</p>
+      <div className="privacy-note"><Icon name="building" /><p><b>{t('Devenir fournisseur')}</b><br />{t('Inscris ton entreprise, envoie ses documents et soumets-la : l’équipe Trezutil la vérifie. Une fois inscrite, elle apparaît ici.')}<br /><Link to="/supplier">{t('Inscrire mon entreprise →')}</Link></p></div>
     </>
   )
 }
@@ -149,11 +149,11 @@ function PreferencesSection() {
   const { conversations } = useConversations()
   return (
     <>
-      <Title title="Préférences">Ce qui guide Trezutil dans ses recherches vient de ta mémoire commerciale.</Title>
+      <Title title={t('Préférences')}>{t('Ce qui guide Trezutil dans ses recherches vient de ta mémoire commerciale.')}</Title>
       <div className="memory-list">
-        <Link className="memory-item selectable" to="/settings/memory"><span><Icon name="target" /></span><div><b>Préférences d’achat, marques, budgets</b><p>Gère-les dans la mémoire commerciale.</p></div><Icon name="chevron" /></Link>
-        <Link className="memory-item selectable" to="/settings/notifications"><span><Icon name="bell" /></span><div><b>Notifications</b><p>Ce que le centre de notifications te montre.</p></div><Icon name="chevron" /></Link>
-        <div className="memory-item"><span><Icon name="message" /></span><div><b>Conversations sur cet appareil</b><p>{conversations.length} conversation{conversations.length > 1 ? 's' : ''}, dont {conversations.filter((c) => c.archived).length} archivée{conversations.filter((c) => c.archived).length > 1 ? 's' : ''}.</p></div></div>
+        <Link className="memory-item selectable" to="/settings/memory"><span><Icon name="target" /></span><div><b>{t('Préférences d’achat, marques, budgets')}</b><p>{t('Gère-les dans la mémoire commerciale.')}</p></div><Icon name="chevron" /></Link>
+        <Link className="memory-item selectable" to="/settings/notifications"><span><Icon name="bell" /></span><div><b>{t('Notifications')}</b><p>{t('Ce que le centre de notifications te montre.')}</p></div><Icon name="chevron" /></Link>
+        <div className="memory-item"><span><Icon name="message" /></span><div><b>{t('Conversations sur cet appareil')}</b><p>{tn(conversations.length, '{n} conversation', '{n} conversations')}, {tn(conversations.filter((c) => c.archived).length, 'dont {n} archivée', 'dont {n} archivées')}.</p></div></div>
       </div>
     </>
   )
@@ -161,18 +161,21 @@ function PreferencesSection() {
 
 function LanguageSection() {
   const lang = useLang()
-  const options: [Lang, string, string][] = [['fr', 'Français', 'Trezutil te répond en français.'], ['en', 'English', 'Trezutil answers in English.']]
+  const options: [Lang, string, string][] = [
+    ['fr', 'Français', 'L’interface est en français et Trezutil te répond en français.'],
+    ['en', 'English', 'The interface is in English and Trezutil answers in English.'],
+  ]
   return (
     <>
-      <Title title="Langue">La langue dans laquelle Trezutil te répond. Elle est transmise à chaque message.</Title>
+      <Title title={t('Langue')}>{t('La langue de l’interface et des réponses de Trezutil. Elle est gardée sur cet appareil.')}</Title>
       <div className="memory-list">
         {options.map(([code, label, copy]) => (
-          <button type="button" key={code} className={`memory-item selectable ${lang === code ? 'on' : ''}`} aria-pressed={lang === code} onClick={() => setLang(code)}>
+          <button type="button" key={code} lang={code} className={`memory-item selectable ${lang === code ? 'on' : ''}`} aria-pressed={lang === code} onClick={() => switchLanguage(code)}>
             <span><Icon name="globe" /></span><div><b>{label}</b><p>{copy}</p></div>{lang === code && <Icon name="check" />}
           </button>
         ))}
       </div>
-      <p className="muted-line">L’interface reste en français pour l’instant{getLang() === 'en' ? ' ; les réponses de l’assistant seront en anglais' : ''}.</p>
+      <p className="muted-line">{t('Les prix, les noms des fournisseurs et les messages déjà échangés ne sont pas traduits.')}</p>
     </>
   )
 }
@@ -181,10 +184,10 @@ function NotificationsSection() {
   const prefs = noticePrefs.use()
   return (
     <>
-      <Title title="Notifications" toggle={<Toggle checked={prefs.enabled} onChange={(v) => noticePrefs.set({ enabled: v })} label="Activer les notifications" />}>
-        Le centre de notifications montre ce qui attend réellement ta décision. Choisis ce qu’il affiche.
+      <Title title={t('Notifications')} toggle={<Toggle checked={prefs.enabled} onChange={(v) => noticePrefs.set({ enabled: v })} label={t('Activer les notifications')} />}>
+        {t('Le centre de notifications montre ce qui attend réellement ta décision. Choisis ce qu’il affiche.')}
       </Title>
-      <h3 className="memory-heading">Ce qui apparaît</h3>
+      <h3 className="memory-heading">{t('Ce qui apparaît')}</h3>
       <div className="memory-list spaced">
         {(Object.keys(NOTICE_KINDS) as NoticeKind[]).map((k) => (
           <div className="memory-item" key={k}>
@@ -194,19 +197,19 @@ function NotificationsSection() {
           </div>
         ))}
       </div>
-      <h3 className="memory-heading">Opportunités et suivi des prix</h3>
-      <NotConnected title="Surveillance pas encore disponible">
-        Trezutil ne surveille pas encore les prix ni les nouvelles offres, et n’envoie aucune notification hors de l’application. Tes choix ci-dessous sont enregistrés et serviront dès que ce service existera. Aucune sollicitation commerciale ne te sera envoyée sans ton accord.
+      <h3 className="memory-heading">{t('Opportunités et suivi des prix')}</h3>
+      <NotConnected title={t('Surveillance pas encore disponible')}>
+        {t('Trezutil ne surveille pas encore les prix ni les nouvelles offres, et n’envoie aucune notification hors de l’application. Tes choix ci-dessous sont enregistrés et serviront dès que ce service existera. Aucune sollicitation commerciale ne te sera envoyée sans ton accord.')}
       </NotConnected>
-      <div className="chip-row" role="group" aria-label="Catégories d’opportunités">
+      <div className="chip-row" role="group" aria-label={t('Catégories d’opportunités')}>
         {OPPORTUNITY_CATEGORIES.map((c) => {
           const on = prefs.categories.includes(c)
           return <button type="button" key={c} className={`chip ${on ? 'on' : ''}`} aria-pressed={on} onClick={() => noticePrefs.set((p) => ({ ...p, categories: on ? p.categories.filter((x) => x !== c) : [...p.categories, c] }))}>{on && <Icon name="check" size={13} />}{c}</button>
         })}
       </div>
-      <label className="select-line">Fréquence
+      <label className="select-line">{t('Fréquence')}
         <select value={prefs.frequency} onChange={(e) => noticePrefs.set({ frequency: e.target.value as 'realtime' | 'daily' | 'weekly' })}>
-          <option value="realtime">Au fil de l’eau</option><option value="daily">Une fois par jour</option><option value="weekly">Une fois par semaine</option>
+          <option value="realtime">{t('Au fil de l’eau')}</option><option value="daily">{t('Une fois par jour')}</option><option value="weekly">{t('Une fois par semaine')}</option>
         </select>
       </label>
     </>
@@ -218,25 +221,25 @@ function PrivacySection() {
   const archived = conversations.filter((c) => c.archived)
   return (
     <>
-      <Title title="Confidentialité">Avec un compte, tes conversations sont conservées sur Trezutil et te suivent sur tes appareils ; tu peux les renommer, les archiver ou les supprimer. La mémoire commerciale est distincte de cet historique.</Title>
+      <Title title={t('Confidentialité')}>{t('Avec un compte, tes conversations sont conservées sur Trezutil et te suivent sur tes appareils ; tu peux les renommer, les archiver ou les supprimer. La mémoire commerciale est distincte de cet historique.')}</Title>
       <p className="muted-line legal-links">
-        <Link to="/legal/confidentialite">Politique de confidentialité</Link> · <Link to="/legal/conditions">Conditions d’utilisation</Link> · <Link to="/legal/cookies">Cookies</Link> · <Link to="/legal">Toutes les informations légales</Link>
+        <Link to="/legal/confidentialite">{t('Politique de confidentialité')}</Link> · <Link to="/legal/conditions">{t('Conditions d’utilisation')}</Link> · <Link to="/legal/cookies">{t('Cookies')}</Link> · <Link to="/legal">{t('Toutes les informations légales')}</Link>
       </p>
-      <h3 className="memory-heading">Conversations archivées <Badge>{archived.length}</Badge></h3>
-      {!archived.length ? <p className="muted-line">Aucune conversation archivée.</p> : (
+      <h3 className="memory-heading">{t('Conversations archivées')} <Badge>{archived.length}</Badge></h3>
+      {!archived.length ? <p className="muted-line">{t('Aucune conversation archivée.')}</p> : (
         <div className="memory-list spaced">
           {archived.map((c) => (
             <div className="memory-item" key={c.id}>
               <span><Icon name="archive" /></span>
-              <div><b>{c.title}</b><p>{new Date(c.updatedAt).toLocaleDateString('fr-FR')}</p></div>
-              <button type="button" className="secondary-btn small-btn" onClick={() => conversationStore.archive(c.id, false)}>Restaurer</button>
-              <button type="button" className="icon-btn" aria-label={`Supprimer ${c.title}`} onClick={() => { if (window.confirm('Supprimer définitivement cette conversation ?')) conversationStore.remove(c.id) }}><Icon name="trash" size={16} /></button>
+              <div><b>{c.title}</b><p>{new Date(c.updatedAt).toLocaleDateString(locale())}</p></div>
+              <button type="button" className="secondary-btn small-btn" onClick={() => conversationStore.archive(c.id, false)}>{t('Restaurer')}</button>
+              <button type="button" className="icon-btn" aria-label={t('Supprimer {title}', { title: c.title })} onClick={() => { if (window.confirm(t('Supprimer définitivement cette conversation ?'))) conversationStore.remove(c.id) }}><Icon name="trash" size={16} /></button>
             </div>
           ))}
         </div>
       )}
-      <button type="button" className="danger-link" disabled={!conversations.length} onClick={() => { if (window.confirm('Supprimer toutes les conversations ? Leurs messages sont effacés de Trezutil ; les commandes et réservations restent.')) conversationStore.removeAll() }}>
-        Supprimer toutes les conversations
+      <button type="button" className="danger-link" disabled={!conversations.length} onClick={() => { if (window.confirm(t('Supprimer toutes les conversations ? Leurs messages sont effacés de Trezutil ; les commandes et réservations restent.'))) conversationStore.removeAll() }}>
+        {t('Supprimer toutes les conversations')}
       </button>
     </>
   )
@@ -257,40 +260,40 @@ function MemorySection() {
   }
   return (
     <>
-      <Title title="Mémoire commerciale" toggle={<Toggle checked={memory.enabled} onChange={(v) => setMemoryEnabled(v)} label="Activer la mémoire" />}>
-        Trezutil peut retenir ce que tu lui indiques pour mieux t’aider : préférences, marques, budgets, contraintes, fournisseurs favoris, projets.
+      <Title title={t('Mémoire commerciale')} toggle={<Toggle checked={memory.enabled} onChange={(v) => setMemoryEnabled(v)} label={t('Activer la mémoire')} />}>
+        {t('Trezutil peut retenir ce que tu lui indiques pour mieux t’aider : préférences, marques, budgets, contraintes, fournisseurs favoris, projets.')}
       </Title>
-      <div className="privacy-note"><Icon name="shield" /><p><b>Tu gardes le contrôle</b><br />La mémoire est distincte de l’historique des conversations. Rien n’est retenu sans que tu l’ajoutes, et Trezutil refuse les données de paiement et les secrets. Avec un compte, elle est conservée sur Trezutil et te suit sur tous tes appareils ; l’assistant s’en sert comme indications quand tu ne précises pas (marque, budget, lieu…), et les opérations que tu ouvres la reçoivent. Désactivée, elle est gardée mais n’est plus utilisée.</p></div>
+      <div className="privacy-note"><Icon name="shield" /><p><b>{t('Tu gardes le contrôle')}</b><br />{t('La mémoire est distincte de l’historique des conversations. Rien n’est retenu sans que tu l’ajoutes, et Trezutil refuse les données de paiement et les secrets. Avec un compte, elle est conservée sur Trezutil et te suit sur tous tes appareils ; l’assistant s’en sert comme indications quand tu ne précises pas (marque, budget, lieu…), et les opérations que tu ouvres la reçoivent. Désactivée, elle est gardée mais n’est plus utilisée.')}</p></div>
       <form className="memory-add" onSubmit={add}>
-        <select value={kind} onChange={(e) => setKind(e.target.value as MemoryKind)} aria-label="Type d’information">
+        <select value={kind} onChange={(e) => setKind(e.target.value as MemoryKind)} aria-label={t('Type d’information')}>
           {(Object.keys(MEMORY_KINDS) as MemoryKind[]).map((k) => <option key={k} value={k}>{MEMORY_KINDS[k]}</option>)}
         </select>
-        <input value={text} onChange={(e) => setText(e.target.value)} placeholder="Ex. : Livraison à Kinshasa, factures en USD" aria-label="Information à retenir" maxLength={400} />
-        <button type="submit" className="primary-btn" disabled={!memory.enabled || !text.trim()}>Retenir</button>
+        <input value={text} onChange={(e) => setText(e.target.value)} placeholder={t('Ex. : Livraison à Kinshasa, factures en USD')} aria-label={t('Information à retenir')} maxLength={400} />
+        <button type="submit" className="primary-btn" disabled={!memory.enabled || !text.trim()}>{t('Retenir')}</button>
       </form>
       {error && <p className="form-error" role="alert">{error}</p>}
-      <h3 className="memory-heading">Informations mémorisées <Badge>{memory.items.length}</Badge></h3>
-      {!memory.items.length ? <p className="muted-line">Rien pour l’instant.</p> : (
+      <h3 className="memory-heading">{t('Informations mémorisées')} <Badge>{memory.items.length}</Badge></h3>
+      {!memory.items.length ? <p className="muted-line">{t('Rien pour l’instant.')}</p> : (
         <div className="memory-list">
           {memory.items.map((m) => (
             <div className="memory-item" key={m.id}>
               <span><Icon name={MEMORY_ICONS[m.kind]} /></span>
               {editing === m.id ? (
                 <form className="memory-edit" onSubmit={(e) => { e.preventDefault(); const p = updateMemory(m.id, draft); setError(p ?? ''); if (!p) setEditing(null) }}>
-                  <input value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus aria-label="Modifier l’information" />
-                  <button type="submit" className="primary-btn small-btn">OK</button>
-                  <button type="button" className="secondary-btn small-btn" onClick={() => setEditing(null)}>Annuler</button>
+                  <input value={draft} onChange={(e) => setDraft(e.target.value)} autoFocus aria-label={t('Modifier l’information')} />
+                  <button type="submit" className="primary-btn small-btn">{t('OK')}</button>
+                  <button type="button" className="secondary-btn small-btn" onClick={() => setEditing(null)}>{t('Annuler')}</button>
                 </form>
               ) : (
                 <div><b>{MEMORY_KINDS[m.kind]}</b><p>{m.text}</p></div>
               )}
-              {editing !== m.id && <button type="button" className="icon-btn" aria-label="Modifier" onClick={() => { setEditing(m.id); setDraft(m.text) }}><Icon name="edit" size={16} /></button>}
-              <button type="button" className="icon-btn" aria-label="Supprimer" onClick={() => removeMemory(m.id)}><Icon name="trash" size={16} /></button>
+              {editing !== m.id && <button type="button" className="icon-btn" aria-label={t('Modifier')} onClick={() => { setEditing(m.id); setDraft(m.text) }}><Icon name="edit" size={16} /></button>}
+              <button type="button" className="icon-btn" aria-label={t('Supprimer')} onClick={() => removeMemory(m.id)}><Icon name="trash" size={16} /></button>
             </div>
           ))}
         </div>
       )}
-      {memory.items.length > 0 && <button type="button" className="danger-link" onClick={() => { if (window.confirm('Effacer toute la mémoire commerciale ?')) clearMemory() }}>Effacer toute la mémoire</button>}
+      {memory.items.length > 0 && <button type="button" className="danger-link" onClick={() => { if (window.confirm(t('Effacer toute la mémoire commerciale ?'))) clearMemory() }}>{t('Effacer toute la mémoire')}</button>}
     </>
   )
 }
@@ -309,13 +312,13 @@ function SupplierReviewSection() {
   }
   return (
     <>
-      <Title title="Vérification fournisseurs">Les entreprises inscrites ne sont vérifiées que par une décision de l’équipe. Tu ne peux pas vérifier une entreprise dont tu es membre.</Title>
-      <label className="select-line">Dossiers
+      <Title title={t('Vérification fournisseurs')}>{t('Les entreprises inscrites ne sont vérifiées que par une décision de l’équipe. Tu ne peux pas vérifier une entreprise dont tu es membre.')}</Title>
+      <label className="select-line">{t('Dossiers')}
         <select value={status} onChange={(e) => setStatus(e.target.value as ApplicationStatus)}>
           {(Object.keys(STATUS_LABEL) as ApplicationStatus[]).map((k) => <option key={k} value={k}>{STATUS_LABEL[k]}</option>)}
         </select>
       </label>
-      {queue.loading ? <Loading /> : queue.error ? <ErrorNote error={queue.error} onRetry={queue.reload} /> : !queue.data?.length ? <p className="muted-line">Aucun dossier.</p> : (
+      {queue.loading ? <Loading /> : queue.error ? <ErrorNote error={queue.error} onRetry={queue.reload} /> : !queue.data?.length ? <p className="muted-line">{t('Aucun dossier.')}</p> : (
         <div className="memory-list">
           {queue.data.map((a) => (
             <div key={a.organization_id} className="memory-item review-item">
@@ -323,7 +326,7 @@ function SupplierReviewSection() {
               <div>
                 <b>{a.display_name}</b>
                 <p>{a.legal_name} · {a.city || '—'} · {a.phone}{a.rccm ? ` · RCCM ${a.rccm}` : ''}</p>
-                <p>Secteurs : {a.sectors.join(', ') || '—'} · Zones : {a.service_areas.join(', ') || '—'}</p>
+                <p>{t('Secteurs :')} {a.sectors.join(', ') || '—'} {t('· Zones :')} {a.service_areas.join(', ') || '—'}</p>
                 {open === a.organization_id && (
                   <div className="review-detail">
                     <p>{a.capabilities}</p>
@@ -334,18 +337,18 @@ function SupplierReviewSection() {
                     ))}
                     {a.status === 'submitted' && (
                       <>
-                        <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Message au fournisseur (obligatoire pour refuser ou demander des modifications)" aria-label="Message au fournisseur" />
+                        <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('Message au fournisseur (obligatoire pour refuser ou demander des modifications)')} aria-label={t('Message au fournisseur')} />
                         <div className="form-actions">
-                          <button type="button" className="primary-btn small-btn" disabled={busy} onClick={() => void decide(a.organization_id, 'verify')}>Vérifier</button>
-                          <button type="button" className="secondary-btn small-btn" disabled={busy || !note.trim()} onClick={() => void decide(a.organization_id, 'request_changes')}>Demander des modifications</button>
-                          <button type="button" className="secondary-btn small-btn" disabled={busy || !note.trim()} onClick={() => void decide(a.organization_id, 'reject')}>Refuser</button>
+                          <button type="button" className="primary-btn small-btn" disabled={busy} onClick={() => void decide(a.organization_id, 'verify')}>{t('Vérifier')}</button>
+                          <button type="button" className="secondary-btn small-btn" disabled={busy || !note.trim()} onClick={() => void decide(a.organization_id, 'request_changes')}>{t('Demander des modifications')}</button>
+                          <button type="button" className="secondary-btn small-btn" disabled={busy || !note.trim()} onClick={() => void decide(a.organization_id, 'reject')}>{t('Refuser')}</button>
                         </div>
                       </>
                     )}
                   </div>
                 )}
               </div>
-              <button type="button" className="icon-btn" aria-expanded={open === a.organization_id} aria-label={`Détails de ${a.display_name}`} onClick={() => { setOpen(open === a.organization_id ? null : a.organization_id); setNote('') }}><Icon name="chevron" size={16} /></button>
+              <button type="button" className="icon-btn" aria-expanded={open === a.organization_id} aria-label={t('Détails de {display_name}', { display_name: a.display_name })} onClick={() => { setOpen(open === a.organization_id ? null : a.organization_id); setNote('') }}><Icon name="chevron" size={16} /></button>
             </div>
           ))}
         </div>
@@ -357,17 +360,17 @@ function SupplierReviewSection() {
 
 /** Light, dark, or the device's choice. */
 export const THEMES: [Theme, string, string, IconName][] = [
-  ['system', 'Système', 'Suit le réglage de ton appareil (clair le jour, sombre la nuit si tu l’as configuré).', 'settings'],
-  ['light', 'Clair', 'Fond blanc, texte sombre.', 'eye'],
-  ['dark', 'Sombre', 'Fond sombre, plus reposant le soir.', 'eye'],
+  ['system', t('Système'), t('Suit le réglage de ton appareil (clair le jour, sombre la nuit si tu l’as configuré).'), 'settings'],
+  ['light', t('Clair'), t('Fond blanc, texte sombre.'), 'eye'],
+  ['dark', t('Sombre'), t('Fond sombre, plus reposant le soir.'), 'eye'],
 ]
 
 function AppearanceSection() {
   const theme = useTheme()
   return (
     <>
-      <Title title="Apparence">Le thème de Trezutil sur cet appareil.</Title>
-      <div className="memory-list spaced" role="radiogroup" aria-label="Thème">
+      <Title title={t('Apparence')}>{t('Le thème de Trezutil sur cet appareil.')}</Title>
+      <div className="memory-list spaced" role="radiogroup" aria-label={t('Thème')}>
         {THEMES.map(([code, label, copy, icon]) => (
           <button type="button" key={code} role="radio" aria-checked={theme === code} className={`memory-item selectable ${theme === code ? 'on' : ''}`} onClick={() => setTheme(code)}>
             <span><Icon name={icon} /></span><div><b>{label}</b><p>{copy}</p></div>{theme === code && <Icon name="check" />}
@@ -381,16 +384,16 @@ function AppearanceSection() {
 function SecuritySection() {
   const { user, signOut } = useSession()
   const navigate = useNavigate()
-  if (!user) return <><Title title="Sécurité" />{user === undefined ? <Loading /> : <NeedsAccount />}</>
+  if (!user) return <><Title title={t('Sécurité')} />{user === undefined ? <Loading /> : <NeedsAccount />}</>
   return (
     <>
-      <Title title="Sécurité">Tes moyens de connexion : ton numéro (code par WhatsApp) et, si tu l’as lié, ton compte Google.</Title>
+      <Title title={t('Sécurité')}>{t('Tes moyens de connexion : ton numéro (code par WhatsApp) et, si tu l’as lié, ton compte Google.')}</Title>
       <div className="memory-list spaced">
-        {user.phone && <div className="memory-item"><span><Icon name="lock" /></span><div><b>Numéro de connexion</b><p>{user.phone}{user.verified_at ? ' · vérifié' : ''}</p></div>{user.verified_at && <Badge tone="green">Vérifié</Badge>}</div>}
+        {user.phone && <div className="memory-item"><span><Icon name="lock" /></span><div><b>{t('Numéro de connexion')}</b><p>{user.phone}{user.verified_at ? t(' · vérifié') : ''}</p></div>{user.verified_at && <Badge tone="green">{t('Vérifié')}</Badge>}</div>}
         <GoogleLinkItem />
-        <div className="memory-item"><span><Icon name="user" /></span><div><b>Compte</b><p>Créé le {user.created_at ? new Date(user.created_at).toLocaleDateString('fr-FR') : '—'} · statut : {user.status || '—'}</p></div></div>
+        <div className="memory-item"><span><Icon name="user" /></span><div><b>{t('Compte')}</b><p>{t('Créé le')} {user.created_at ? new Date(user.created_at).toLocaleDateString(locale()) : '—'} {t('· statut :')} {user.status || '—'}</p></div></div>
       </div>
-      <button type="button" className="secondary-btn" onClick={() => { signOut(); navigate('/') }}><Icon name="logout" size={15} />Se déconnecter de cet appareil</button>
+      <button type="button" className="secondary-btn" onClick={() => { signOut(); navigate('/') }}><Icon name="logout" size={15} />{t('Se déconnecter de cet appareil')}</button>
     </>
   )
 }
@@ -418,11 +421,11 @@ function GoogleLinkItem() {
             setBusy(true); setError('')
             void authApi.linkGoogle(credential, nonce.current).then(() => ids.reload(), (err) => {
               const e = toApiError(err)
-              setError(e.code === 'GOOGLE_LINKED_ELSEWHERE' ? 'Ce compte Google est déjà lié à un autre compte Trezutil.' : 'Google n’a pas pu être lié. Réessaie.')
+              setError(e.code === 'GOOGLE_LINKED_ELSEWHERE' ? t('Ce compte Google est déjà lié à un autre compte Trezutil.') : t('Google n’a pas pu être lié. Réessaie.'))
             }).finally(() => setBusy(false))
           },
         })
-      } catch { if (alive) setError('Google n’est pas disponible pour le moment.') }
+      } catch { if (alive) setError(t('Google n’est pas disponible pour le moment.')) }
     })()
     return () => { alive = false }
   }, [enabled, linked]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -431,19 +434,19 @@ function GoogleLinkItem() {
     setBusy(true); setError('')
     try { await authApi.unlinkGoogle(); ids.reload() } catch (err) {
       const e = toApiError(err)
-      setError(e.code === 'LAST_SIGN_IN_METHOD' ? 'Google est ton seul moyen de connexion : ajoute d’abord ton numéro.' : 'Google n’a pas pu être délié.')
+      setError(e.code === 'LAST_SIGN_IN_METHOD' ? t('Google est ton seul moyen de connexion : ajoute d’abord ton numéro.') : t('Google n’a pas pu être délié.'))
     } finally { setBusy(false) }
   }
   return (
     <div className="memory-item google-link">
       <span><Icon name="user" /></span>
       <div>
-        <b>Compte Google</b>
-        {linked ? <p>Lié · {linked.email || linked.name || 'compte Google'}</p> : <p>Non lié. Lie ton compte Google pour te connecter sans code WhatsApp.</p>}
+        <b>{t('Compte Google')}</b>
+        {linked ? <p>{t('Lié ·')} {linked.email || linked.name || t('compte Google')}</p> : <p>{t('Non lié. Lie ton compte Google pour te connecter sans code WhatsApp.')}</p>}
         {!linked && <div ref={holder} className="google-button" aria-busy={busy} />}
         {error && <p className="form-error" role="alert">{error}</p>}
       </div>
-      {linked && <button type="button" className="secondary-btn small-btn" disabled={busy} onClick={() => void unlink()}>Délier</button>}
+      {linked && <button type="button" className="secondary-btn small-btn" disabled={busy} onClick={() => void unlink()}>{t('Délier')}</button>}
     </div>
   )
 }
@@ -451,13 +454,13 @@ function GoogleLinkItem() {
 function ServicesSection() {
   return (
     <>
-      <Title title="Services connectés">Ce que cette interface utilise vraiment, et ce qui attend encore un service du backend.</Title>
+      <Title title={t('Services connectés')}>{t('Ce que cette interface utilise vraiment, et ce qui attend encore un service du backend.')}</Title>
       <div className="memory-list">
         {SERVICES.map((s) => (
           <div className="memory-item service" key={s.id}>
             <div>
-              <b>{s.label} <Badge tone={s.status === 'connected' ? 'green' : s.status === 'partial' ? 'blue' : 'amber'}>{s.status === 'connected' ? 'Connecté' : s.status === 'partial' ? 'Partiel' : 'Pas encore branché'}</Badge></b>
-              <p>{s.uses}{s.missing ? <><br /><span className="missing">Manque : {s.missing}</span></> : null}</p>
+              <b>{s.label} <Badge tone={s.status === 'connected' ? 'green' : s.status === 'partial' ? 'blue' : 'amber'}>{s.status === 'connected' ? t('Connecté') : s.status === 'partial' ? t('Partiel') : t('Pas encore branché')}</Badge></b>
+              <p>{s.uses}{s.missing ? <><br /><span className="missing">{t('Manque :')} {s.missing}</span></> : null}</p>
             </div>
           </div>
         ))}
@@ -478,27 +481,27 @@ function CreditsSection() {
   const own = mine.data
   return (
     <>
-      <Title title="Crédits et usage">Les crédits financent les actions (rechercher, comparer, vérifier, réserver, commander), pas la conversation.</Title>
+      <Title title={t('Crédits et usage')}>{t('Les crédits financent les actions (rechercher, comparer, vérifier, réserver, commander), pas la conversation.')}</Title>
       {!signedIn ? <NeedsAccount /> : (
         <>
-          <h3 className="memory-heading">Mes crédits personnels{own ? ` · ${own.periodId}` : ''}</h3>
+          <h3 className="memory-heading">{t('Mes crédits personnels')}{own ? ` · ${own.periodId}` : ''}</h3>
           {mine.loading ? <Loading /> : mine.error ? <ErrorNote error={mine.error} onRetry={mine.reload} /> : own && (
             <>
               <div className="stats-row compact four">
-                <div><small>SOLDE</small><b>{own.balance}</b></div>
-                <div><small>ATTRIBUÉS</small><b>{own.granted}</b></div>
-                <div><small>UTILISÉS</small><b>{own.consumed}</b></div>
-                <div><small>RÉSERVÉS</small><b>{own.reserved}</b></div>
+                <div><small>{t('SOLDE')}</small><b>{own.balance}</b></div>
+                <div><small>{t('ATTRIBUÉS')}</small><b>{own.granted}</b></div>
+                <div><small>{t('UTILISÉS')}</small><b>{own.consumed}</b></div>
+                <div><small>{t('RÉSERVÉS')}</small><b>{own.reserved}</b></div>
               </div>
               <p className="muted-line">
                 {own.meteringActive
-                  ? `Actions payantes pour un compte personnel : ${own.costs.map((c) => `${c.actionType} (${c.cost})`).join(', ')}.`
-                  : 'Aucune action n’est facturée aux comptes personnels pour l’instant : elles sont gratuites, quel que soit le solde.'}
+                  ? t('Actions payantes pour un compte personnel : {list}.', { list: own.costs.map((c) => `${c.actionType} (${c.cost})`).join(', ') })
+                  : t('Aucune action n’est facturée aux comptes personnels pour l’instant : elles sont gratuites, quel que soit le solde.')}
               </p>
               {own.ledger.length > 0 && (
                 <div className="memory-list">
                   {own.ledger.map((e) => (
-                    <div className="memory-item" key={e.id}><span><Icon name="wallet" /></span><div><b>{e.actionType || e.kind}</b><p>{new Date(e.createdAt).toLocaleString('fr-FR')}</p></div><b>{e.amount > 0 ? `+${e.amount}` : e.amount}</b></div>
+                    <div className="memory-item" key={e.id}><span><Icon name="wallet" /></span><div><b>{e.actionType || e.kind}</b><p>{new Date(e.createdAt).toLocaleString(locale())}</p></div><b>{e.amount > 0 ? `+${e.amount}` : e.amount}</b></div>
                   ))}
                 </div>
               )}
@@ -508,18 +511,18 @@ function CreditsSection() {
       )}
       {signedIn && (!loaded ? <Loading /> : !managed ? null : usage.loading ? <Loading /> : usage.error ? <ErrorNote error={usage.error} onRetry={usage.reload} /> : (
         <>
-          <h3 className="memory-heading">Crédits de l’organisation · {managed.display_name}</h3>
+          <h3 className="memory-heading">{t('Crédits de l’organisation ·')} {managed.display_name}</h3>
           <div className="stats-row compact four">
-            <div><small>SOLDE</small><b>{account?.balance ?? '—'}</b></div>
-            <div><small>ATTRIBUÉS</small><b>{account?.granted ?? '—'}</b></div>
-            <div><small>UTILISÉS</small><b>{account?.consumed ?? '—'}</b></div>
-            <div><small>RÉSERVÉS</small><b>{account?.reserved ?? '—'}</b></div>
+            <div><small>{t('SOLDE')}</small><b>{account?.balance ?? '—'}</b></div>
+            <div><small>{t('ATTRIBUÉS')}</small><b>{account?.granted ?? '—'}</b></div>
+            <div><small>{t('UTILISÉS')}</small><b>{account?.consumed ?? '—'}</b></div>
+            <div><small>{t('RÉSERVÉS')}</small><b>{account?.reserved ?? '—'}</b></div>
           </div>
-          <h3 className="memory-heading">{managed.display_name} · derniers mouvements</h3>
-          {!usage.data?.ledger.length ? <p className="muted-line">Aucun mouvement sur la période.</p> : (
+          <h3 className="memory-heading">{managed.display_name} {t('· derniers mouvements')}</h3>
+          {!usage.data?.ledger.length ? <p className="muted-line">{t('Aucun mouvement sur la période.')}</p> : (
             <div className="memory-list">
               {usage.data.ledger.slice(0, 20).map((e) => (
-                <div className="memory-item" key={e.id}><span><Icon name="wallet" /></span><div><b>{e.actionType || e.kind}</b><p>{new Date(e.createdAt).toLocaleString('fr-FR')}</p></div><b>{e.amount > 0 ? `+${e.amount}` : e.amount}</b></div>
+                <div className="memory-item" key={e.id}><span><Icon name="wallet" /></span><div><b>{e.actionType || e.kind}</b><p>{new Date(e.createdAt).toLocaleString(locale())}</p></div><b>{e.amount > 0 ? `+${e.amount}` : e.amount}</b></div>
               ))}
             </div>
           )}

@@ -1,5 +1,6 @@
 import { API_BASE, ApiError, http, tokens } from '@/api/client'
 import { arr, num, obj, str } from '@/api/json'
+import { t } from '@/lib/i18n'
 
 /*
  * Supplier self-registration (/supplier/applications) and its review by Trezutil staff (/admin/supplier-applications).
@@ -100,7 +101,7 @@ export const supplierApi = {
   /** Opens a document in a new tab (it needs the session, so it is fetched, never linked). */
   async open(doc: SupplierDocument): Promise<void> {
     const res = await fetch(`${API_BASE}${doc.url.replace(/^\/api\/v1/, '')}`, { headers: { Authorization: `Bearer ${tokens.access() ?? ''}` }, credentials: 'same-origin' })
-    if (!res.ok) throw new ApiError('Le document n’a pas pu être ouvert.', res.status, 'DOCUMENT_FAILED')
+    if (!res.ok) throw new ApiError(t('Le document n’a pas pu être ouvert.'), res.status, 'DOCUMENT_FAILED')
     const url = URL.createObjectURL(await res.blob())
     window.open(url, '_blank', 'noopener')
     setTimeout(() => URL.revokeObjectURL(url), 60_000)
@@ -115,19 +116,19 @@ export const supplierApi = {
 }
 
 export const STATUS_LABEL: Record<ApplicationStatus, string> = {
-  draft: 'Inscrit · dossier à compléter',
-  submitted: 'Documents soumis · vérification en attente',
-  changes_requested: 'Modifications demandées',
-  verified: 'Vérifié par Trezutil',
-  rejected: 'Refusé',
+  draft: t('Inscrit · dossier à compléter'),
+  submitted: t('Documents soumis · vérification en attente'),
+  changes_requested: t('Modifications demandées'),
+  verified: t('Vérifié par Trezutil'),
+  rejected: t('Refusé'),
 }
 
 export const MISSING_LABEL: Record<string, string> = {
-  legal_name: 'la raison sociale', display_name: 'le nom commercial', phone: 'le téléphone', city: 'la ville',
-  sectors: 'au moins un secteur d’activité', capabilities: 'vos capacités', service_areas: 'au moins une zone desservie',
-  legal_document: 'un document légal (RCCM, identification nationale ou pièce d’identité)',
+  legal_name: t('la raison sociale'), display_name: t('le nom commercial'), phone: t('le téléphone'), city: t('la ville'),
+  sectors: t('au moins un secteur d’activité'), capabilities: t('vos capacités'), service_areas: t('au moins une zone desservie'),
+  legal_document: t('un document légal (RCCM, identification nationale ou pièce d’identité)'),
 }
 
 export const DOCUMENT_LABEL: Record<DocumentKind, string> = {
-  rccm: 'RCCM', id_nat: 'Identification nationale', nif: 'NIF (impôts)', identity: 'Pièce d’identité du responsable', other: 'Autre document',
+  rccm: 'RCCM', id_nat: t('Identification nationale'), nif: t('NIF (impôts)'), identity: t('Pièce d’identité du responsable'), other: t('Autre document'),
 }

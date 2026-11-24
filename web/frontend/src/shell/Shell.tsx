@@ -10,6 +10,7 @@ import { Sidebar } from '@/shell/Sidebar'
 import { useWorkspace, WorkspaceProvider } from '@/shell/workspace'
 import { Icon } from '@/ui/Icon'
 import { initials, OfflineBar } from '@/ui/kit'
+import { t } from '@/lib/i18n'
 
 /*
  * The frame: the sidebar (foldable on a large screen, a drawer on a phone), the top bar with the title of what is open,
@@ -19,14 +20,14 @@ import { initials, OfflineBar } from '@/ui/kit'
 const SIDE_KEY = 'trezutil_side_collapsed'
 
 function titleOf(pathname: string, conversationTitle: string | undefined): string {
-  if (pathname.startsWith('/c/')) return conversationTitle ?? 'Conversation'
-  if (pathname.startsWith('/operations')) return 'Opérations'
-  if (pathname.startsWith('/purchases')) return 'Achats et réservations'
-  if (pathname.startsWith('/suppliers')) return 'Fournisseurs'
-  if (pathname === '/supplier') return 'Devenir fournisseur'
-  if (pathname.startsWith('/overview')) return 'Vue d’ensemble'
-  if (pathname.startsWith('/settings')) return 'Paramètres'
-  return 'Nouvelle conversation'
+  if (pathname.startsWith('/c/')) return conversationTitle ?? t('Conversation')
+  if (pathname.startsWith('/operations')) return t('Opérations')
+  if (pathname.startsWith('/purchases')) return t('Achats et réservations')
+  if (pathname.startsWith('/suppliers')) return t('Fournisseurs')
+  if (pathname === '/supplier') return t('Devenir fournisseur')
+  if (pathname.startsWith('/overview')) return t('Vue d’ensemble')
+  if (pathname.startsWith('/settings')) return t('Paramètres')
+  return t('Nouvelle conversation')
 }
 
 export function Shell() {
@@ -50,10 +51,10 @@ function ConversationMenu({ id, title, operationId }: { id: string; title: strin
       </button>
       {open && (
         <div className="menu" role="menu">
-          <button type="button" role="menuitem" onClick={() => { setOpen(false); const next = window.prompt('Nouveau titre', title); if (next) conversationStore.rename(id, next) }}><Icon name="edit" size={15} />Renommer</button>
-          {operationId && <button type="button" role="menuitem" onClick={() => { setOpen(false); navigate(`/operations/${operationId}`) }}><Icon name="flow" size={15} />Voir l’opération</button>}
-          <button type="button" role="menuitem" onClick={() => { setOpen(false); conversationStore.archive(id); navigate('/') }}><Icon name="archive" size={15} />Archiver</button>
-          <button type="button" role="menuitem" className="danger" onClick={() => { setOpen(false); if (window.confirm('Supprimer cette conversation ? Ses messages sont effacés de Trezutil ; les commandes et réservations qu’elle a créées restent.')) { conversationStore.remove(id); navigate('/') } }}><Icon name="trash" size={15} />Supprimer</button>
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); const next = window.prompt(t('Nouveau titre'), title); if (next) conversationStore.rename(id, next) }}><Icon name="edit" size={15} />{t('Renommer')}</button>
+          {operationId && <button type="button" role="menuitem" onClick={() => { setOpen(false); navigate(`/operations/${operationId}`) }}><Icon name="flow" size={15} />{t('Voir l’opération')}</button>}
+          <button type="button" role="menuitem" onClick={() => { setOpen(false); conversationStore.archive(id); navigate('/') }}><Icon name="archive" size={15} />{t('Archiver')}</button>
+          <button type="button" role="menuitem" className="danger" onClick={() => { setOpen(false); if (window.confirm(t('Supprimer cette conversation ? Ses messages sont effacés de Trezutil ; les commandes et réservations qu’elle a créées restent.'))) { conversationStore.remove(id); navigate('/') } }}><Icon name="trash" size={15} />{t('Supprimer')}</button>
         </div>
       )}
     </div>
@@ -99,7 +100,7 @@ function Frame() {
 
   return (
     <div className="app-shell">
-      <a className="skip-link" href="#main">Aller au contenu</a>
+      <a className="skip-link" href="#main">{t('Aller au contenu')}</a>
       <Sidebar
         collapsed={collapsed} onCollapse={() => setCollapsed((c) => { try { localStorage.setItem(SIDE_KEY, c ? '0' : '1') } catch { /* visit only */ } return !c })}
         mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} conversations={conversations} pending={pending}
@@ -109,13 +110,13 @@ function Frame() {
       <main className="main-shell" id="main" tabIndex={-1}>
         {!wide && (
           <header className="topbar">
-            <button type="button" className="icon-btn menu-trigger" onClick={() => setMobileOpen(true)} aria-label="Ouvrir le menu"><Icon name="menu" /></button>
+            <button type="button" className="icon-btn menu-trigger" onClick={() => setMobileOpen(true)} aria-label={t('Ouvrir le menu')}><Icon name="menu" /></button>
             {conv ? <ConversationMenu id={conv.id} title={title} operationId={conv.operationId} /> : <div className="top-title"><span>{title}</span></div>}
             <div className="top-actions">
-              <button type="button" className="icon-btn notification-btn" onClick={() => setDrawer(true)} aria-label={unread ? `Notifications, ${unread} non lues` : 'Notifications'}>
+              <button type="button" className="icon-btn notification-btn" onClick={() => setDrawer(true)} aria-label={unread ? t('Notifications, {unread} non lues', { unread }) : t('Notifications')}>
                 <Icon name="bell" />{unread > 0 && <i>{unread > 9 ? '9+' : unread}</i>}
               </button>
-              {user ? <Link className="avatar small" to="/settings/profile" aria-label="Mon profil">{initials(name)}</Link> : user === null ? <Link className="secondary-btn small-btn" to={`/login?returnTo=${encodeURIComponent(pathname)}`}>Se connecter</Link> : null}
+              {user ? <Link className="avatar small" to="/settings/profile" aria-label={t('Mon profil')}>{initials(name)}</Link> : user === null ? <Link className="secondary-btn small-btn" to={`/login?returnTo=${encodeURIComponent(pathname)}`}>{t('Se connecter')}</Link> : null}
             </div>
           </header>
         )}

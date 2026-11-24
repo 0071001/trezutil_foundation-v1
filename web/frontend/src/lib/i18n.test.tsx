@@ -2,6 +2,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import ts from 'typescript'
 import { describe, expect, it } from 'vitest'
+import { en } from '@/i18n/en'
 import { fr } from '@/i18n/fr'
 import { getLang, plural, setLang, t, tn } from '@/lib/i18n'
 
@@ -44,18 +45,33 @@ describe('translations', () => {
     expect(t('Sign in')).toBe('Se connecter')
   })
 
-  it('has a French entry for every message in the source', () => {
-    const missing = [...sourceKeys()].filter(([key]) => !(key in fr)).map(([key, file]) => `${file}: ${key}`)
+  it('translates every message in the source (French text -> English, or English text -> French)', () => {
+    const missing = [...sourceKeys()].filter(([key]) => !(key in fr) && !(key in en)).map(([key, file]) => `${file}: ${key}`)
     expect(missing).toEqual([])
   })
 
-  it('keeps every {placeholder} in each French message', () => {
-    const broken = Object.entries(fr).filter(([key, value]) => placeholders(key) !== placeholders(value)).map(([key]) => key)
+  it('has no translation left over from a message the source no longer uses', () => {
+    const used = sourceKeys()
+    expect(Object.keys(en).filter((key) => !used.has(key))).toEqual([])
+  })
+
+  it('keeps every {placeholder} in each translation', () => {
+    const broken = [...Object.entries(fr), ...Object.entries(en)].filter(([key, value]) => placeholders(key) !== placeholders(value)).map(([key]) => key)
     expect(broken).toEqual([])
   })
 
-  it('has no empty French message', () => {
-    expect(Object.entries(fr).filter(([, value]) => !value.trim()).map(([key]) => key)).toEqual([])
+  it('has no empty translation', () => {
+    expect([...Object.entries(fr), ...Object.entries(en)].filter(([, value]) => !value.trim()).map(([key]) => key)).toEqual([])
+  })
+
+  it('shows the French source text in French and its translation in English', () => {
+    setLang('fr', false)
+    expect(t('Paramètres')).toBe('Paramètres')
+    expect(tn(2, '{n} offre trouvée', '{n} offres trouvées')).toBe('2 offres trouvées')
+    setLang('en', false)
+    expect(t('Paramètres')).toBe('Settings')
+    expect(tn(1, '{n} offre trouvée', '{n} offres trouvées')).toBe('1 offer found')
+    expect(tn(0, '{n} offre trouvée', '{n} offres trouvées')).toBe('0 offers found')
   })
 
   it('fills placeholders and falls back to the English text for an unknown message', () => {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router'
-import { getLang } from '@/lib/i18n'
+import { getLang, t } from '@/lib/i18n'
 import { conversationStore, useConversations } from '@/conversation/store'
 import { Icon } from '@/ui/Icon'
 import { Logo } from '@/ui/kit'
@@ -35,14 +35,14 @@ function recognitionCtor(): (new () => Recognition) | null {
 type Phase = 'starting' | 'listening' | 'thinking' | 'speaking' | 'muted' | 'confirm' | 'unsupported' | 'denied'
 
 const COPY: Record<Phase, [string, string]> = {
-  starting: ['Un instant…', 'Préparation du microphone.'],
-  listening: ['Je t’écoute', 'Parle naturellement de ton besoin commercial.'],
-  thinking: ['Je réfléchis…', 'Trezutil traite ta demande.'],
-  speaking: ['Je réponds', 'Touche le cercle pour m’interrompre.'],
-  muted: ['Microphone désactivé', 'Réactive le microphone pour continuer.'],
-  confirm: ['Ta confirmation est requise', 'Pour ta sécurité, une commande ou un paiement s’approuve à l’écrit.'],
-  unsupported: ['Mode vocal indisponible', 'Ce navigateur ne propose pas la reconnaissance vocale. Essaie Chrome, Edge ou Safari.'],
-  denied: ['Microphone refusé', 'Autorise le microphone dans ton navigateur pour utiliser le mode vocal.'],
+  starting: [t('Un instant…'), t('Préparation du microphone.')],
+  listening: [t('Je t’écoute'), t('Parle naturellement de ton besoin commercial.')],
+  thinking: [t('Je réfléchis…'), t('Trezutil traite ta demande.')],
+  speaking: [t('Je réponds'), t('Touche le cercle pour m’interrompre.')],
+  muted: [t('Microphone désactivé'), t('Réactive le microphone pour continuer.')],
+  confirm: [t('Ta confirmation est requise'), t('Pour ta sécurité, une commande ou un paiement s’approuve à l’écrit.')],
+  unsupported: [t('Mode vocal indisponible'), t('Ce navigateur ne propose pas la reconnaissance vocale. Essaie Chrome, Edge ou Safari.')],
+  denied: [t('Microphone refusé'), t('Autorise le microphone dans ton navigateur pour utiliser le mode vocal.')],
 }
 
 export function VoiceMode() {
@@ -62,7 +62,7 @@ export function VoiceMode() {
   phaseRef.current = phase
   const audio = useRef<{ ctx: AudioContext; stream: MediaStream; raf: number } | null>(null)
 
-  useEffect(() => { document.title = 'Mode vocal — Trezutil' }, [])
+  useEffect(() => { document.title = t('Mode vocal — Trezutil') }, [])
 
   const stopListening = useCallback(() => {
     const r = recognition.current
@@ -114,7 +114,7 @@ export function VoiceMode() {
     const start = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return }
+        if (cancelled) { stream.getTracks().forEach((tr) => tr.stop()); return }
         const ctx = new AudioContext()
         const analyser = ctx.createAnalyser()
         analyser.fftSize = 256
@@ -141,25 +141,25 @@ export function VoiceMode() {
       window.speechSynthesis?.cancel()
       const a = audio.current
       audio.current = null
-      if (a) { cancelAnimationFrame(a.raf); a.stream.getTracks().forEach((t) => t.stop()); void a.ctx.close() }
+      if (a) { cancelAnimationFrame(a.raf); a.stream.getTracks().forEach((tr) => tr.stop()); void a.ctx.close() }
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // The answer of the runtime arrives in the conversation: read it aloud, then listen again.
   useEffect(() => {
     if (phase !== 'thinking' || !conv || pending[conv.id]) return
-    const last = [...conv.turns].reverse().find((t) => t.at >= waitingSince.current - 50)
+    const last = [...conv.turns].reverse().find((x) => x.at >= waitingSince.current - 50)
     if (!last) return
     if (last.role === 'user') {
-      if (last.failed) { setAnswer(`Le message n’est pas parti : ${last.failed.message}`); setPhase('muted') }
+      if (last.failed) { setAnswer(t('Le message n’est pas parti : {message}', { message: last.failed.message })); setPhase('muted') }
       return
     }
     const reply = last.reply
-    const text = last.text || 'C’est fait.'
+    const text = last.text || t('C’est fait.')
     setAnswer(text)
     if (reply?.is_confirmation) {
       setPhase('confirm')
-      speak(`${reply.confirmation?.summary || text}. Pour confirmer, ouvre la conversation et approuve à l’écrit.`, () => {})
+      speak(t('{summary}. Pour confirmer, ouvre la conversation et approuve à l’écrit.', { summary: reply.confirmation?.summary || text }), () => {})
       return
     }
     setPhase('speaking')
@@ -198,30 +198,30 @@ export function VoiceMode() {
   const scale = phase === 'listening' ? 1 + level * 0.18 : 1
   return (
     <div className={`voice-screen phase-${phase}`}>
-      <div className="voice-top"><Logo /><button type="button" className="voice-close" onClick={() => close(false)} aria-label="Fermer le mode vocal"><Icon name="x" /></button></div>
+      <div className="voice-top"><Logo /><button type="button" className="voice-close" onClick={() => close(false)} aria-label={t('Fermer le mode vocal')}><Icon name="x" /></button></div>
       <div className="voice-center">
         <button type="button" className={`sound-orb ${active ? '' : 'muted'} ${phase === 'speaking' ? 'speaking' : ''}`} style={{ transform: `scale(${scale})` }}
-          onClick={interrupt} aria-label={phase === 'speaking' ? 'Interrompre la réponse' : 'Activité audio'} disabled={phase !== 'speaking'}>
+          onClick={interrupt} aria-label={phase === 'speaking' ? t('Interrompre la réponse') : t('Activité audio')} disabled={phase !== 'speaking'}>
           <i /><i /><i /><i /><i /><i /><i />
         </button>
         <h2 aria-live="polite">{title}</h2>
         <p>{copy}</p>
         {(heard || answer) && (
           <div className="voice-transcript" aria-live="polite">
-            {heard && <p className="you"><small>Toi</small>{heard}</p>}
+            {heard && <p className="you"><small>{t('Toi')}</small>{heard}</p>}
             {answer && phase !== 'listening' && <p><small>Trezutil</small>{answer.length > 280 ? `${answer.slice(0, 277)}…` : answer}</p>}
           </div>
         )}
-        {phase === 'confirm' && <button type="button" className="primary-btn" onClick={() => close(true)}>Voir et approuver <Icon name="arrow" size={15} /></button>}
+        {phase === 'confirm' && <button type="button" className="primary-btn" onClick={() => close(true)}>{t('Voir et approuver')} <Icon name="arrow" size={15} /></button>}
       </div>
       <div className="voice-controls">
         <button type="button" onClick={toggleMute} className={phase === 'muted' ? 'active' : ''} disabled={phase === 'unsupported' || phase === 'denied'}>
-          <span><Icon name={phase === 'muted' ? 'micOff' : 'mic'} /></span>{phase === 'muted' ? 'Réactiver' : 'Muet'}
+          <span><Icon name={phase === 'muted' ? 'micOff' : 'mic'} /></span>{phase === 'muted' ? t('Réactiver') : t('Muet')}
         </button>
-        <button type="button" onClick={() => close(false)}><span className="end-call"><Icon name="x" /></span>Terminer</button>
-        <button type="button" onClick={() => close(true)}><span><Icon name="message" /></span>Écrire</button>
+        <button type="button" onClick={() => close(false)}><span className="end-call"><Icon name="x" /></span>{t('Terminer')}</button>
+        <button type="button" onClick={() => close(true)}><span><Icon name="message" /></span>{t('Écrire')}</button>
       </div>
-      <p className="voice-note">Reconnaissance et synthèse vocales de ton navigateur, tour par tour.</p>
+      <p className="voice-note">{t('Reconnaissance et synthèse vocales de ton navigateur, tour par tour.')}</p>
     </div>
   )
 }

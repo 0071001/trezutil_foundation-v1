@@ -2,6 +2,7 @@ import { mapSearchResult } from '@/api/search'
 import { formatMoney, safeImage } from '@/lib/format'
 import type { SearchResult } from '@/types'
 import { initials } from '@/ui/kit'
+import { t } from '@/lib/i18n'
 
 /*
  * The offers a search of the runtime returned (result_items of a reply), in the shape the cards and the comparison
@@ -38,8 +39,8 @@ function shade(name: string): string {
 }
 
 const AVAILABILITY: Record<string, string> = {
-  available: 'Disponible', in_stock: 'En stock', out_of_stock: 'Rupture de stock', limited: 'Stock limité',
-  on_request: 'Sur demande', preorder: 'Sur commande', unavailable: 'Indisponible',
+  available: t('Disponible'), in_stock: t('En stock'), out_of_stock: t('Rupture de stock'), limited: t('Stock limité'),
+  on_request: t('Sur demande'), preorder: t('Sur commande'), unavailable: t('Indisponible'),
 }
 
 export function availabilityText(status: string): string {
@@ -48,7 +49,7 @@ export function availabilityText(status: string): string {
 }
 
 export function toOffer(r: SearchResult, index: number): Offer {
-  const supplier = r.seller?.display_name || r.store?.name || 'Fournisseur'
+  const supplier = r.seller?.display_name || r.store?.name || t('Fournisseur')
   const where = [r.location?.neighborhood, r.location?.city].filter(Boolean).join(', ')
   return {
     n: index + 1,
@@ -58,7 +59,7 @@ export function toOffer(r: SearchResult, index: number): Offer {
     initials: initials(supplier),
     color: shade(supplier),
     image: safeImage(r.primary_media_url),
-    price: r.price_amount > 0 ? formatMoney(r.price_amount, r.price_currency) : 'Prix sur demande',
+    price: r.price_amount > 0 ? formatMoney(r.price_amount, r.price_currency) : t('Prix sur demande'),
     priceValue: r.price_amount,
     currency: r.price_currency,
     wasPrice: r.compare_at_amount ? formatMoney(r.compare_at_amount, r.price_currency) : '',
@@ -77,10 +78,10 @@ export function offersOf(items: Record<string, unknown>[]): Offer[] {
 
 /** The four trust levels of a supplier. A new supplier is "registered", which is not a fault. */
 export const TRUST_LEVELS = [
-  { level: 0, label: 'Inscrit', text: 'Compte créé sur Trezutil. Aucun document examiné pour l’instant.' },
-  { level: 1, label: 'Informations vérifiées', text: 'Identité et coordonnées contrôlées.' },
-  { level: 2, label: 'Vérifié', text: 'Documents de l’entreprise examinés par Trezutil.' },
-  { level: 3, label: 'Fiabilité établie', text: 'Historique de transactions menées à bien.' },
+  { level: 0, label: t('Inscrit'), text: t('Compte créé sur Trezutil. Aucun document examiné pour l’instant.') },
+  { level: 1, label: t('Informations vérifiées'), text: t('Identité et coordonnées contrôlées.') },
+  { level: 2, label: t('Vérifié'), text: t('Documents de l’entreprise examinés par Trezutil.') },
+  { level: 3, label: t('Fiabilité établie'), text: t('Historique de transactions menées à bien.') },
 ]
 
 export const trustLabel = (level: number) => TRUST_LEVELS[Math.max(0, Math.min(3, level))]!.label

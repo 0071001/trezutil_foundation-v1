@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { ApiError } from '@/api/client'
 import { Icon, type IconName } from '@/ui/Icon'
+import { LANGUAGES, getLang, locale, switchLanguage, t } from '@/lib/i18n'
 
 /* Small shared pieces: the logo, badges, and the states every screen needs (loading, error, empty, offline). */
 
@@ -23,6 +24,16 @@ export function Logo({ compact = false }: { compact?: boolean }) {
   )
 }
 
+/** FR / EN, for screens a visitor reaches before the settings: switches the whole interface (the page reloads). */
+export function LanguageToggle() {
+  const other = LANGUAGES.find((l) => l.code !== getLang())!
+  return (
+    <button type="button" className="lang-toggle" lang={other.code} aria-label={other.label} title={other.label} onClick={() => switchLanguage(other.code)}>
+      <Icon name="globe" size={15} />{other.short}
+    </button>
+  )
+}
+
 export type Tone = 'green' | 'amber' | 'neutral' | 'blue' | 'red'
 
 export function Badge({ children, tone = 'neutral' }: { children: ReactNode; tone?: Tone }) {
@@ -34,14 +45,14 @@ export function Loading({ label = 'Chargement…' }: { label?: string }) {
 }
 
 export function errorText(error: ApiError): string {
-  if (error.isNetwork) return 'Trezutil est injoignable. Vérifie ta connexion puis réessaie.'
-  if (error.status === 401) return 'Ta session a expiré. Reconnecte-toi pour continuer.'
-  if (error.status === 403) return 'Ce contenu n’est pas accessible avec ce compte.'
-  if (error.status === 404) return 'Introuvable : il a peut-être été supprimé.'
-  if (error.code === 'OTP_DELIVERY_FAILED') return 'Le code n’a pas pu être envoyé sur WhatsApp pour le moment. Réessaie dans quelques minutes.'
+  if (error.isNetwork) return t('Trezutil est injoignable. Vérifie ta connexion puis réessaie.')
+  if (error.status === 401) return t('Ta session a expiré. Reconnecte-toi pour continuer.')
+  if (error.status === 403) return t('Ce contenu n’est pas accessible avec ce compte.')
+  if (error.status === 404) return t('Introuvable : il a peut-être été supprimé.')
+  if (error.code === 'OTP_DELIVERY_FAILED') return t('Le code n’a pas pu être envoyé sur WhatsApp pour le moment. Réessaie dans quelques minutes.')
   // The server never explains a 5xx (its text is a generic English notice): say it plainly, in French.
-  if (error.status >= 500) return 'Trezutil rencontre un problème de son côté. Réessaie dans un instant.'
-  return error.message || 'Une erreur est survenue.'
+  if (error.status >= 500) return t('Trezutil rencontre un problème de son côté. Réessaie dans un instant.')
+  return error.message || t('Une erreur est survenue.')
 }
 
 export function ErrorNote({ error, onRetry }: { error: ApiError; onRetry?: () => void }) {
@@ -49,7 +60,7 @@ export function ErrorNote({ error, onRetry }: { error: ApiError; onRetry?: () =>
     <div className="state-error" role="alert">
       <Icon name="x" size={16} />
       <span>{errorText(error)}</span>
-      {onRetry && <button type="button" className="secondary-btn small-btn" onClick={onRetry}>Réessayer</button>}
+      {onRetry && <button type="button" className="secondary-btn small-btn" onClick={onRetry}>{t('Réessayer')}</button>}
     </div>
   )
 }
@@ -90,7 +101,7 @@ export function useOnline(): boolean {
 export function OfflineBar() {
   const online = useOnline()
   if (online) return null
-  return <div className="offline-bar" role="status"><Icon name="offline" size={15} />Hors ligne : tes messages partiront quand la connexion reviendra, si tu les renvoies.</div>
+  return <div className="offline-bar" role="status"><Icon name="offline" size={15} />{t('Hors ligne : tes messages partiront quand la connexion reviendra, si tu les renvoies.')}</div>
 }
 
 export function initials(name: string): string {
@@ -104,14 +115,14 @@ export function newId(): string {
   return c?.randomUUID ? c.randomUUID() : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`
 }
 
-export const clock = (at: number) => new Date(at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+export const clock = (at: number) => new Date(at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })
 
 export function dayLabel(at: number): string {
   const today = new Date()
   const start = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()
-  if (at >= start) return 'Aujourd’hui'
-  if (at >= start - 86_400_000) return 'Hier'
-  if (at >= start - 6 * 86_400_000) return '7 derniers jours'
-  if (at >= start - 29 * 86_400_000) return '30 derniers jours'
-  return new Date(at).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+  if (at >= start) return t('Aujourd’hui')
+  if (at >= start - 86_400_000) return t('Hier')
+  if (at >= start - 6 * 86_400_000) return t('7 derniers jours')
+  if (at >= start - 29 * 86_400_000) return t('30 derniers jours')
+  return new Date(at).toLocaleDateString(locale(), { month: 'long', year: 'numeric' })
 }

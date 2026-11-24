@@ -140,7 +140,7 @@ const cookies = (
       <ul>
         <li>ta session (jetons de connexion), pour rester connecté ;</li>
         <li>une copie de tes conversations et de ta mémoire commerciale, pour les afficher immédiatement et garder une modification faite hors ligne jusqu’à la prochaine synchronisation ;</li>
-        <li>tes préférences : langue, profil choisi (personnel ou entreprise), notifications.</li>
+        <li>tes préférences : langue, thème, profil choisi (personnel ou entreprise), notifications.</li>
       </ul>
       <p>Ces données restent dans le stockage local de ton navigateur. La déconnexion efface la session ; tu peux tout effacer depuis les réglages de ton navigateur.</p>
     </Section>

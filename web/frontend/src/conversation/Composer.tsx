@@ -2,6 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, us
 import { useVoiceInput } from '@/lib/voice'
 import type { TurnAttachment } from '@/conversation/store'
 import { Icon } from '@/ui/Icon'
+import { t } from '@/lib/i18n'
 
 /*
  * The composer. Enter sends, Shift+Enter adds a line, the field grows with the text. The + adds files or a photo (on
@@ -103,54 +104,54 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
       <div className={`composer ${voice.listening ? 'listening' : ''}`}>
         {files.length > 0 && (
           <>
-            <div className="attachments" aria-label="Pièces jointes">
+            <div className="attachments" aria-label={t('Pièces jointes')}>
               {files.map((f) => (
                 <div className="attachment" key={f.id}>
                   <span>{f.preview ? <img src={f.preview} alt="" /> : <Icon name="file" />}</span>
-                  <div><b title={f.file.name}>{f.file.name}</b><small>{sizeText(f.file.size)} · reste sur l’appareil</small></div>
-                  <button type="button" onClick={() => removeFile(f.id)} aria-label={`Retirer ${f.file.name}`}><Icon name="x" size={14} /></button>
+                  <div><b title={f.file.name}>{f.file.name}</b><small>{sizeText(f.file.size)} {t('· reste sur l’appareil')}</small></div>
+                  <button type="button" onClick={() => removeFile(f.id)} aria-label={t('Retirer {name}', { name: f.file.name })}><Icon name="x" size={14} /></button>
                 </div>
               ))}
             </div>
-            <p className="composer-note" role="note"><Icon name="lock" size={13} />L’envoi et l’analyse de fichiers ne sont pas encore disponibles : ton message partira sans eux. Décris l’essentiel par écrit.</p>
+            <p className="composer-note" role="note"><Icon name="lock" size={13} />{t('L’envoi et l’analyse de fichiers ne sont pas encore disponibles : ton message partira sans eux. Décris l’essentiel par écrit.')}</p>
           </>
         )}
-        <label className="sr-only" htmlFor="composer-field">Ton besoin</label>
+        <label className="sr-only" htmlFor="composer-field">{t('Ton besoin')}</label>
         <textarea
           id="composer-field" ref={area} rows={1} value={value} maxLength={MAX} autoFocus={autoFocus}
-          placeholder={voice.listening ? 'Je t’écoute… parle naturellement.' : placeholder ?? 'Exprime ton besoin commercial…'}
+          placeholder={voice.listening ? t('Je t’écoute… parle naturellement.') : placeholder ?? t('Exprime ton besoin commercial…')}
           onChange={(e) => onChange(e.target.value)} onKeyDown={onKey}
         />
         <div className="composer-actions">
           <div style={{ position: 'relative' }}>
-            <button type="button" className="round-btn" onClick={() => setMenu((m) => !m)} aria-label="Ajouter des fichiers ou une photo" aria-expanded={menu} aria-haspopup="menu">
+            <button type="button" className="round-btn" onClick={() => setMenu((m) => !m)} aria-label={t('Ajouter des fichiers ou une photo')} aria-expanded={menu} aria-haspopup="menu">
               <Icon name="plus" />
             </button>
             {menu && (
               <div className="menu up" role="menu" onMouseDown={(e) => e.stopPropagation()}>
-                <button type="button" role="menuitem" onClick={() => filesInput.current?.click()}><Icon name="paperclip" size={16} />Fichiers (images, PDF, Word, Excel)</button>
-                <button type="button" role="menuitem" onClick={() => cameraInput.current?.click()}><Icon name="camera" size={16} />Prendre une photo</button>
+                <button type="button" role="menuitem" onClick={() => filesInput.current?.click()}><Icon name="paperclip" size={16} />{t('Fichiers (images, PDF, Word, Excel)')}</button>
+                <button type="button" role="menuitem" onClick={() => cameraInput.current?.click()}><Icon name="camera" size={16} />{t('Prendre une photo')}</button>
               </div>
             )}
             <input ref={filesInput} type="file" multiple accept={ACCEPT} hidden onChange={(e) => { add(e.target.files); e.target.value = '' }} data-testid="file-input" />
             <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { add(e.target.files); e.target.value = '' }} />
-            {busy && <span className="composer-busy" role="status"><i /><i /><i />Trezutil répond</span>}
+            {busy && <span className="composer-busy" role="status"><i /><i /><i />{t('Trezutil répond')}</span>}
           </div>
           <div>
             {voice.supported && (
-              <button type="button" className={`round-btn ${voice.listening ? 'on' : ''}`} onClick={dictate} aria-pressed={voice.listening} aria-label={voice.listening ? 'Arrêter la dictée' : 'Dicter'} title="Dictée vocale">
+              <button type="button" className={`round-btn ${voice.listening ? 'on' : ''}`} onClick={dictate} aria-pressed={voice.listening} aria-label={voice.listening ? t('Arrêter la dictée') : t('Dicter')} title={t('Dictée vocale')}>
                 <Icon name="mic" />
               </button>
             )}
             {busy && onStop
-              ? <button type="button" className="send-button stop-button" onClick={onStop} aria-label="Arrêter la réponse" title="Arrêter"><Icon name="x" size={17} /></button>
+              ? <button type="button" className="send-button stop-button" onClick={onStop} aria-label={t('Arrêter la réponse')} title={t('Arrêter')}><Icon name="x" size={17} /></button>
               : !hasText && onVoice
-              ? <button type="button" className="voice-button" onClick={onVoice} aria-label="Ouvrir le mode vocal" title="Mode vocal"><Icon name="voice" /></button>
-              : <button type="button" className="send-button" onClick={submit} disabled={!hasText || busy} aria-label="Envoyer"><Icon name="send" size={17} /></button>}
+              ? <button type="button" className="voice-button" onClick={onVoice} aria-label={t('Ouvrir le mode vocal')} title={t('Mode vocal')}><Icon name="voice" /></button>
+              : <button type="button" className="send-button" onClick={submit} disabled={!hasText || busy} aria-label={t('Envoyer')}><Icon name="send" size={17} /></button>}
           </div>
         </div>
       </div>
-      <small className="disclaimer">Trezutil peut faire des erreurs. Vérifie les informations importantes avant toute décision commerciale.</small>
+      <small className="disclaimer">{t('Trezutil peut faire des erreurs. Vérifie les informations importantes avant toute décision commerciale.')}</small>
     </div>
   )
 })

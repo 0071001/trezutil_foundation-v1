@@ -1,3 +1,4 @@
+import { t } from '@/lib/i18n'
 /*
  * The facts the legal pages need that the code cannot know: who operates Trezutil, where it is registered, how to
  * reach it, how long data is kept. Nothing here is invented: an empty fact shows on the page as a highlighted
@@ -49,7 +50,7 @@ export const LEGAL: LegalConfig = {
   updated: '2026-11-23',
   entity: { name: '', form: '', address: '', registration: '', director: '', email: '', phone: '', jurisdiction: '' },
   // Verified on the production server (2026-11-23): a virtual server rented from Contabo GmbH, located in France.
-  hosting: 'Contabo GmbH (Allemagne) — serveur situé à Lauterbourg, en France (Union européenne)',
+  hosting: t('Contabo GmbH (Allemagne) — serveur situé à Lauterbourg, en France (Union européenne)'),
   minimumAge: '',
   retention: '',
   authority: '',
@@ -61,12 +62,12 @@ export const LEGAL: LegalConfig = {
 
 /** The legal pages, in the order they are listed (slug → title). */
 export const LEGAL_DOCS = {
-  conditions: 'Conditions générales d’utilisation',
-  confidentialite: 'Politique de confidentialité',
-  cookies: 'Cookies et stockage local',
-  remboursements: 'Annulations et remboursements',
-  fournisseurs: 'Conditions fournisseurs',
-  mentions: 'Mentions légales',
+  conditions: t('Conditions générales d’utilisation'),
+  confidentialite: t('Politique de confidentialité'),
+  cookies: t('Cookies et stockage local'),
+  remboursements: t('Annulations et remboursements'),
+  fournisseurs: t('Conditions fournisseurs'),
+  mentions: t('Mentions légales'),
 } as const
 export type LegalDoc = keyof typeof LEGAL_DOCS
 export const isLegalDoc = (value: string | undefined): value is LegalDoc => !!value && value in LEGAL_DOCS

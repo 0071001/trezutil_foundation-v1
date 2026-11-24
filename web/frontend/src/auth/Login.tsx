@@ -6,7 +6,8 @@ import { renderGoogleButton } from '@/lib/google'
 import { LEGAL } from '@/lib/legal'
 import { safeReturnTo, useSession } from '@/lib/session'
 import { Icon } from '@/ui/Icon'
-import { errorText, Logo } from '@/ui/kit'
+import { errorText, LanguageToggle, Logo } from '@/ui/kit'
+import { t } from '@/lib/i18n'
 
 /*
  * Sign-in: with Google (POST /auth/google, the official Google button) when the server offers it, or with a one-time
@@ -33,8 +34,8 @@ export function GoogleSignIn({ onSignedIn }: { onSignedIn: () => Promise<void> }
           void authApi.signInWithGoogle(credential, nonce.current).then(onSignedIn, (err) => {
             const e = toApiError(err)
             setError(e.code === 'ACCOUNT_EXISTS'
-              ? 'Un compte Trezutil utilise déjà cette adresse e-mail. Connecte-toi avec ton numéro, puis lie Google dans Paramètres → Sécurité.'
-              : e.code === 'ACCOUNT_SUSPENDED' ? 'Ce compte est suspendu.' : 'La connexion avec Google n’a pas abouti. Réessaie.')
+              ? t('Un compte Trezutil utilise déjà cette adresse e-mail. Connecte-toi avec ton numéro, puis lie Google dans Paramètres → Sécurité.')
+              : e.code === 'ACCOUNT_SUSPENDED' ? t('Ce compte est suspendu.') : t('La connexion avec Google n’a pas abouti. Réessaie.'))
             void setup() // a fresh nonce for the next try
           })
         },
@@ -49,10 +50,10 @@ export function GoogleSignIn({ onSignedIn }: { onSignedIn: () => Promise<void> }
   return (
     <div className="google-signin">
       <div ref={holder} className="google-button" aria-busy={state === 'busy'} />
-      {state === 'busy' && <p className="muted-line" role="status">Connexion avec Google…</p>}
-      {state === 'unavailable' && <p className="muted-line">La connexion avec Google n’est pas disponible pour le moment.</p>}
+      {state === 'busy' && <p className="muted-line" role="status">{t('Connexion avec Google…')}</p>}
+      {state === 'unavailable' && <p className="muted-line">{t('La connexion avec Google n’est pas disponible pour le moment.')}</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
-      <div className="or-divider" role="separator"><span>ou avec ton numéro</span></div>
+      <div className="or-divider" role="separator"><span>{t('ou avec ton numéro')}</span></div>
     </div>
   )
 }
@@ -76,7 +77,7 @@ export function Login() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
 
-  useEffect(() => { document.title = 'Connexion — Trezutil' }, [])
+  useEffect(() => { document.title = `${t('Connexion')} — Trezutil` }, [])
   useEffect(() => { if (user) navigate(returnTo, { replace: true }) }, [user, navigate, returnTo])
 
   const request = async (e: FormEvent) => {
@@ -103,43 +104,43 @@ export function Login() {
 
   return (
     <div className="onboarding-page">
-      <div className="onboarding-brand"><Link to="/" aria-label="Retour à Trezutil"><Logo /></Link><small>Connexion</small></div>
+      <div className="onboarding-brand"><Link to="/" aria-label={t('Retour à Trezutil')}><Logo /></Link><small>{t('Connexion')}</small><LanguageToggle /></div>
       <div className="onboarding-card login-card">
         {!requestId ? (
           <form onSubmit={(e) => void request(e)}>
-            <p className="eyebrow">BIENVENUE</p>
-            <h1>Connecte-toi à Trezutil</h1>
-            <p>Avec ton compte Google, ou avec ton numéro : tu recevras alors un code de connexion sur WhatsApp. Pas de mot de passe. La première connexion crée ton compte.</p>
+            <p className="eyebrow">{t('BIENVENUE')}</p>
+            <h1>{t('Connecte-toi à Trezutil')}</h1>
+            <p>{t('Avec ton compte Google, ou avec ton numéro : tu recevras alors un code de connexion sur WhatsApp. Pas de mot de passe. La première connexion crée ton compte.')}</p>
             <GoogleSignIn onSignedIn={async () => { await refreshUser(); navigate(returnTo, { replace: true }) }} />
             <div className="form-grid single">
-              <label>Numéro de téléphone<input type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+243 81 234 5678" required autoFocus /></label>
+              <label>{t('Numéro de téléphone')}<input type="tel" inputMode="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+243 81 234 5678" required autoFocus /></label>
             </div>
             {error && <p className="form-error" role="alert">{errorText(error)}</p>}
             <div className="onboarding-actions">
-              <Link className="secondary-btn" to="/">Continuer sans compte</Link>
-              <button type="submit" className="primary-btn" disabled={busy || normalisePhone(phone).length < 8}>{busy ? 'Envoi…' : 'Recevoir le code'} <Icon name="arrow" size={15} /></button>
+              <Link className="secondary-btn" to="/">{t('Continuer sans compte')}</Link>
+              <button type="submit" className="primary-btn" disabled={busy || normalisePhone(phone).length < 8}>{busy ? 'Envoi…' : t('Recevoir le code')} <Icon name="arrow" size={15} /></button>
             </div>
           </form>
         ) : (
           <form onSubmit={(e) => void verify(e)}>
-            <p className="eyebrow">VÉRIFICATION</p>
-            <h1>Saisis le code reçu</h1>
-            <p>Un code a été envoyé au {phone}. Il expire dans quelques minutes.</p>
+            <p className="eyebrow">{t('VÉRIFICATION')}</p>
+            <h1>{t('Saisis le code reçu')}</h1>
+            <p>{t('Un code a été envoyé au')} {phone}{t('. Il expire dans quelques minutes.')}</p>
             <div className="form-grid single">
-              <label>Code de connexion<input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 8))} required autoFocus /></label>
+              <label>{t('Code de connexion')}<input inputMode="numeric" autoComplete="one-time-code" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 8))} required autoFocus /></label>
             </div>
             {error && <p className="form-error" role="alert">{errorText(error)}</p>}
             <div className="onboarding-actions">
-              <button type="button" className="secondary-btn" onClick={() => { setRequestId(''); setCode(''); setError(null) }}>Changer de numéro</button>
-              <button type="submit" className="primary-btn" disabled={busy || code.length < 4}>{busy ? 'Vérification…' : 'Se connecter'} <Icon name="arrow" size={15} /></button>
+              <button type="button" className="secondary-btn" onClick={() => { setRequestId(''); setCode(''); setError(null) }}>{t('Changer de numéro')}</button>
+              <button type="submit" className="primary-btn" disabled={busy || code.length < 4}>{busy ? t('Vérification…') : t('Se connecter')} <Icon name="arrow" size={15} /></button>
             </div>
           </form>
         )}
       </div>
-      <p className="login-note"><Icon name="shield" size={14} />Rien n’est commandé, réservé ou payé sans ta confirmation explicite.</p>
+      <p className="login-note"><Icon name="shield" size={14} />{t('Rien n’est commandé, réservé ou payé sans ta confirmation explicite.')}</p>
       <p className="login-legal">
-        {LEGAL.reviewed ? 'En continuant, tu acceptes les ' : 'Consulte les '}
-        <Link to="/legal/conditions">conditions d’utilisation</Link> et la <Link to="/legal/confidentialite">politique de confidentialité</Link>.
+        {LEGAL.reviewed ? t('En continuant, tu acceptes les ') : t('Consulte les ')}
+        <Link to="/legal/conditions">{t('conditions d’utilisation')}</Link> {t('et la')} <Link to="/legal/confidentialite">{t('politique de confidentialité')}</Link>.
       </p>
     </div>
   )

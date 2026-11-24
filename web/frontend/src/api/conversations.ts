@@ -1,5 +1,5 @@
 import { ApiError, http } from '@/api/client'
-import { getLang } from '@/lib/i18n'
+import { getLang, t } from '@/lib/i18n'
 import { arr, num, obj, read, str } from '@/api/json'
 
 export interface ConversationCard {
@@ -149,8 +149,8 @@ export const conversationsApi = {
     }, signal)
     if (done) return done
     const f = failure as { code: string; message: string } | null
-    if (f) throw new ApiError(f.message || 'Le message n’a pas pu être traité.', f.code === 'FORBIDDEN' ? 403 : 500, f.code)
-    throw new ApiError('La réponse a été interrompue.', 0, 'STREAM_INTERRUPTED')
+    if (f) throw new ApiError(f.message || t('Le message n’a pas pu être traité.'), f.code === 'FORBIDDEN' ? 403 : 500, f.code)
+    throw new ApiError(t('La réponse a été interrompue.'), 0, 'STREAM_INTERRUPTED')
   },
 
   async confirm(conversationId: string, token: string): Promise<ConversationReply> {

@@ -107,7 +107,7 @@ export function mapAdminView(value: unknown): SiteAdminView {
 export function toRequest(doc: SiteDocument, expectedVersion: number): Record<string, unknown> {
   return {
     expected_version: expectedVersion,
-    trust: doc.trust.map((t) => ({ metric: t.metric, enabled: t.enabled, min_value: t.minValue, label_fr: t.labelFr, label_en: t.labelEn })),
+    trust: doc.trust.map((x) => ({ metric: x.metric, enabled: x.enabled, min_value: x.minValue, label_fr: x.labelFr, label_en: x.labelEn })),
     partners: doc.partners.map((p) => ({ id: p.id, name: p.name, kind: p.kind, logo_url: p.logoUrl, link_url: p.linkUrl, visible: p.visible })),
     sections: doc.sections.map((s) => ({ key: s.key, visible: s.visible })),
   }

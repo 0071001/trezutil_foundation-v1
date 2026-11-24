@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react'
 import { toApiError, type ApiError } from '@/api/client'
 import { conversationsApi, type ConversationReply } from '@/api/conversations'
 import { newId } from '@/ui/kit'
+import { t } from '@/lib/i18n'
 
 /*
  * The conversations. They are kept on this device, per account, and for a signed-in account also on the server
@@ -106,11 +107,11 @@ function without<T>(record: Record<string, T>, id: string): Record<string, T> {
 /** What the runtime is doing, phrased from what was asked (shown while the answer is on its way). */
 export function activityLabel(text: string): string {
   const low = text.toLowerCase()
-  if (/compar/.test(low)) return 'Comparaison des offres…'
-  if (/(réserv|reserv|dispo|nuit|book)/.test(low)) return 'Vérification des disponibilités…'
-  if (/(command|achète|acheter|payer|order)/.test(low)) return 'Préparation de l’opération…'
-  if (/^(oui|non|yes|no|ok|d’accord|d'accord)\b/.test(low.trim())) return 'Un instant…'
-  return 'Recherche des bons fournisseurs…'
+  if (/compar/.test(low)) return t('Comparaison des offres…')
+  if (/(réserv|reserv|dispo|nuit|book)/.test(low)) return t('Vérification des disponibilités…')
+  if (/(command|achète|acheter|payer|order)/.test(low)) return t('Préparation de l’opération…')
+  if (/^(oui|non|yes|no|ok|d’accord|d'accord)\b/.test(low.trim())) return t('Un instant…')
+  return t('Recherche des bons fournisseurs…')
 }
 
 /** A message that only answers a confirmation must never be sent again by a "regenerate". */
@@ -123,13 +124,13 @@ function titleFrom(text: string): string {
 
 /** The step the server reports, in words (shown while the answer is on its way). */
 function stageLabel(stage: string, detail: string, asked: string): string {
-  if (stage === 'interpreting') return 'Compréhension de ta demande…'
+  if (stage === 'interpreting') return t('Compréhension de ta demande…')
   if (stage === 'acting') {
-    if (detail === 'SEARCH_LISTINGS') return 'Recherche des fournisseurs…'
-    if (detail === 'GET_LISTING') return 'Lecture de l’offre…'
-    return 'Préparation de l’opération…'
+    if (detail === 'SEARCH_LISTINGS') return t('Recherche des fournisseurs…')
+    if (detail === 'GET_LISTING') return t('Lecture de l’offre…')
+    return t('Préparation de l’opération…')
   }
-  if (stage === 'writing') return 'Rédaction de la réponse…'
+  if (stage === 'writing') return t('Rédaction de la réponse…')
   return activityLabel(asked)
 }
 
@@ -166,7 +167,7 @@ async function deliver(id: string, turnId: string, text: string, key: string) {
     update(id, (c) => ({ ...c, serverId: reply.conversation_id || c.serverId, updatedAt: Date.now(), turns: [...c.turns, answer] }))
   }
   const failed = (e: ApiError) => {
-    const message = e.status === 403 ? 'Cette conversation appartient à un autre compte. Commence-en une nouvelle.' : e.isNetwork ? 'Trezutil est injoignable.' : e.message || 'Le message n’a pas pu être traité.'
+    const message = e.status === 403 ? t('Cette conversation appartient à un autre compte. Commence-en une nouvelle.') : e.isNetwork ? t('Trezutil est injoignable.') : e.message || t('Le message n’a pas pu être traité.')
     update(id, (c) => ({ ...c, turns: c.turns.map((x) => (x.id === turnId ? { ...x, failed: { message, network: e.isNetwork, key } } : x)) }))
   }
   try {
@@ -185,7 +186,7 @@ async function deliver(id: string, turnId: string, text: string, key: string) {
     if (e.code === 'ABORTED') {
       // Stopped by the person: what had arrived stays, marked; the whole answer can be read back later.
       const partial = state.streaming[id]?.text.trim() ?? ''
-      const turn: Turn = { id: newId(), role: 'assistant', text: partial || 'Réponse interrompue.', at: Date.now(), interrupted: { key, question: text } }
+      const turn: Turn = { id: newId(), role: 'assistant', text: partial || t('Réponse interrompue.'), at: Date.now(), interrupted: { key, question: text } }
       update(id, (c) => ({ ...c, updatedAt: Date.now(), turns: [...c.turns, turn] }))
     } else if (e.isNetwork || e.status === 404 || e.status === 405) {
       // The connection broke (or a server without the streamed route): ask again with the same key, which returns
@@ -312,13 +313,13 @@ export const conversationStore = {
     if (!conv || !turn || state.confirming[conversationId]) return
     if (!token || !conv.serverId) {
       update(conversationId, (c) => ({ ...c, turns: c.turns.map((x) => (x.id === turnId ? { ...x, resolution: accept ? 'confirmed' : 'rejected' } : x)) }))
-      conversationStore.send(conversationId, accept ? 'Oui' : 'Non')
+      conversationStore.send(conversationId, accept ? t('Oui') : t('Non'))
       return
     }
     set({ confirming: { ...state.confirming, [conversationId]: turnId } }, false)
     try {
       const reply = accept ? await conversationsApi.confirm(conv.serverId, token) : await conversationsApi.reject(conv.serverId, token)
-      const answer: Turn = { id: newId(), role: 'assistant', text: reply.text || (accept ? 'C’est fait.' : 'Annulé : rien n’a été modifié.'), at: Date.now(), reply }
+      const answer: Turn = { id: newId(), role: 'assistant', text: reply.text || (accept ? t('C’est fait.') : t('Annulé : rien n’a été modifié.')), at: Date.now(), reply }
       update(conversationId, (c) => ({
         ...c,
         updatedAt: Date.now(),
@@ -331,7 +332,7 @@ export const conversationStore = {
         ...c,
         turns: [
           ...c.turns.map((x) => (x.id === turnId && expired ? { ...x, resolution: 'expired' as const } : x)),
-          { id: newId(), role: 'assistant', text: expired ? 'Cette confirmation a expiré. Redemande-moi et je la prépare à nouveau.' : e.message || 'La confirmation n’a pas pu être envoyée.', at: Date.now() },
+          { id: newId(), role: 'assistant', text: expired ? t('Cette confirmation a expiré. Redemande-moi et je la prépare à nouveau.') : e.message || t('La confirmation n’a pas pu être envoyée.'), at: Date.now() },
         ],
       }))
     } finally {
@@ -422,7 +423,7 @@ export const conversationStore = {
       for (const s of items) {
         if (bySender.has(s.externalId) || hidden.has(s.id) || state.conversations.some((c) => c.serverId === s.id)) continue
         added.push({
-          id: s.id, sender: s.externalId, serverId: s.id, title: titleFrom(s.title) || 'Conversation', turns: [],
+          id: s.id, sender: s.externalId, serverId: s.id, title: titleFrom(s.title) || t('Conversation'), turns: [],
           createdAt: s.createdAt * 1000, updatedAt: (s.lastActivityAt || s.createdAt) * 1000, remote: true, archived: s.archived,
         })
       }

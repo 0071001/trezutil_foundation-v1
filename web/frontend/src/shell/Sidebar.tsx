@@ -6,6 +6,7 @@ import { conversationStore, type Conversation } from '@/conversation/store'
 import { profileStore, useOrganizations } from '@/shell/profile'
 import { Icon, type IconName } from '@/ui/Icon'
 import { dayLabel, initials, Logo } from '@/ui/kit'
+import { LANGUAGES, switchLanguage, t, useLang } from '@/lib/i18n'
 
 /*
  * The sidebar of the design: new conversation, search, the conversations by day (rename, archive, delete), the
@@ -37,6 +38,7 @@ function ProfileMenu({ name, subtitle, account, orgs, activeOrg, collapsed, onNa
   const navigate = useNavigate()
   const { signOut } = useSession()
   const theme = useTheme()
+  const lang = useLang()
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -55,13 +57,13 @@ function ProfileMenu({ name, subtitle, account, orgs, activeOrg, collapsed, onNa
   }
   return (
     <div className="profile-box" ref={box}>
-      <button type="button" className={`profile ${open ? 'open' : ''}`} aria-haspopup="menu" aria-expanded={open} aria-label={`Compte : ${name}`} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className={`profile ${open ? 'open' : ''}`} aria-haspopup="menu" aria-expanded={open} aria-label={t('Compte : {name}', { name })} onClick={() => setOpen((o) => !o)}>
         <span className="avatar">{initials(name)}</span>
         <span className="profile-copy"><b>{name}</b><small>{subtitle}</small></span>
         <Icon name="more" size={16} />
       </button>
       {open && (
-        <div className={`menu up profile-menu ${collapsed ? 'beside' : ''}`} role="menu" aria-label="Compte">
+        <div className={`menu up profile-menu ${collapsed ? 'beside' : ''}`} role="menu" aria-label={t('Compte')}>
           <div className="profile-menu-head" role="presentation">
             <span className="avatar">{initials(name)}</span>
             <span><b>{name}</b>{account && <small>{account}</small>}</span>
@@ -69,7 +71,7 @@ function ProfileMenu({ name, subtitle, account, orgs, activeOrg, collapsed, onNa
           {orgs.length > 0 && (
             <>
               <div className="menu-sep" role="separator" />
-              <button type="button" role="menuitemradio" aria-checked={!activeOrg} onClick={() => choose('')}><Icon name="user" size={15} />Profil personnel{!activeOrg && <Icon name="check" size={15} />}</button>
+              <button type="button" role="menuitemradio" aria-checked={!activeOrg} onClick={() => choose('')}><Icon name="user" size={15} />{t('Profil personnel')}{!activeOrg && <Icon name="check" size={15} />}</button>
               {orgs.map((o) => (
                 <button type="button" role="menuitemradio" key={o.organization_id} aria-checked={activeOrg === o.organization_id} onClick={() => choose(o.organization_id)}>
                   <Icon name="building" size={15} />{o.display_name}{activeOrg === o.organization_id && <Icon name="check" size={15} />}
@@ -78,22 +80,29 @@ function ProfileMenu({ name, subtitle, account, orgs, activeOrg, collapsed, onNa
             </>
           )}
           <div className="menu-sep" role="separator" />
-          <button type="button" role="menuitem" onClick={() => go('/settings/profile')}><Icon name="user" size={15} />Mon profil</button>
-          <button type="button" role="menuitem" onClick={() => go('/settings/credits')}><Icon name="wallet" size={15} />Crédits et usage</button>
-          <button type="button" role="menuitem" onClick={() => go('/settings')}><Icon name="settings" size={15} />Paramètres</button>
-          <button type="button" role="menuitem" onClick={() => go('/supplier')}><Icon name="building" size={15} />Devenir fournisseur</button>
-          <button type="button" role="menuitem" onClick={() => go('/legal')}><Icon name="shield" size={15} />Informations légales</button>
+          <button type="button" role="menuitem" onClick={() => go('/settings/profile')}><Icon name="user" size={15} />{t('Mon profil')}</button>
+          <button type="button" role="menuitem" onClick={() => go('/settings/credits')}><Icon name="wallet" size={15} />{t('Crédits et usage')}</button>
+          <button type="button" role="menuitem" onClick={() => go('/settings')}><Icon name="settings" size={15} />{t('Paramètres')}</button>
+          <button type="button" role="menuitem" onClick={() => go('/supplier')}><Icon name="building" size={15} />{t('Devenir fournisseur')}</button>
+          <button type="button" role="menuitem" onClick={() => go('/legal')}><Icon name="shield" size={15} />{t('Informations légales')}</button>
           <div className="menu-sep" role="separator" />
-          <div className="theme-switch" role="radiogroup" aria-label="Thème">
-            {(['system', 'light', 'dark'] as Theme[]).map((t) => (
-              <button type="button" key={t} role="radio" aria-checked={theme === t} className={theme === t ? 'on' : ''} onClick={() => setTheme(t)}>
-                {t === 'system' ? 'Auto' : t === 'light' ? 'Clair' : 'Sombre'}
+          <div className="theme-switch" role="radiogroup" aria-label={t('Thème')}>
+            {(['system', 'light', 'dark'] as Theme[]).map((mode) => (
+              <button type="button" key={mode} role="radio" aria-checked={theme === mode} className={theme === mode ? 'on' : ''} onClick={() => setTheme(mode)}>
+                {mode === 'system' ? t('Auto') : mode === 'light' ? t('Clair') : t('Sombre')}
+              </button>
+            ))}
+          </div>
+          <div className="theme-switch" role="radiogroup" aria-label={t('Langue')}>
+            {LANGUAGES.map((l) => (
+              <button type="button" key={l.code} role="radio" lang={l.code} aria-checked={lang === l.code} className={lang === l.code ? 'on' : ''} onClick={() => switchLanguage(l.code)}>
+                {l.label}
               </button>
             ))}
           </div>
           <div className="menu-sep" role="separator" />
-          <button type="button" role="menuitem" onClick={() => leave('/login')}><Icon name="refresh" size={15} />Changer de compte</button>
-          <button type="button" role="menuitem" className="danger" onClick={() => leave('/')}><Icon name="logout" size={15} />Se déconnecter</button>
+          <button type="button" role="menuitem" onClick={() => leave('/login')}><Icon name="refresh" size={15} />{t('Changer de compte')}</button>
+          <button type="button" role="menuitem" className="danger" onClick={() => leave('/')}><Icon name="logout" size={15} />{t('Se déconnecter')}</button>
         </div>
       )}
     </div>
@@ -121,7 +130,7 @@ function HistoryItem({ conv, active, busy, collapsed, onNavigate }: { conv: Conv
   if (renaming && !collapsed) {
     const done = () => { conversationStore.rename(conv.id, title); setRenaming(false) }
     return (
-      <input className="side-search rename" aria-label="Nouveau titre" value={title} autoFocus onChange={(e) => setTitle(e.target.value)}
+      <input className="side-search rename" aria-label={t('Nouveau titre')} value={title} autoFocus onChange={(e) => setTitle(e.target.value)}
         onBlur={done} onKeyDown={(e) => { if (e.key === 'Enter') done(); if (e.key === 'Escape') { setTitle(conv.title); setRenaming(false) } }} />
     )
   }
@@ -129,22 +138,22 @@ function HistoryItem({ conv, active, busy, collapsed, onNavigate }: { conv: Conv
     <div className={`history-row ${active ? 'active' : ''}`} ref={box}>
       <Link to={`/c/${conv.id}`} className={`history-item ${active ? 'active' : ''}`} onClick={onNavigate} title={conv.title} aria-current={active ? 'page' : undefined}>
         {collapsed ? <Icon name="message" /> : <span>{conv.title}</span>}
-        {!collapsed && busy && <i className="busy-dot" aria-label="Réponse en cours" />}
-        {!collapsed && !busy && conv.operationId && <i className="op-dot" aria-label="Liée à une opération" />}
+        {!collapsed && busy && <i className="busy-dot" aria-label={t('Réponse en cours')} />}
+        {!collapsed && !busy && conv.operationId && <i className="op-dot" aria-label={t('Liée à une opération')} />}
       </Link>
       {!collapsed && (
-        <button type="button" className="history-more" aria-label={`Actions pour ${conv.title}`} aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
+        <button type="button" className="history-more" aria-label={t('Actions pour {title}', { title: conv.title })} aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((m) => !m)}>
           <Icon name="more" size={16} />
         </button>
       )}
       {menu && (
         <div className="menu" role="menu">
-          <button type="button" role="menuitem" onClick={() => { setMenu(false); setTitle(conv.title); setRenaming(true) }}><Icon name="edit" size={15} />Renommer</button>
-          <button type="button" role="menuitem" onClick={() => { setMenu(false); conversationStore.archive(conv.id); if (active) navigate('/') }}><Icon name="archive" size={15} />Archiver</button>
+          <button type="button" role="menuitem" onClick={() => { setMenu(false); setTitle(conv.title); setRenaming(true) }}><Icon name="edit" size={15} />{t('Renommer')}</button>
+          <button type="button" role="menuitem" onClick={() => { setMenu(false); conversationStore.archive(conv.id); if (active) navigate('/') }}><Icon name="archive" size={15} />{t('Archiver')}</button>
           <button type="button" role="menuitem" className="danger" onClick={() => {
             setMenu(false)
-            if (window.confirm('Supprimer cette conversation ? Ses messages sont effacés de Trezutil ; les commandes et réservations qu’elle a créées restent.')) { conversationStore.remove(conv.id); if (active) navigate('/') }
-          }}><Icon name="trash" size={15} />Supprimer</button>
+            if (window.confirm(t('Supprimer cette conversation ? Ses messages sont effacés de Trezutil ; les commandes et réservations qu’elle a créées restent.'))) { conversationStore.remove(conv.id); if (active) navigate('/') }
+          }}><Icon name="trash" size={15} />{t('Supprimer')}</button>
         </div>
       )}
     </div>
@@ -176,18 +185,18 @@ export function Sidebar({ collapsed, onCollapse, mobileOpen, onClose, conversati
   const visible = useMemo(() => {
     const list = conversations.filter((c) => !c.archived)
     const q = norm(query.trim())
-    return q ? list.filter((c) => norm(c.title).includes(q) || c.turns.some((t) => norm(t.text).includes(q))) : list
+    return q ? list.filter((c) => norm(c.title).includes(q) || c.turns.some((x) => norm(x.text).includes(q))) : list
   }, [conversations, query])
 
   const commercial: CommercialItem[] = [
-    { icon: 'target', label: 'Vue d’ensemble', to: '/overview' },
-    { icon: 'flow', label: 'Opérations', to: '/operations', count: activeOperations },
-    { icon: 'handshake', label: 'Négociations', soon: true },
-    { icon: 'orders', label: 'Achats et commandes', to: '/purchases' },
-    { icon: 'calendar', label: 'Réservations et organisation', to: '/purchases?tab=bookings' },
-    { icon: 'building', label: 'Fournisseurs', to: '/suppliers' },
-    { icon: 'refresh', label: 'Automatisations', soon: true },
-    { icon: 'bell', label: 'Alertes et opportunités', action: () => { onNotifications(); onClose() } },
+    { icon: 'target', label: t('Vue d’ensemble'), to: '/overview' },
+    { icon: 'flow', label: t('Opérations'), to: '/operations', count: activeOperations },
+    { icon: 'handshake', label: t('Négociations'), soon: true },
+    { icon: 'orders', label: t('Achats et commandes'), to: '/purchases' },
+    { icon: 'calendar', label: t('Réservations et organisation'), to: '/purchases?tab=bookings' },
+    { icon: 'building', label: t('Fournisseurs'), to: '/suppliers' },
+    { icon: 'refresh', label: t('Automatisations'), soon: true },
+    { icon: 'bell', label: t('Alertes et opportunités'), action: () => { onNotifications(); onClose() } },
   ]
 
   const org = profile.kind !== 'personal' ? orgs.find((o) => o.organization_id === profile.organizationId) : undefined
@@ -195,26 +204,26 @@ export function Sidebar({ collapsed, onCollapse, mobileOpen, onClose, conversati
 
   let lastDay = ''
   return (
-    <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`} aria-label="Navigation">
+    <aside className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`} aria-label={t('Navigation')}>
       <div className="side-head">
-        <Link to="/" onClick={onClose} aria-label="Trezutil, nouvelle conversation"><Logo compact={collapsed} /></Link>
-        <button type="button" className="icon-btn desktop-only" onClick={onCollapse} aria-label={collapsed ? 'Développer le menu' : 'Réduire le menu'} aria-expanded={!collapsed}><Icon name="panel" /></button>
-        <button type="button" className="icon-btn mobile-close" onClick={onClose} aria-label="Fermer le menu"><Icon name="x" /></button>
+        <Link to="/" onClick={onClose} aria-label={t('Trezutil, nouvelle conversation')}><Logo compact={collapsed} /></Link>
+        <button type="button" className="icon-btn desktop-only" onClick={onCollapse} aria-label={collapsed ? t('Développer le menu') : t('Réduire le menu')} aria-expanded={!collapsed}><Icon name="panel" /></button>
+        <button type="button" className="icon-btn mobile-close" onClick={onClose} aria-label={t('Fermer le menu')}><Icon name="x" /></button>
       </div>
       <div className="side-actions">
-        <Link className="side-action primary" to="/" onClick={onClose} title={collapsed ? 'Nouvelle conversation' : undefined}><Icon name="edit" /><span>Nouvelle conversation</span></Link>
-        <button type="button" className="side-action" onClick={() => { if (collapsed) onCollapse(); setSearching((s) => !s); requestAnimationFrame(() => search.current?.focus()) }} aria-expanded={searching} title={collapsed ? 'Rechercher' : undefined}>
-          <Icon name="search" /><span>Rechercher</span><kbd>Ctrl K</kbd>
+        <Link className="side-action primary" to="/" onClick={onClose} title={collapsed ? t('Nouvelle conversation') : undefined}><Icon name="edit" /><span>{t('Nouvelle conversation')}</span></Link>
+        <button type="button" className="side-action" onClick={() => { if (collapsed) onCollapse(); setSearching((s) => !s); requestAnimationFrame(() => search.current?.focus()) }} aria-expanded={searching} title={collapsed ? t('Rechercher') : undefined}>
+          <Icon name="search" /><span>{t('Rechercher')}</span><kbd>{t('Ctrl K')}</kbd>
         </button>
         {searching && !collapsed && (
-          <input ref={search} className="side-search" type="search" placeholder="Rechercher une conversation…" aria-label="Rechercher une conversation" value={query}
+          <input ref={search} className="side-search" type="search" placeholder={t('Rechercher une conversation…')} aria-label={t('Rechercher une conversation')} value={query}
             onChange={(e) => setQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Escape') { setQuery(''); setSearching(false) } }} />
         )}
       </div>
 
       <div className="history">
-        {!collapsed && <p className="side-label">Conversations</p>}
-        {!collapsed && visible.length === 0 && <p className="history-empty">{query ? 'Aucune conversation ne correspond.' : 'Tes conversations apparaîtront ici.'}</p>}
+        {!collapsed && <p className="side-label">{t('Conversations')}</p>}
+        {!collapsed && visible.length === 0 && <p className="history-empty">{query ? t('Aucune conversation ne correspond.') : t('Tes conversations apparaîtront ici.')}</p>}
         {visible.slice(0, 50).map((c) => {
           const day = dayLabel(c.updatedAt)
           const head = day !== lastDay ? day : ''
@@ -227,16 +236,16 @@ export function Sidebar({ collapsed, onCollapse, mobileOpen, onClose, conversati
           )
         })}
 
-        <nav className="commercial-nav" aria-label="Espace commercial">
-          {!collapsed && <p className="side-label">Espace commercial</p>}
+        <nav className="commercial-nav" aria-label={t('Espace commercial')}>
+          {!collapsed && <p className="side-label">{t('Espace commercial')}</p>}
           {commercial.map((item) => item.soon ? (
-            <span key={item.label} className="side-action commercial-link soon" aria-disabled="true" title={`${item.label} — bientôt disponible`}>
-              <Icon name={item.icon} /><span>{item.label}</span><em>Bientôt</em>
+            <span key={item.label} className="side-action commercial-link soon" aria-disabled="true" title={t('{label} — bientôt disponible', { label: item.label })}>
+              <Icon name={item.icon} /><span>{item.label}</span><em>{t('Bientôt')}</em>
             </span>
           ) : item.to ? (
             <Link key={item.label} to={item.to} onClick={onClose} title={item.label} aria-current={isActive(item.to) ? 'page' : undefined}
               className={`side-action commercial-link ${isActive(item.to) ? 'active' : ''}`}>
-              <Icon name={item.icon} /><span>{item.label}</span>{!!item.count && <i aria-label={`${item.count} en cours`}>{item.count}</i>}
+              <Icon name={item.icon} /><span>{item.label}</span>{!!item.count && <i aria-label={t('{count} en cours', { count: item.count })}>{item.count}</i>}
             </Link>
           ) : (
             <button type="button" key={item.label} className="side-action commercial-link" onClick={item.action} title={item.label}><Icon name={item.icon} /><span>{item.label}</span></button>
@@ -245,12 +254,12 @@ export function Sidebar({ collapsed, onCollapse, mobileOpen, onClose, conversati
       </div>
 
       <div className="side-bottom">
-        <NavLink to="/settings" onClick={onClose} className={({ isActive }) => `side-action ${isActive ? 'active' : ''}`} title="Paramètres"><Icon name="settings" /><span>Paramètres</span></NavLink>
+        <NavLink to="/settings" onClick={onClose} className={({ isActive }) => `side-action ${isActive ? 'active' : ''}`} title={t('Paramètres')}><Icon name="settings" /><span>{t('Paramètres')}</span></NavLink>
         {user === undefined ? null : user ? (
-          <ProfileMenu name={name} subtitle={org ? `Entreprise · ${org.role || 'membre'}` : 'Profil personnel'} account={user.email || user.phone}
+          <ProfileMenu name={name} subtitle={org ? t('Entreprise · {role}', { role: org.role || t('membre') }) : t('Profil personnel')} account={user.email || user.phone}
             orgs={orgs} activeOrg={profile.kind !== 'personal' ? profile.organizationId : ''} collapsed={collapsed} onNavigate={onClose} />
         ) : (
-          <Link to={`/login?returnTo=${encodeURIComponent(pathname)}`} onClick={onClose} className="side-action sign-in"><Icon name="user" /><span>Se connecter</span><Icon name="arrow" size={15} /></Link>
+          <Link to={`/login?returnTo=${encodeURIComponent(pathname)}`} onClick={onClose} className="side-action sign-in"><Icon name="user" /><span>{t('Se connecter')}</span><Icon name="arrow" size={15} /></Link>
         )}
       </div>
     </aside>

@@ -4,6 +4,7 @@ import { missionsApi, type Mission, type MissionPlan, type MissionStatus, type M
 import { conversationStore, type Conversation } from '@/conversation/store'
 import { memoryAsPreferences } from '@/memory/memory'
 import { newId } from '@/ui/kit'
+import { t } from '@/lib/i18n'
 
 /*
  * An operation is a mission of the backend (/api/v1/missions): a goal handed to Trezutil, with a plan of steps the
@@ -12,16 +13,16 @@ import { newId } from '@/ui/kit'
  */
 
 export const OPERATION_TYPES: Record<string, string> = {
-  EVENT: 'Événement', TRAVEL: 'Voyage', STAY: 'Séjour', MOVE: 'Déménagement', TRANSPORT: 'Transport',
-  BUSINESS_TRIP: 'Voyage d’affaires', PROJECT: 'Projet', OTHER: 'Achat ou autre opération',
+  EVENT: t('Événement'), TRAVEL: t('Voyage'), STAY: t('Séjour'), MOVE: t('Déménagement'), TRANSPORT: t('Transport'),
+  BUSINESS_TRIP: t('Voyage d’affaires'), PROJECT: t('Projet'), OTHER: t('Achat ou autre opération'),
 }
 
 export const OPERATION_STATUS: Record<string, { label: string; tone: 'green' | 'amber' | 'neutral' | 'blue' | 'red' }> = {
-  draft: { label: 'En préparation', tone: 'neutral' },
-  active: { label: 'En cours', tone: 'blue' },
-  paused: { label: 'En pause', tone: 'amber' },
-  completed: { label: 'Terminée', tone: 'green' },
-  cancelled: { label: 'Arrêtée', tone: 'red' },
+  draft: { label: t('En préparation'), tone: 'neutral' },
+  active: { label: t('En cours'), tone: 'blue' },
+  paused: { label: t('En pause'), tone: 'amber' },
+  completed: { label: t('Terminée'), tone: 'green' },
+  cancelled: { label: t('Arrêtée'), tone: 'red' },
 }
 
 /** The goal of a conversation in the person's words: what they asked first. */

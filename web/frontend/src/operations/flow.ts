@@ -1,5 +1,6 @@
 import type { MissionStep } from '@/api/missions'
 import type { Conversation } from '@/conversation/store'
+import { locale, t } from '@/lib/i18n'
 
 /*
  * The Commerce Flow of an operation: what happened and what waits, as events. It is built only from what the backend
@@ -33,32 +34,32 @@ export interface FlowNode {
 }
 
 export const FLOW_KINDS: Record<FlowKind, string> = {
-  request: 'Demande', search: 'Recherche de fournisseurs', solicit: 'Sollicitation', proposals: 'Propositions reçues',
-  compare: 'Comparaison', negotiate: 'Négociation', counter: 'Contre-proposition', verify: 'Vérification',
-  decision: 'Décision', approval: 'Approbation', human: 'Ton intervention', commit: 'Engagement', answer: 'Information', failure: 'Échec',
+  request: t('Demande'), search: t('Recherche de fournisseurs'), solicit: t('Sollicitation'), proposals: t('Propositions reçues'),
+  compare: t('Comparaison'), negotiate: t('Négociation'), counter: 'Contre-proposition', verify: t('Vérification'),
+  decision: t('Décision'), approval: t('Approbation'), human: t('Ton intervention'), commit: t('Engagement'), answer: t('Information'), failure: t('Échec'),
 }
 
 export const FLOW_STATUS: Record<FlowStatus, string> = {
-  done: 'Terminé', running: 'En cours', ready: 'Prêt', waiting: 'En attente', blocked: 'Bloqué', failed: 'Échec', skipped: 'Ignoré',
+  done: t('Terminé'), running: t('En cours'), ready: t('Prêt'), waiting: t('En attente'), blocked: t('Bloqué'), failed: t('Échec'), skipped: t('Ignoré'),
 }
 
 export const STEP_TITLES: Record<string, string> = {
-  FIND_VENUE: 'Trouver un lieu', FIND_CATERING: 'Trouver un traiteur', FIND_DECORATION: 'Trouver la décoration',
-  FIND_ENTERTAINMENT: 'Trouver une animation', FIND_PHOTOGRAPHY: 'Trouver un photographe', FIND_TRANSPORT: 'Trouver un transport',
-  FIND_ACCOMMODATION: 'Trouver un hébergement', FIND_LOCAL_TRANSPORT: 'Trouver un transport sur place', FIND_ACTIVITIES: 'Trouver des activités',
-  FIND_MOVING_TRANSPORT: 'Trouver un transport de déménagement', FIND_MOVERS: 'Trouver des déménageurs', FIND_STORAGE: 'Trouver un stockage',
-  FIND_TRANSPORT_OPTION: 'Trouver une option de transport', CHECK_AVAILABILITY: 'Vérifier la disponibilité',
+  FIND_VENUE: t('Trouver un lieu'), FIND_CATERING: t('Trouver un traiteur'), FIND_DECORATION: t('Trouver la décoration'),
+  FIND_ENTERTAINMENT: t('Trouver une animation'), FIND_PHOTOGRAPHY: t('Trouver un photographe'), FIND_TRANSPORT: t('Trouver un transport'),
+  FIND_ACCOMMODATION: t('Trouver un hébergement'), FIND_LOCAL_TRANSPORT: t('Trouver un transport sur place'), FIND_ACTIVITIES: t('Trouver des activités'),
+  FIND_MOVING_TRANSPORT: t('Trouver un transport de déménagement'), FIND_MOVERS: t('Trouver des déménageurs'), FIND_STORAGE: t('Trouver un stockage'),
+  FIND_TRANSPORT_OPTION: t('Trouver une option de transport'), CHECK_AVAILABILITY: t('Vérifier la disponibilité'),
 }
 
 const REASONS: Record<string, string> = {
-  dependency_failed: 'Une étape dont elle dépend a échoué.',
-  dependency_blocked: 'Une étape dont elle dépend est bloquée.',
-  dependency_skipped: 'Une étape dont elle dépend a été ignorée.',
-  needs_input: 'Une information de ta part est nécessaire.',
-  needs_confirmation: 'Ta confirmation est nécessaire.',
-  waiting: 'Attend les étapes précédentes.',
-  not_executable: 'Aucune action du runtime ne sait encore faire cette étape.',
-  abandoned: 'La tentative ne répond plus ; elle peut être relancée.',
+  dependency_failed: t('Une étape dont elle dépend a échoué.'),
+  dependency_blocked: t('Une étape dont elle dépend est bloquée.'),
+  dependency_skipped: t('Une étape dont elle dépend a été ignorée.'),
+  needs_input: t('Une information de ta part est nécessaire.'),
+  needs_confirmation: t('Ta confirmation est nécessaire.'),
+  waiting: t('Attend les étapes précédentes.'),
+  not_executable: t('Aucune action du runtime ne sait encore faire cette étape.'),
+  abandoned: t('La tentative ne répond plus ; elle peut être relancée.'),
 }
 
 export const reasonText = (reason: string) => REASONS[reason] ?? reason
@@ -88,47 +89,47 @@ export function conversationNodes(conv: Conversation | undefined, pendingLabel?:
   turns.forEach((turn, index) => {
     const later = turns.slice(index + 1)
     if (turn.role === 'user') {
-      push({ id: `c-${turn.id}`, kind: 'request', title: index === 0 ? 'Besoin exprimé' : 'Précision', summary: clip(turn.text), status: 'done', at: turn.at, turnId: turn.id, facts: [['Envoyé', new Date(turn.at).toLocaleString('fr-FR')]] })
+      push({ id: `c-${turn.id}`, kind: 'request', title: index === 0 ? t('Besoin exprimé') : t('Précision'), summary: clip(turn.text), status: 'done', at: turn.at, turnId: turn.id, facts: [[t('Envoyé'), new Date(turn.at).toLocaleString(locale())]] })
       if (turn.failed) {
-        push({ id: `f-${turn.id}`, kind: 'failure', title: 'Message non remis', summary: turn.failed.message, status: 'failed', at: turn.at, turnId: turn.id, facts: [['Cause', turn.failed.network ? 'Réseau' : 'Serveur'], ['Nouvel essai', 'Même clé d’idempotence : exécuté au plus une fois']] })
+        push({ id: `f-${turn.id}`, kind: 'failure', title: t('Message non remis'), summary: turn.failed.message, status: 'failed', at: turn.at, turnId: turn.id, facts: [[t('Cause'), turn.failed.network ? t('Réseau') : t('Serveur')], [t('Nouvel essai'), t('Même clé d’idempotence : exécuté au plus une fois')]] })
       }
       return
     }
     const r = turn.reply
     if (!r) {
-      push({ id: `c-${turn.id}`, kind: 'answer', title: 'Message', summary: clip(turn.text), status: 'done', at: turn.at, turnId: turn.id, facts: [] })
+      push({ id: `c-${turn.id}`, kind: 'answer', title: t('Message'), summary: clip(turn.text), status: 'done', at: turn.at, turnId: turn.id, facts: [] })
       return
     }
     const facts: [string, string][] = []
-    if (r.action_type) facts.push(['Action du runtime', r.action_type])
-    if (r.source) facts.push(['Interprété par', r.source])
-    if (r.result_items.length) facts.push(['Offres renvoyées', String(r.result_items.length)])
-    if (r.refs.order_id) facts.push(['Commande', r.refs.order_id])
-    if (r.refs.reservation_id) facts.push(['Réservation', r.refs.reservation_id])
+    if (r.action_type) facts.push([t('Action du runtime'), r.action_type])
+    if (r.source) facts.push([t('Interprété par'), r.source])
+    if (r.result_items.length) facts.push([t('Offres renvoyées'), String(r.result_items.length)])
+    if (r.refs.order_id) facts.push([t('Commande'), r.refs.order_id])
+    if (r.refs.reservation_id) facts.push([t('Réservation'), r.refs.reservation_id])
 
     if (r.is_confirmation && r.confirmation) {
       const answered = turn.resolution
       push({
-        id: `c-${turn.id}`, kind: 'decision', title: 'Confirmation demandée', summary: clip(r.confirmation.summary || r.text), at: turn.at, turnId: turn.id,
-        status: answered === 'expired' ? 'failed' : answered ? 'done' : 'waiting', facts: [...facts, ['Action à confirmer', r.confirmation.action_type || r.action_type || '—']],
+        id: `c-${turn.id}`, kind: 'decision', title: t('Confirmation demandée'), summary: clip(r.confirmation.summary || r.text), at: turn.at, turnId: turn.id,
+        status: answered === 'expired' ? 'failed' : answered ? 'done' : 'waiting', facts: [...facts, [t('Action à confirmer'), r.confirmation.action_type || r.action_type || '—']],
       })
       if (answered === 'confirmed' || answered === 'rejected') {
-        push({ id: `a-${turn.id}`, kind: 'approval', title: answered === 'confirmed' ? 'Approuvé par toi' : 'Refusé par toi', summary: answered === 'confirmed' ? 'Le runtime peut exécuter l’action.' : 'Rien n’a été modifié.', status: 'done', at: later[0]?.at, turnId: turn.id, facts: [] })
+        push({ id: `a-${turn.id}`, kind: 'approval', title: answered === 'confirmed' ? t('Approuvé par toi') : t('Refusé par toi'), summary: answered === 'confirmed' ? t('Le runtime peut exécuter l’action.') : t('Rien n’a été modifié.'), status: 'done', at: later[0]?.at, turnId: turn.id, facts: [] })
       }
       return
     }
     if (r.is_clarification) {
       const answered = later.some((x) => x.role === 'user')
-      push({ id: `c-${turn.id}`, kind: 'human', title: 'Précision demandée', summary: clip(r.missing_params.map((p) => p.prompt || p.name).join(' · ') || r.text), status: answered ? 'done' : 'waiting', at: turn.at, turnId: turn.id, facts })
+      push({ id: `c-${turn.id}`, kind: 'human', title: t('Précision demandée'), summary: clip(r.missing_params.map((p) => p.prompt || p.name).join(' · ') || r.text), status: answered ? 'done' : 'waiting', at: turn.at, turnId: turn.id, facts })
       return
     }
     const kind = ACTION_KIND[r.action_type] ?? 'answer'
     const found = r.result_items.length
-    const title = kind === 'search' ? 'Recherche de fournisseurs' : kind === 'compare' ? 'Comparaison des offres' : kind === 'verify' ? 'Vérification'
-      : kind === 'commit' ? (r.refs.order_id ? 'Commande créée' : r.refs.reservation_id ? 'Réservation créée' : 'Action exécutée') : 'Information'
-    push({ id: `c-${turn.id}`, kind, title, at: turn.at, turnId: turn.id, facts, status: 'done', summary: kind === 'search' ? (found ? countOf(found, 'offre trouvée', 'offres trouvées') : clip(r.text)) : clip(r.text) })
+    const title = kind === 'search' ? t('Recherche de fournisseurs') : kind === 'compare' ? t('Comparaison des offres') : kind === 'verify' ? t('Vérification')
+      : kind === 'commit' ? (r.refs.order_id ? t('Commande créée') : r.refs.reservation_id ? t('Réservation créée') : t('Action exécutée')) : t('Information')
+    push({ id: `c-${turn.id}`, kind, title, at: turn.at, turnId: turn.id, facts, status: 'done', summary: kind === 'search' ? (found ? countOf(found, t('offre trouvée'), t('offres trouvées')) : clip(r.text)) : clip(r.text) })
   })
-  if (pendingLabel) push({ id: 'c-pending', kind: 'answer', title: 'En cours', summary: pendingLabel, status: 'running', facts: [] })
+  if (pendingLabel) push({ id: 'c-pending', kind: 'answer', title: t('En cours'), summary: pendingLabel, status: 'running', facts: [] })
   return nodes
 }
 
@@ -143,20 +144,20 @@ export function planNodes(steps: MissionStep[]): FlowNode[] {
     const x = s.execution
     const waitsForYou = s.state === 'blocked' && (s.reason === 'needs_input' || s.reason === 'needs_confirmation')
     const kind: FlowKind = s.state === 'failed' ? 'failure' : waitsForYou ? 'human' : s.actionType === 'CHECK_AVAILABILITY' ? 'verify' : s.actionType === 'SEARCH_LISTINGS' ? 'search' : 'human'
-    const facts: [string, string][] = [['Étape', s.type]]
-    if (s.actionType) facts.push(['Action du runtime', s.actionType])
-    if (s.actionSupport) facts.push(['Prise en charge', s.actionSupport === 'supported' ? 'Oui' : 'Pas encore'])
-    if (s.state) facts.push(['État', s.state])
-    if (s.reason) facts.push(['Raison', reasonText(s.reason)])
+    const facts: [string, string][] = [[t('Étape'), s.type]]
+    if (s.actionType) facts.push([t('Action du runtime'), s.actionType])
+    if (s.actionSupport) facts.push([t('Prise en charge'), s.actionSupport === 'supported' ? t('Oui') : t('Pas encore')])
+    if (s.state) facts.push([t('État'), s.state])
+    if (s.reason) facts.push([t('Raison'), reasonText(s.reason)])
     if (x) {
-      facts.push(['Tentative', String(x.attempt)])
-      if (x.status) facts.push(['Dernière tentative', x.status])
-      if (x.total) facts.push(['Résultats', String(x.total)])
-      if (x.available !== null) facts.push(['Disponible', x.available ? 'Oui' : 'Non'])
-      if (x.errorCode) facts.push(['Code d’erreur', x.errorCode])
+      facts.push([t('Tentative'), String(x.attempt)])
+      if (x.status) facts.push([t('Dernière tentative'), x.status])
+      if (x.total) facts.push([t('Résultats'), String(x.total)])
+      if (x.available !== null) facts.push([t('Disponible'), x.available ? t('Oui') : t('Non')])
+      if (x.errorCode) facts.push([t('Code d’erreur'), x.errorCode])
     }
     const summary = s.state === 'completed' && x
-      ? (x.available === true ? 'Disponible' : x.available === false ? 'Indisponible' : countOf(x.total, 'résultat trouvé', 'résultats trouvés'))
+      ? (x.available === true ? t('Disponible') : x.available === false ? t('Indisponible') : countOf(x.total, t('résultat trouvé'), t('résultats trouvés')))
       : s.reason ? reasonText(s.reason) : s.description || ''
     return {
       id: s.id, kind, source: 'plan' as const, step: s, title: STEP_TITLES[s.type] ?? s.title,

@@ -27,8 +27,8 @@ for (const name of ['localStorage', 'sessionStorage'] as const) {
 beforeEach(() => {
   localStorage.clear()
   sessionStorage.clear()
-  // French is the product default; the suites assert the English source text.
-  setLang('en', false)
+  // The suites run in French: the product default, and the language most of the interface is written in.
+  setLang('fr', false)
   window.scrollTo = vi.fn() as unknown as typeof window.scrollTo
   Element.prototype.scrollIntoView = vi.fn()
 })

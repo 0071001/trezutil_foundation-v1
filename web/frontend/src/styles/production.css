@@ -431,10 +431,16 @@ a.list-row:hover { background: var(--soft); }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .logo .on-light { display: none; } :root:not([data-theme="light"]) .logo .on-dark { display: block; } }
 :root[data-theme="dark"] .logo .on-light { display: none; }
 :root[data-theme="dark"] .logo .on-dark { display: block; }
-.theme-switch { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 4px; margin: 2px; background: var(--soft2); border-radius: 9px; }
+.theme-switch { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 4px; padding: 4px; margin: 2px; background: var(--soft2); border-radius: 9px; }
 .theme-switch button { border: 0; background: transparent; border-radius: 7px; padding: 6px 4px; font-size: 13px; color: var(--muted); justify-content: center; }
 .theme-switch button.on { background: var(--surface); color: var(--ink); font-weight: 500; box-shadow: 0 1px 3px rgb(0 0 0 / 12%); }
 
 /* Dark theme: amber notes (approval, legal draft) keep their meaning without a pale beige box. */
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --amber-line: #5a4626; --amber-ink: #f0cf96; } }
 :root[data-theme="dark"] { --amber-line: #5a4626; --amber-ink: #f0cf96; }
+
+/* Language toggle (sign-in screen, legal pages): FR / EN, the language it switches to. */
+.lang-toggle { display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--text-2); font-size: 13px; font-weight: 500; cursor: pointer; }
+.lang-toggle:hover { background: var(--soft); color: var(--ink); }
+.onboarding-brand .lang-toggle { margin-left: auto; }
+.legal-head-actions { display: flex; align-items: center; gap: 8px; }
