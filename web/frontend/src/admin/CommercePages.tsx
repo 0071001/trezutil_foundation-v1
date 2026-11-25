@@ -8,6 +8,9 @@ import { useSession } from '@/lib/session'
 import { useAsync } from '@/lib/useAsync'
 import { errorText } from '@/ui/kit'
 import { CCIcon } from '@/admin/icons'
+import { adminManageApi } from '@/api/adminManage'
+import { GrantCreditsDialog, SubscribeDialog } from '@/admin/BillingPage'
+import { changeError, Modal } from '@/admin/ui'
 import { day, Empty, Failed, Loading, money, n, PageHead, Pager, Panel, Person, SearchBox, shortId, Status, Tabs, toneOf, when } from '@/admin/ui'
 
 /* Commerce: suppliers (organisations) and their verification, customer accounts, the catalogue, the categories, and
@@ -136,6 +139,15 @@ export function Accounts() {
   const [page, setPage] = useState(1)
   const list = useAsync(() => adminApi.users({ q: q.trim() || undefined, page, pageSize: PAGE }), [q, page])
   const [acting, setActing] = useState<{ id: string; name: string; suspend: boolean } | null>(null)
+  const [extra, setExtra] = useState<{ kind: 'credits' | 'plan' | 'role'; id: string; name: string } | null>(null)
+  const plans = useAsync(() => (extra?.kind === 'plan' ? adminConsoleApi.monetization(30).then((m) => m.plans) : Promise.resolve([])), [extra?.kind])
+  const [role, setRole] = useState('operator')
+  const [roleError, setRoleError] = useState<string | null>(null)
+  const grantRole = async () => {
+    if (!extra) return
+    setRoleError(null)
+    try { await adminManageApi.grantRole(extra.id, role); setExtra(null); list.reload() } catch (err) { setRoleError(changeError(toApiError(err))) }
+  }
   const [reason, setReason] = useState('')
   const [error, setError] = useState<ApiError | null>(null)
   const act = async (e: FormEvent) => {
@@ -159,16 +171,31 @@ export function Accounts() {
               <tr key={r.id}>
                 <td><Person name={r.displayName || r.email || r.phone} sub={r.email || shortId(r.id)} /></td><td>{r.phone || '—'}</td><td>{r.roles.join(', ') || '—'}</td>
                 <td><Status tone={toneOf(r.status)}>{r.status}</Status></td><td>{day(r.createdAt)}</td><td>{when(r.lastLoginAt)}</td>
-                <td>{admin && r.id !== user?.id && (
-                  <button type="button" className="cc-secondary cc-small" onClick={() => { setActing({ id: r.id, name: r.displayName || r.email || r.phone, suspend: r.status !== 'suspended' }); setReason(''); setError(null) }}>
-                    {r.status === 'suspended' ? t('Réactiver') : t('Suspendre')}
-                  </button>
+                <td>{admin && (
+                  <div className="cc-row-actions">
+                    <button type="button" className="cc-secondary cc-small" onClick={() => setExtra({ kind: 'credits', id: r.id, name: r.displayName || r.email || r.phone })}>{t('Crédits')}</button>
+                    <button type="button" className="cc-secondary cc-small" onClick={() => setExtra({ kind: 'plan', id: r.id, name: r.displayName || r.email || r.phone })}>{t('Plan')}</button>
+                    <button type="button" className="cc-secondary cc-small" onClick={() => { setExtra({ kind: 'role', id: r.id, name: r.displayName || r.email || r.phone }); setRoleError(null) }}>{t('Rôle')}</button>
+                    {r.id !== user?.id && (
+                      <button type="button" className="cc-secondary cc-small" onClick={() => { setActing({ id: r.id, name: r.displayName || r.email || r.phone, suspend: r.status !== 'suspended' }); setReason(''); setError(null) }}>
+                        {r.status === 'suspended' ? t('Réactiver') : t('Suspendre')}
+                      </button>
+                    )}
+                  </div>
                 )}</td>
               </tr>
             ))}
           </tbody></table>
         )}
       </ListPanel>
+      {extra?.kind === 'credits' && <GrantCreditsDialog user={extra} onClose={() => setExtra(null)} onSaved={() => setExtra(null)} />}
+      {extra?.kind === 'plan' && (plans.loading ? null : <SubscribeDialog plans={plans.data ?? []} presetUser={extra} onClose={() => setExtra(null)} onSaved={() => setExtra(null)} />)}
+      {extra?.kind === 'role' && (
+        <Modal title={t('Donner un rôle d’équipe à {name}', { name: extra.name })} onClose={() => setExtra(null)} onSubmit={() => void grantRole()} submitLabel={t('Donner le rôle')} error={roleError}>
+          <label>{t('Rôle')}<select value={role} onChange={(e) => setRole(e.target.value)}><option value="operator">{t('Opérateur')}</option><option value="moderator">{t('Modérateur')}</option><option value="admin">{t('Administrateur')}</option></select></label>
+          <p className="cc-muted">{t('Le compte ouvre alors le Control Center avec les droits de ce rôle. Le changement est inscrit au journal d’audit.')}</p>
+        </Modal>
+      )}
       {acting && (
         <div className="cc-modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && setActing(null)}>
           <form className="cc-modal" onSubmit={(e) => void act(e)} aria-label={acting.suspend ? t('Suspendre le compte') : t('Réactiver le compte')}>
@@ -230,14 +257,33 @@ export function Categories() {
     try { await adminConsoleApi.createCategory(name.trim(), slug.trim(), parent || undefined); setName(''); setSlug(''); setParent(''); cats.reload() } catch (err) { setError(toApiError(err)) } finally { setBusy(false) }
   }
   const names = new Map((cats.data ?? []).map((c) => [c.id, c.name]))
+  const [editing, setEditing] = useState<{ id: string; name: string; slug: string; parent: string } | null>(null)
+  const [editError, setEditError] = useState<string | null>(null)
+  const saveEdit = async () => {
+    if (!editing) return
+    setEditError(null)
+    try { await adminManageApi.updateCategory(editing.id, { name: editing.name.trim(), slug: editing.slug.trim(), parent_id: editing.parent || null }); setEditing(null); cats.reload() } catch (err) { setEditError(changeError(toApiError(err))) }
+  }
+  const remove = async (id: string, label: string) => {
+    if (!window.confirm(t('Supprimer la catégorie « {name} » ? Seule une catégorie sans offre ni sous-catégorie peut l’être.', { name: label }))) return
+    setError(null)
+    try { await adminManageApi.deleteCategory(id); cats.reload() } catch (err) { setError(toApiError(err)) }
+  }
   return (
     <>
       <PageHead eyebrow={t('Commerce / Catégories')} title={t('Catégories')} description={t('Les catégories que l’assistant et la recherche proposent. L’assistant en reçoit la liste à jour en quelques minutes.')} />
       <div className="cc-dashboard-grid">
         <Panel wide title={t('Catégories existantes')} sub={cats.data ? t('{n} catégorie(s)', { n: cats.data.length }) : ''}>
           {cats.loading ? <Loading /> : cats.error ? <Failed error={cats.error} onRetry={cats.reload} /> : !cats.data?.length ? <Empty icon="tag" title={t('Aucune catégorie')} /> : (
-            <div className="cc-table-wrap"><table className="cc-table"><thead><tr><th>{t('Nom')}</th><th>{t('Identifiant')}</th><th>{t('Catégorie parente')}</th></tr></thead><tbody>
-              {[...cats.data].sort((a, b) => a.name.localeCompare(b.name)).map((c) => <tr key={c.id}><td><strong>{c.name}</strong></td><td><code>{c.slug}</code></td><td>{c.parentId ? names.get(c.parentId) ?? '—' : '—'}</td></tr>)}
+            <div className="cc-table-wrap"><table className="cc-table"><thead><tr><th>{t('Nom')}</th><th>{t('Identifiant')}</th><th>{t('Catégorie parente')}</th><th /></tr></thead><tbody>
+              {[...cats.data].sort((a, b) => a.name.localeCompare(b.name)).map((c) => (
+                <tr key={c.id}><td><strong>{c.name}</strong></td><td><code>{c.slug}</code></td><td>{c.parentId ? names.get(c.parentId) ?? '—' : '—'}</td>
+                  <td><div className="cc-row-actions">
+                    <button type="button" className="cc-icon-btn" title={t('Modifier')} aria-label={t('Modifier {name}', { name: c.name })} onClick={() => { setEditing({ id: c.id, name: c.name, slug: c.slug, parent: c.parentId }); setEditError(null) }}><CCIcon name="settings" size={15} /></button>
+                    <button type="button" className="cc-icon-btn danger" title={t('Supprimer')} aria-label={t('Supprimer {name}', { name: c.name })} onClick={() => void remove(c.id, c.name)}><CCIcon name="close" size={15} /></button>
+                  </div></td>
+                </tr>
+              ))}
             </tbody></table></div>
           )}
         </Panel>
@@ -251,6 +297,14 @@ export function Categories() {
           </form>
         </Panel>
       </div>
+      {error && !busy && <p className="cc-error" role="alert">{error.code === 'IN_USE' ? t('Cette catégorie contient des offres ou des sous-catégories : elle ne peut pas être supprimée.') : changeError(error)}</p>}
+      {editing && (
+        <Modal title={t('Modifier la catégorie')} onClose={() => setEditing(null)} onSubmit={() => void saveEdit()} submitLabel={t('Enregistrer')} error={editError}>
+          <label>{t('Nom')}<input value={editing.name} onChange={(e) => setEditing({ ...editing, name: e.target.value })} required /></label>
+          <label>{t('Identifiant (slug)')}<input value={editing.slug} onChange={(e) => setEditing({ ...editing, slug: e.target.value })} required pattern="[a-z0-9]+(-[a-z0-9]+)*" /></label>
+          <label>{t('Catégorie parente')}<select value={editing.parent} onChange={(e) => setEditing({ ...editing, parent: e.target.value })}><option value="">{t('Aucune')}</option>{(cats.data ?? []).filter((c) => c.id !== editing.id).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+        </Modal>
+      )}
     </>
   )
 }

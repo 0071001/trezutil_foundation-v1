@@ -14,6 +14,7 @@ import (
 	"github.com/trezutil/trezutil/infrastructure/postgres"
 	"github.com/trezutil/trezutil/internal/api"
 	googleauth "github.com/trezutil/trezutil/internal/infrastructure/google"
+	"github.com/trezutil/trezutil/internal/application/adminmanage"
 	"github.com/trezutil/trezutil/internal/application/exchangerate"
 	"github.com/trezutil/trezutil/internal/application/supplieronboarding"
 	"github.com/trezutil/trezutil/internal/application"
@@ -129,6 +130,18 @@ func main() {
 	api.NewSupplierOnboardingHandler(supplieronboarding.NewService(postgres.NewSupplierOnboardingStore(db), orgRepo, userRepo, auditLog), logger).Register(mux)
 	// The CDF / USD rate: entered by an administrator, read by everyone (indicative conversions only).
 	api.NewExchangeRateHandler(exchangerate.NewService(postgres.NewExchangeRateStore(db), userRepo, auditLog), logger).Register(mux)
+	// What the Control Center creates, changes and removes: plans, subscriptions, credit grants, pricing rules,
+	// categories, staff roles. Subscriptions get their included credits each month (idempotent hourly check).
+	manage := api.NewAdminManageHandler(adminmanage.NewService(postgres.NewAdminManageStore(db), userRepo, auditLog), logger)
+	manage.Register(mux)
+	go func() {
+		manage.RunRenewals(context.Background())
+		t := time.NewTicker(time.Hour)
+		defer t.Stop()
+		for range t.C {
+			manage.RunRenewals(context.Background())
+		}
+	}()
 	mux.HandleFunc("GET /api/v1/stores", stores.GetStoreH)
 	// Administration console API: every route checks the caller's role itself.
 	adminRepo := postgres.NewAdminRepository(db)

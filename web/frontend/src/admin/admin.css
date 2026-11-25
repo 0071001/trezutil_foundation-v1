@@ -114,7 +114,8 @@
 .cc-strip > div { padding: 16px 20px; border-right: 1px solid var(--line); min-width: 0; }
 .cc-strip > div:last-child { border-right: 0; }
 .cc-strip span, .cc-strip strong, .cc-strip small { display: block; }
-.cc-strip span { font-size: 13px; color: var(--muted); text-transform: capitalize; }
+.cc-strip span { font-size: 13px; color: var(--muted); }
+.cc-strip span::first-letter { text-transform: uppercase; }
 .cc-strip strong { font-size: 24px; margin-top: 8px; letter-spacing: -.02em; font-weight: 600; }
 .cc-strip small { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
 .cc-strip small.positive { color: var(--green-text); }
@@ -326,3 +327,26 @@
   .cc-filter-bar input { width: 100%; }
   .cc-top-avatar { display: none !important; }
 }
+
+/* Forms in dialogs, row actions */
+.cc-modal { max-height: calc(100dvh - 40px); overflow: auto; }
+.cc-modal-fields { display: grid; gap: 12px; }
+.cc-modal-fields .cc-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.cc-modal input, .cc-modal select { height: 40px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--ink); padding: 0 11px; font-size: 14px; font-weight: 400; outline: none; width: 100%; }
+.cc-modal input:focus, .cc-modal select:focus { border-color: var(--brand); }
+.cc-modal small { font-weight: 400; color: var(--muted); }
+.cc-modal .cc-check { display: flex; align-items: center; gap: 8px; font-weight: 500; }
+.cc-modal .cc-check input { width: auto; height: auto; }
+.cc-danger { background: var(--red) !important; }
+.cc-row-actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.cc-icon-btn { width: 32px; height: 32px; border: 1px solid var(--line-strong); border-radius: 7px; background: var(--surface); color: var(--text-2); display: grid; place-items: center; cursor: pointer; }
+.cc-icon-btn:hover { background: var(--soft); }
+.cc-icon-btn.danger { color: var(--red); }
+.cc-chip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 4px 3px 9px; border-radius: 10px; background: var(--soft2); font-size: 12.5px; margin: 2px 4px 2px 0; }
+.cc-chip button { border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0 3px; font-size: 14px; line-height: 1; }
+.cc-chip button:hover { color: var(--red); }
+@media (max-width: 620px) { .cc-modal-fields .cc-two { grid-template-columns: 1fr; } }
+.cc-chosen { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; }
+.cc-pick { display: grid; gap: 2px; margin-top: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 4px; max-height: 240px; overflow: auto; }
+.cc-pick button { border: 0; background: none; text-align: left; padding: 6px 8px; border-radius: 6px; cursor: pointer; color: inherit; }
+.cc-pick button:hover { background: var(--soft); }

@@ -2,13 +2,14 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { adminApi, isAdmin, type AuditFilters } from '@/api/admin'
 import { toApiError, type ApiError } from '@/api/client'
 import { adminConsoleApi } from '@/api/console'
+import { adminManageApi } from '@/api/adminManage'
 import { exchangeRateApi, loadExchangeRate, useExchangeRate } from '@/lib/exchangeRate'
 import { locale, t } from '@/lib/i18n'
 import { useSession } from '@/lib/session'
 import { useAsync } from '@/lib/useAsync'
 import { errorText } from '@/ui/kit'
 import { CCIcon } from '@/admin/icons'
-import { day, Empty, Failed, Loading, money, n, Notice, PageHead, Pager, Panel, Person, SearchBox, shortId, Status, Strip, Tabs, toneOf, when } from '@/admin/ui'
+import { changeError, day, Empty, Failed, Loading, money, n, Notice, PageHead, Pager, Panel, Person, SearchBox, shortId, Status, Strip, Tabs, toneOf, when } from '@/admin/ui'
 
 /* Platform: the assistant's activity, credits and billing, payments, channels and providers, the CDF / USD rate,
    the staff and the audit trail. */
@@ -62,45 +63,6 @@ export function AIActivityPage() {
             <Panel title={t('Par canal')}><Counts data={d.byChannel} empty={t('Aucune conversation.')} /></Panel>
             <Panel wide title={t('Confirmations demandées')} sub={t('Toute action engageante attend la confirmation explicite du client')}><Counts data={d.confirmations} empty={t('Aucune confirmation sur la période.')} /></Panel>
             <Panel title={t('États des conversations')}><Counts data={d.byState} empty={t('Aucune conversation.')} /></Panel>
-          </div>
-        </>
-      )}
-    </>
-  )
-}
-
-export function Billing() {
-  const m = useAsync(() => adminConsoleApi.monetization(30), [])
-  const d = m.data
-  return (
-    <>
-      <PageHead eyebrow={t('Crédits et revenus')} title={t('Crédits et facturation')} description={t('L’économie des actions commerciales : la conversation reste toujours gratuite.')} />
-      <div className="cc-principle"><CCIcon name="coins" /><div><strong>{t('Les crédits financent les actions, jamais la conversation.')}</strong><p>{t('Ils sont réservés avant une action mesurable (recherche, vérification, rédaction par l’IA), consommés seulement si elle aboutit, libérés sinon.')}</p></div></div>
-      {m.loading ? <Loading /> : m.error ? <Failed error={m.error} onRetry={m.reload} /> : d && (
-        <>
-          <Strip items={[
-            { label: t('Comptes de crédits'), value: n(d.credits.accounts) },
-            { label: t('Crédits attribués'), value: n(d.credits.granted) },
-            { label: t('Crédits consommés'), value: n(d.credits.consumed) },
-            { label: t('Crédits réservés'), value: n(d.credits.reserved) },
-          ]} />
-          <div className="cc-dashboard-grid">
-            <Panel wide title={t('Tarification des actions')} sub={t('Règles actives : sans règle, une action est gratuite')}>
-              {!d.policies.length ? <Empty icon="coins" title={t('Aucune règle de tarification')}>{t('Toutes les actions sont gratuites pour l’instant.')}</Empty> : (
-                <div className="cc-table-wrap"><table className="cc-table"><thead><tr><th>{t('Action')}</th><th>{t('Canal')}</th><th>{t('Pour')}</th><th>{t('Crédits')}</th><th>{t('Statut')}</th></tr></thead><tbody>
-                  {d.policies.map((p, i) => <tr key={i}><td><strong>{p.actionType}</strong></td><td>{p.channel || t('Tous')}</td><td>{p.actorType || t('Tous')}</td><td><strong>{n(p.cost)}</strong></td><td><Status tone={p.active ? 'good' : 'neutral'}>{p.active ? t('Active') : t('Inactive')}</Status></td></tr>)}
-                </tbody></table></div>
-              )}
-            </Panel>
-            <Panel title={t('Grand livre par type')} sub={t('Mouvements de crédits sur {n} jours', { n: d.days })}><Counts data={d.ledgerByType} empty={t('Aucun mouvement.')} /></Panel>
-            <Panel wide title={t('Plans et abonnements')}>
-              {!d.plans.length ? <Empty icon="card" title={t('Aucun plan publié')} /> : (
-                <div className="cc-table-wrap"><table className="cc-table"><thead><tr><th>{t('Plan')}</th><th>{t('Prix')}</th><th>{t('Cycle')}</th><th>{t('Crédits inclus')}</th><th>{t('Abonnés')}</th><th>{t('Statut')}</th></tr></thead><tbody>
-                  {d.plans.map((p) => <tr key={p.id}><td><strong>{p.name}</strong><small className="cc-sub">{p.slug}</small></td><td>{money(p.priceMinor, p.currency)}</td><td>{p.billingCycle}</td><td>{n(p.creditPack || p.quota)}</td><td>{n(p.subscribers)}</td><td><Status tone={toneOf(p.status)}>{p.status}</Status></td></tr>)}
-                </tbody></table></div>
-              )}
-            </Panel>
-            <Panel title={t('Abonnements par statut')}><Counts data={d.subscriptionsByStatus} empty={t('Aucun abonnement.')} /></Panel>
           </div>
         </>
       )}
@@ -256,17 +218,26 @@ export function ExchangeRatePage() {
 }
 
 export function Staff() {
+  const { user } = useSession()
+  const admin = isAdmin(user)
   const s = useAsync(() => adminConsoleApi.security(), [])
+  const [error, setError] = useState<string | null>(null)
+  const revoke = async (userId: string, name: string, role: string) => {
+    if (!window.confirm(t('Retirer le rôle « {role} » à {name} ?', { role, name }))) return
+    setError(null)
+    try { await adminManageApi.revokeRole(userId, role); s.reload() } catch (err) { setError(changeError(toApiError(err))) }
+  }
   const d = s.data
   return (
     <>
-      <PageHead eyebrow={t('Sécurité / Équipe')} title={t('Administrateurs et rôles')} description={t('Les comptes de l’équipe Trezutil, leurs rôles, leurs connexions et les derniers événements de sécurité.')} />
+      <PageHead eyebrow={t('Sécurité / Équipe')} title={t('Administrateurs et rôles')} description={t('Les comptes de l’équipe Trezutil, leurs rôles, leurs connexions et les derniers événements de sécurité. Pour donner un rôle, ouvre le compte dans Comptes clients.')} />
+      {error && <p className="cc-error" role="alert">{error}</p>}
       {s.loading ? <Loading /> : s.error ? <Failed error={s.error} onRetry={s.reload} /> : d && (
         <div className="cc-dashboard-grid">
           <Panel wide title={t('Équipe')} sub={t('{n} compte(s)', { n: d.staff.length })}>
             {!d.staff.length ? <Empty icon="lock" title={t('Aucun compte d’équipe')} /> : (
               <div className="cc-table-wrap"><table className="cc-table"><thead><tr><th>{t('Membre')}</th><th>{t('Rôles')}</th><th>{t('Statut')}</th><th>{t('Dernière connexion')}</th><th>{t('Échecs de connexion')}</th></tr></thead><tbody>
-                {d.staff.map((m) => <tr key={m.userId}><td><Person name={m.displayName || m.email} sub={m.email} /></td><td>{m.roles.join(', ')}</td><td><Status tone={m.locked ? 'bad' : toneOf(m.status)}>{m.locked ? t('Verrouillé') : m.status}</Status></td><td>{when(m.lastLoginAt)}</td><td>{n(m.failedAttempts)}</td></tr>)}
+                {d.staff.map((m) => <tr key={m.userId}><td><Person name={m.displayName || m.email} sub={m.email} /></td><td>{m.roles.map((r) => <span className="cc-chip" key={r}>{r}{admin && ['admin', 'operator', 'moderator'].includes(r) && <button type="button" aria-label={t('Retirer le rôle {role}', { role: r })} title={t('Retirer')} onClick={() => void revoke(m.userId, m.displayName || m.email, r)}>×</button>}</span>)}</td><td><Status tone={m.locked ? 'bad' : toneOf(m.status)}>{m.locked ? t('Verrouillé') : m.status}</Status></td><td>{when(m.lastLoginAt)}</td><td>{n(m.failedAttempts)}</td></tr>)}
               </tbody></table></div>
             )}
           </Panel>

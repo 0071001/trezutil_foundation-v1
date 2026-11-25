@@ -167,3 +167,36 @@ export function money(minor: number, currency: string): string {
 }
 
 export const shortId = (id: string) => (id ? id.slice(0, 8) : '—')
+
+/** A dialog for one form: title, fields, error, cancel / confirm. Closes on Escape or a click outside. */
+export function Modal({ title, children, onClose, onSubmit, submitLabel, busy, error, danger }: {
+  title: string; children: ReactNode; onClose: () => void; onSubmit: () => void; submitLabel: string; busy?: boolean; error?: string | null; danger?: boolean
+}) {
+  return (
+    <div className="cc-modal-backdrop" onMouseDown={(e) => e.target === e.currentTarget && onClose()} onKeyDown={(e) => e.key === 'Escape' && onClose()}>
+      <form className="cc-modal" role="dialog" aria-modal="true" aria-label={title} onSubmit={(e) => { e.preventDefault(); onSubmit() }}>
+        <h2>{title}</h2>
+        <div className="cc-modal-fields">{children}</div>
+        {error && <p className="cc-error" role="alert">{error}</p>}
+        <div className="cc-modal-actions">
+          <button type="button" className="cc-secondary" onClick={onClose}>{t('Annuler')}</button>
+          <button type="submit" className={danger ? 'cc-primary cc-danger' : 'cc-primary'} disabled={busy}>{busy ? t('Enregistrement…') : submitLabel}</button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+/** The message for an error of a Control Center change. */
+export function changeError(e: ApiError): string {
+  switch (e.code) {
+    case 'FORBIDDEN': return t('Seul un administrateur peut faire ce changement.')
+    case 'CONFLICT': return t('Cela entre en conflit avec un élément existant (même identifiant, ou une règle déjà active pour cette action).')
+    case 'IN_USE': return t('Encore utilisé : impossible de le supprimer.')
+    case 'LAST_ADMIN': return t('La plateforme doit garder au moins un administrateur.')
+    case 'SELF_DEMOTE': return t('Tu ne peux pas retirer ton propre rôle d’administrateur.')
+    case 'NO_PLATFORM_ORGANIZATION': return t('L’organisation Trezutil n’existe pas encore sur le serveur.')
+    case 'INVALID_FIELD': return t('Une valeur n’est pas valide : {detail}', { detail: e.message })
+    default: return errorText(e)
+  }
+}

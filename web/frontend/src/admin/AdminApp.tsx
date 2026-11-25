@@ -10,7 +10,8 @@ import { CCIcon, type CCIconName } from '@/admin/icons'
 import { Loading } from '@/admin/ui'
 import { Alerts, CommandCenter, HealthPage } from '@/admin/CommandCenter'
 import { Accounts, Catalogue, Categories, Orders, Organizations, Reservations, Verification } from '@/admin/CommercePages'
-import { AIActivityPage, Audit, Billing, ExchangeRatePage, Integrations, Payments, Staff } from '@/admin/PlatformPages'
+import { AIActivityPage, Audit, ExchangeRatePage, Integrations, Payments, Staff } from '@/admin/PlatformPages'
+import { Billing } from '@/admin/BillingPage'
 import '@/admin/admin.css'
 
 /*
