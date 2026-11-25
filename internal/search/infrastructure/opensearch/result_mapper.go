@@ -2,6 +2,7 @@ package opensearch
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/trezutil/trezutil/internal/domain"
@@ -48,6 +49,23 @@ func mapHitToSearchResult(hit SearchHit) (domain.SearchResult, error) {
 		lon, lonOK := loc["lon"].(float64)
 		if latOK && lonOK {
 			result.Location.Latitude, result.Location.Longitude = &lat, &lon
+		}
+	}
+	// The indexed location is only a geo_point: the readable place ("Limete, Kinshasa": the listing's neighbourhood,
+	// then city) is the "place" text. Without it a result would show no place at all.
+	if place := strings.TrimSpace(getStringField(hit.Source, "place")); place != "" {
+		if result.Location == nil {
+			result.Location = &domain.SearchResultLocation{}
+		}
+		if result.Location.Neighborhood == nil && result.Location.City == nil {
+			parts := strings.Split(place, ",")
+			first := strings.TrimSpace(parts[0])
+			if len(parts) > 1 {
+				city := strings.TrimSpace(parts[1])
+				result.Location.Neighborhood, result.Location.City = &first, &city
+			} else {
+				result.Location.City = &first
+			}
 		}
 	}
 
