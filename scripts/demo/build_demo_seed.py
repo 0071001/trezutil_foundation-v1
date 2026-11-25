@@ -248,8 +248,9 @@ def main(demo_dir):
 
     count = {"listings": 0}
 
-    def listing(key, sup, title, description, category, vertical, ltype, price, currency, image=None, meta=None, compare_at=None):
-        org, seller, store, hood = sup
+    def listing(key, sup, title, description, category, vertical, ltype, price, currency, image=None, meta=None, compare_at=None, hood=None):
+        org, seller, store, shop_hood = sup
+        hood = place(hood) if hood else shop_hood  # the listing's own neighbourhood (an agency has homes in several)
         lid = uid("listing", key)
         md = {"demo": True, "demo_batch": BATCH}
         md.update(meta or {})
@@ -263,7 +264,8 @@ def main(demo_dir):
         W(f"DELETE FROM listing_media WHERE listing_id = {q(lid)};")
         if image:
             W(f"INSERT INTO listing_media (id, listing_id, type, url, is_primary, sort_order) VALUES ({q(uid('media', key))}, {q(lid)}, 'image', {q(image)}, true, 0);")
-        W(f"INSERT INTO listing_locations (id, listing_id, location_id, label, is_primary) VALUES ({q(uid('listing-location', key))}, {q(lid)}, {q(loc[hood])}, {q(hood + ', Kinshasa')}, true) ON CONFLICT (listing_id, location_id) DO NOTHING;")
+        W(f"DELETE FROM listing_locations WHERE listing_id = {q(lid)};")
+        W(f"INSERT INTO listing_locations (id, listing_id, location_id, label, is_primary) VALUES ({q(uid('listing-location', key, hood))}, {q(lid)}, {q(loc[hood])}, {q(hood + ', Kinshasa')}, true);")
         count["listings"] += 1
 
     # 1. the Shopify samples
@@ -316,7 +318,7 @@ def main(demo_dir):
                 meta[k] = it[k]
         image = it["images"][0]["url"] if it.get("images") else None
         listing("kinshasa:" + it["id"], sup, it["title"].replace("‑", "-"), it["description"], kin_category(it), vertical, ltype,
-                float(it["price"]["amount"]), it["price"]["currency"], image=image, meta=meta)
+                float(it["price"]["amount"]), it["price"]["currency"], image=image, meta=meta, hood=hood)
 
     W("COMMIT;")
 
