@@ -4,13 +4,11 @@ import { authApi } from '@/api/auth'
 import { toApiError, type ApiError } from '@/api/client'
 import { consoleApi } from '@/api/console'
 import { creditsApi } from '@/api/credits'
-import { DOCUMENT_LABEL, STATUS_LABEL, supplierApi, type ApplicationStatus } from '@/api/supplier'
 import { MANAGER_ROLES } from '@/api/seller'
 import { renderGoogleButton } from '@/lib/google'
 import { setTheme, useTheme, type Theme } from '@/lib/theme'
 import { locale, switchLanguage, useLang, type Lang, t, tn } from '@/lib/i18n'
 import { useSession } from '@/lib/session'
-import { exchangeRateApi, loadExchangeRate, useExchangeRate } from '@/lib/exchangeRate'
 import { useAsync } from '@/lib/useAsync'
 import { conversationStore, useConversations } from '@/conversation/store'
 import { addMemory, clearMemory, MEMORY_KINDS, memoryStore, removeMemory, setMemoryEnabled, updateMemory, type MemoryKind } from '@/memory/memory'
@@ -46,9 +44,9 @@ export function Settings() {
   const { section = 'profile' } = useParams()
   const navigate = useNavigate()
   const { user } = useSession()
-  // Trezutil staff also see the supplier review (the server checks the role again on every call).
-  const staff = !!user?.roles?.some((r) => r === 'admin' || r === 'operator')
-  const sections: [string, string][] = staff ? [...SECTIONS, ['supplier-review', t('Vérification fournisseurs')], ['exchange-rate', t('Taux de change')]] : SECTIONS
+  // Trezutil staff work in the Control Center (/admin): supplier verification, exchange rate, accounts…
+  const staff = !!user?.roles?.some((r) => r === 'admin' || r === 'operator' || r === 'moderator')
+  const sections: [string, string][] = SECTIONS
   const active = sections.some(([id]) => id === section) ? section : 'profile'
   useEffect(() => { document.title = t('Paramètres — Trezutil') }, [])
   return (
@@ -61,6 +59,7 @@ export function Settings() {
               {label}{id === 'memory' && <Badge>{t('Nouveau')}</Badge>}<Icon name="chevron" size={14} />
             </button>
           ))}
+          {staff && <button type="button" onClick={() => navigate('/admin')}>{t('Control Center')}<Icon name="chevron" size={14} /></button>}
         </nav>
         <section className="settings-content">
           {active === 'profile' && <ProfileSection />}
@@ -74,8 +73,6 @@ export function Settings() {
           {active === 'security' && <SecuritySection />}
           {active === 'services' && <ServicesSection />}
           {active === 'credits' && <CreditsSection />}
-          {active === 'exchange-rate' && <ExchangeRateSection admin={!!user?.roles?.includes('admin')} />}
-          {active === 'supplier-review' && <SupplierReviewSection />}
         </section>
       </div>
     </div>
@@ -296,120 +293,6 @@ function MemorySection() {
         </div>
       )}
       {memory.items.length > 0 && <button type="button" className="danger-link" onClick={() => { if (window.confirm(t('Effacer toute la mémoire commerciale ?'))) clearMemory() }}>{t('Effacer toute la mémoire')}</button>}
-    </>
-  )
-}
-
-/** Staff: the supplier applications waiting for a decision. Verifying is a decision, never automatic. */
-/**
- * The CDF / USD rate (staff). Only an administrator enters it; it only adds an indicative "≈" beside prices and lets
- * the assistant read a budget in francs. Prices, orders and payments stay in the supplier's currency.
- */
-function ExchangeRateSection({ admin }: { admin: boolean }) {
-  const current = useExchangeRate()
-  const history = useAsync(() => exchangeRateApi.history(), [])
-  const [rate, setRate] = useState('')
-  const [note, setNote] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<ApiError | null>(null)
-  const [saved, setSaved] = useState(false)
-  useEffect(() => { void loadExchangeRate(true) }, [])
-  const save = async (e: FormEvent) => {
-    e.preventDefault()
-    const value = Number(rate.replace(/\s/g, '').replace(',', '.'))
-    setBusy(true); setError(null); setSaved(false)
-    try { await exchangeRateApi.set(value, note); setRate(''); setNote(''); setSaved(true); history.reload() } catch (err) { setError(toApiError(err)) } finally { setBusy(false) }
-  }
-  const fmt = (n: number) => n.toLocaleString(locale(), { maximumFractionDigits: 2 })
-  return (
-    <>
-      <Title title={t('Taux de change')}>{t('Le taux CDF / USD saisi par un administrateur. Il sert uniquement à afficher un équivalent indicatif « ≈ » à côté des prix et à lire un budget donné en francs : les prix, commandes et paiements restent dans la devise du fournisseur.')}</Title>
-      <div className="memory-item">
-        <span><Icon name="wallet" /></span>
-        <div>
-          <b>{current ? t('1 USD = {rate} CDF', { rate: fmt(current.rate) }) : t('Aucun taux saisi')}</b>
-          <p>{current ? t('Saisi le {date}', { date: new Date(current.setAt).toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' }) }) : t('Sans taux, aucune conversion n’est affichée.')}</p>
-        </div>
-      </div>
-      {admin ? (
-        <form className="settings-form" onSubmit={save}>
-          <label>{t('Nouveau taux (francs congolais pour 1 USD)')}<input inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="2850" required /></label>
-          <label>{t('Source ou remarque')} <small>{t('facultatif')}</small><input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder={t('Ex. : taux BCC du jour')} /></label>
-          {error && <p className="form-error" role="alert">{error.code === 'INVALID_RATE' ? t('Le taux doit être compris entre 100 et 100 000 francs pour 1 USD.') : errorText(error)}</p>}
-          {saved && <p className="muted-line" role="status">{t('Taux enregistré.')}</p>}
-          <button type="submit" className="primary-btn" disabled={busy || !rate.trim()}>{busy ? t('Enregistrement…') : t('Enregistrer le taux')}</button>
-        </form>
-      ) : <p className="muted-line">{t('Seul un administrateur peut modifier le taux.')}</p>}
-      <h3 className="settings-subtitle">{t('Historique')}</h3>
-      {history.loading ? <Loading /> : history.error ? <ErrorNote error={history.error} onRetry={history.reload} /> : !history.data?.length ? <p className="muted-line">{t('Aucun taux saisi')}</p> : (
-        <div className="memory-list">
-          {history.data.map((h) => (
-            <div key={h.setAt + h.rate} className="memory-item">
-              <span><Icon name="clock" /></span>
-              <div><b>{t('1 USD = {rate} CDF', { rate: fmt(h.rate) })}</b><p>{new Date(h.setAt).toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' })}{h.note ? ` · ${h.note}` : ''}</p></div>
-            </div>
-          ))}
-        </div>
-      )}
-    </>
-  )
-}
-
-function SupplierReviewSection() {
-  const [status, setStatus] = useState<ApplicationStatus>('submitted')
-  const queue = useAsync(() => supplierApi.queue(status), [status])
-  const [open, setOpen] = useState<string | null>(null)
-  const [note, setNote] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<ApiError | null>(null)
-  const decide = async (org: string, decision: 'verify' | 'reject' | 'request_changes') => {
-    setBusy(true); setError(null)
-    try { await supplierApi.review(org, decision, note); setNote(''); setOpen(null); queue.reload() } catch (err) { setError(toApiError(err)) } finally { setBusy(false) }
-  }
-  return (
-    <>
-      <Title title={t('Vérification fournisseurs')}>{t('Les entreprises inscrites ne sont vérifiées que par une décision de l’équipe. Tu ne peux pas vérifier une entreprise dont tu es membre.')}</Title>
-      <label className="select-line">{t('Dossiers')}
-        <select value={status} onChange={(e) => setStatus(e.target.value as ApplicationStatus)}>
-          {(Object.keys(STATUS_LABEL) as ApplicationStatus[]).map((k) => <option key={k} value={k}>{STATUS_LABEL[k]}</option>)}
-        </select>
-      </label>
-      {queue.loading ? <Loading /> : queue.error ? <ErrorNote error={queue.error} onRetry={queue.reload} /> : !queue.data?.length ? <p className="muted-line">{t('Aucun dossier.')}</p> : (
-        <div className="memory-list">
-          {queue.data.map((a) => (
-            <div key={a.organization_id} className="memory-item review-item">
-              <span><Icon name="building" /></span>
-              <div>
-                <b>{a.display_name}</b>
-                <p>{a.legal_name} · {a.city || '—'} · {a.phone}{a.rccm ? ` · RCCM ${a.rccm}` : ''}</p>
-                <p>{t('Secteurs :')} {a.sectors.join(', ') || '—'} {t('· Zones :')} {a.service_areas.join(', ') || '—'}</p>
-                {open === a.organization_id && (
-                  <div className="review-detail">
-                    <p>{a.capabilities}</p>
-                    {a.documents.map((d) => (
-                      <button type="button" key={d.id} className="secondary-btn small-btn" onClick={() => void supplierApi.open(d).catch((err) => setError(toApiError(err)))}>
-                        {DOCUMENT_LABEL[d.kind] ?? d.kind} · {d.filename}
-                      </button>
-                    ))}
-                    {a.status === 'submitted' && (
-                      <>
-                        <textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('Message au fournisseur (obligatoire pour refuser ou demander des modifications)')} aria-label={t('Message au fournisseur')} />
-                        <div className="form-actions">
-                          <button type="button" className="primary-btn small-btn" disabled={busy} onClick={() => void decide(a.organization_id, 'verify')}>{t('Vérifier')}</button>
-                          <button type="button" className="secondary-btn small-btn" disabled={busy || !note.trim()} onClick={() => void decide(a.organization_id, 'request_changes')}>{t('Demander des modifications')}</button>
-                          <button type="button" className="secondary-btn small-btn" disabled={busy || !note.trim()} onClick={() => void decide(a.organization_id, 'reject')}>{t('Refuser')}</button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-              <button type="button" className="icon-btn" aria-expanded={open === a.organization_id} aria-label={t('Détails de {display_name}', { display_name: a.display_name })} onClick={() => { setOpen(open === a.organization_id ? null : a.organization_id); setNote('') }}><Icon name="chevron" size={16} /></button>
-            </div>
-          ))}
-        </div>
-      )}
-      {error && <p className="form-error" role="alert">{errorText(error)}</p>}
     </>
   )
 }

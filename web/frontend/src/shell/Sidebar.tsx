@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router'
 import { useSession } from '@/lib/session'
+import { isStaff } from '@/api/admin'
 import { setTheme, useTheme, type Theme } from '@/lib/theme'
 import { conversationStore, type Conversation } from '@/conversation/store'
 import { profileStore, useOrganizations } from '@/shell/profile'
@@ -36,7 +37,7 @@ function ProfileMenu({ name, subtitle, account, orgs, activeOrg, collapsed, onNa
   activeOrg: string; collapsed: boolean; onNavigate: () => void
 }) {
   const navigate = useNavigate()
-  const { signOut } = useSession()
+  const { signOut, user } = useSession()
   const theme = useTheme()
   const lang = useLang()
   const [open, setOpen] = useState(false)
@@ -85,6 +86,7 @@ function ProfileMenu({ name, subtitle, account, orgs, activeOrg, collapsed, onNa
           <button type="button" role="menuitem" onClick={() => go('/settings')}><Icon name="settings" size={15} />{t('Paramètres')}</button>
           <button type="button" role="menuitem" onClick={() => go('/supplier')}><Icon name="building" size={15} />{t('Devenir fournisseur')}</button>
           <button type="button" role="menuitem" onClick={() => go('/legal')}><Icon name="shield" size={15} />{t('Informations légales')}</button>
+          {isStaff(user) && <button type="button" role="menuitem" onClick={() => go('/admin')}><Icon name="settings" size={15} />{t('Control Center')}</button>}
           <div className="menu-sep" role="separator" />
           <div className="theme-switch" role="radiogroup" aria-label={t('Thème')}>
             {(['system', 'light', 'dark'] as Theme[]).map((mode) => (

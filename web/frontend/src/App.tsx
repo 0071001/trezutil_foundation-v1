@@ -11,6 +11,7 @@ import { Legal } from '@/pages/Legal'
 import { SupplierOnboarding } from '@/pages/SupplierOnboarding'
 import { Shell } from '@/shell/Shell'
 import { VoiceMode } from '@/voice/VoiceMode'
+import { AdminApp } from '@/admin/AdminApp'
 
 /*
  * Trezutil on the web: a conversation first. Every address of the client space is here; the earlier addresses
@@ -24,6 +25,7 @@ export function AppRoutes() {
       <Route path="/voice" element={<VoiceMode />} />
       <Route path="/legal" element={<Legal />} />
       <Route path="/legal/:doc" element={<Legal />} />
+      <Route path="/admin/*" element={<AdminApp />} />
       <Route element={<Shell />}>
         <Route index element={<Welcome />} />
         <Route path="c/:id" element={<Thread />} />
