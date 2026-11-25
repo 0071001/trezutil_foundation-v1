@@ -129,30 +129,73 @@ func (s *Sender) Send(ctx context.Context, destination string, code string) erro
 }
 
 func (s *Sender) post(ctx context.Context, payload map[string]interface{}) error {
+	_, err := s.postID(ctx, payload)
+	return err
+}
+
+// postID sends a message and returns the id WhatsApp gave it ("wamid…").
+func (s *Sender) postID(ctx context.Context, payload map[string]interface{}) (string, error) {
 	if !s.cfg.Configured() {
-		return ErrSenderNotConfigured
+		return "", ErrSenderNotConfigured
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		return "", err
 	}
 	url := fmt.Sprintf("%s/%s/messages", s.cfg.BaseURL, s.cfg.PhoneNumberID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return err
+		return "", err
 	}
 	req.Header.Set("Authorization", "Bearer "+s.cfg.AccessToken)
 	req.Header.Set("Content-Type", "application/json")
 	resp, err := s.client.Do(req)
 	if err != nil {
-		return fmt.Errorf("whatsapp send failed: %w", err)
+		return "", fmt.Errorf("whatsapp send failed: %w", err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		// Never echo the access token; the provider body carries only an error code/message.
 		detail, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("whatsapp send failed: status %d: %s", resp.StatusCode, strings.TrimSpace(string(detail)))
+		return "", fmt.Errorf("whatsapp send failed: status %d: %s", resp.StatusCode, strings.TrimSpace(string(detail)))
 	}
+	var out struct {
+		Messages []struct {
+			ID string `json:"id"`
+		} `json:"messages"`
+	}
+	_ = json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&out)
 	_, _ = io.Copy(io.Discard, resp.Body)
-	return nil
+	if len(out.Messages) > 0 {
+		return out.Messages[0].ID, nil
+	}
+	return "", nil
+}
+
+// SendTemplate sends an approved template with its body parameters (outside the 24 h window, Meta delivers only
+// templates). It returns WhatsApp's message id.
+func (s *Sender) SendTemplate(ctx context.Context, to, name, language string, params []string) (string, error) {
+	if name == "" {
+		return "", fmt.Errorf("no template name")
+	}
+	if language == "" {
+		language = "fr"
+	}
+	parameters := make([]interface{}, 0, len(params))
+	for _, p := range params {
+		// A template parameter cannot hold new lines, tabs or more than four spaces in a row.
+		p = strings.Join(strings.Fields(p), " ")
+		parameters = append(parameters, map[string]string{"type": "text", "text": p})
+	}
+	template := map[string]interface{}{"name": name, "language": map[string]string{"code": language}}
+	if len(parameters) > 0 {
+		template["components"] = []interface{}{map[string]interface{}{"type": "body", "parameters": parameters}}
+	}
+	return s.postID(ctx, map[string]interface{}{
+		"messaging_product": "whatsapp",
+		"recipient_type":    "individual",
+		"to":                strings.TrimPrefix(to, "+"),
+		"type":              "template",
+		"template":          template,
+	})
 }

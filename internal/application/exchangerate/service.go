@@ -14,11 +14,17 @@ import (
 )
 
 // Plausible bounds for francs per US dollar: they catch a typo (an extra or missing zero, the rate entered the other
-// way round) without pretending to know the market.
+// way round) without pretending to know the market. The franc has traded between 2000 and 3000 for years; widen them
+// if it ever leaves this range.
 const (
-	MinRate = 100.0
-	MaxRate = 100000.0
+	MinRate = 1000.0
+	MaxRate = 10000.0
 )
+
+// Plausible reports whether a rate can be used.
+func Plausible(rate float64) bool {
+	return !math.IsNaN(rate) && rate >= MinRate && rate <= MaxRate
+}
 
 var (
 	// ErrForbidden: only an administrator may set the rate.
@@ -44,9 +50,14 @@ func NewService(store domain.ExchangeRateStore, users Users, audit domain.AuditL
 	return &Service{store: store, users: users, audit: audit}
 }
 
-// Current returns the rate in force, or domain.ErrNoExchangeRate.
+// Current returns the rate in force, or domain.ErrNoExchangeRate. A stored rate outside the bounds (entered before
+// they were tightened) is not used: no conversion is better than a wrong one.
 func (s *Service) Current(ctx context.Context) (*domain.ExchangeRate, error) {
-	return s.store.Latest(ctx)
+	r, err := s.store.Latest(ctx)
+	if err == nil && !Plausible(r.Rate) {
+		return nil, domain.ErrNoExchangeRate
+	}
+	return r, err
 }
 
 // Set records a new rate entered by an administrator (role admin only: operators read it but cannot change it).
@@ -55,7 +66,7 @@ func (s *Service) Set(ctx context.Context, actorID string, rate float64, note st
 	if err != nil || u == nil || !u.HasRole(domain.RoleAdmin) {
 		return nil, ErrForbidden
 	}
-	if math.IsNaN(rate) || math.IsInf(rate, 0) || rate < MinRate || rate > MaxRate {
+	if !Plausible(rate) {
 		return nil, ErrInvalidRate
 	}
 	note = strings.TrimSpace(note)

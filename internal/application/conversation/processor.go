@@ -533,6 +533,7 @@ func (p *ConversationProcessor) handleNewMessage(
 	// Build and execute the action
 	action := intent.ToAction(conv.ID, req.Actor, req.TenantID)
 	applySearchCriteria(cx, action)
+	completeFromMessage(action, req.MessageText, cx)
 	if listingScopedActions[action.ActionType] {
 		if v, ok := action.Parameters["listing_id"]; !ok || v == "" {
 			if id := currentListingID(cx); id != "" {

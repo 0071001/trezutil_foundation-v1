@@ -38,6 +38,13 @@ type auditSpy struct{ entries []domain.AuditEntry }
 
 func (a *auditSpy) Record(_ context.Context, e domain.AuditEntry) error { a.entries = append(a.entries, e); return nil }
 
+func TestAStoredRateWithAnExtraZeroIsNotUsed(t *testing.T) {
+	svc := NewService(&memStore{rates: []domain.ExchangeRate{{Rate: 22500}}}, users{}, nil)
+	if _, err := svc.Current(context.Background()); !errors.Is(err, domain.ErrNoExchangeRate) {
+		t.Fatalf("an implausible rate must read as none, got %v", err)
+	}
+}
+
 func TestOnlyAnAdministratorSetsTheRateAndEachChangeIsAudited(t *testing.T) {
 	store, spy := &memStore{}, &auditSpy{}
 	svc := NewService(store, users{"admin": {domain.RoleAdmin}, "op": {domain.RoleOperator}, "buyer": {domain.RoleCustomer}}, spy)
@@ -51,7 +58,7 @@ func TestOnlyAnAdministratorSetsTheRateAndEachChangeIsAudited(t *testing.T) {
 			t.Errorf("%s set the rate: %v", who, err)
 		}
 	}
-	for _, bad := range []float64{0, -1, 28, 2850000} {
+	for _, bad := range []float64{0, -1, 28, 285, 22500, 2850000} {
 		if _, err := svc.Set(ctx, "admin", bad, ""); !errors.Is(err, ErrInvalidRate) {
 			t.Errorf("rate %v accepted: %v", bad, err)
 		}

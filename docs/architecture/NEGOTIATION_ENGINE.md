@@ -1,6 +1,8 @@
 # Moteur de négociation — audit et architecture
 
-État : **proposition**, aucune ligne de code du moteur n'est écrite. Audit fait le 2026-11-22 sur la branche
+État au 2026-11-25 : la **phase 1 est écrite** (portail fournisseur, migration `000037`). Écart avec la proposition : les
+sollicitations et contre-propositions **ne sont pas encore comptées en crédits**, et la commande passe par le cas d’usage
+des commandes (`CreateAgreedOrder`), pas par le Commerce Action Runtime. Ce qui suit est la proposition d’origine. Audit fait le 2026-11-22 sur la branche
 `feature/commerce-os-web` (commit `deb9059`) et sur la base de production.
 
 ## 1. Verdict

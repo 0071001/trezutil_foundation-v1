@@ -19,11 +19,13 @@ import (
 	"github.com/trezutil/trezutil/internal/application/availability"
 	"github.com/trezutil/trezutil/internal/application/commerce"
 	"github.com/trezutil/trezutil/internal/application/conversation"
+	"github.com/trezutil/trezutil/internal/application/exchangerate"
 	"github.com/trezutil/trezutil/internal/application/hotel"
 	"github.com/trezutil/trezutil/internal/application/memory"
 	"github.com/trezutil/trezutil/internal/application/missionexec"
 	"github.com/trezutil/trezutil/internal/application/missionorch"
 	"github.com/trezutil/trezutil/internal/application/missionplanning"
+	"github.com/trezutil/trezutil/internal/application/negotiation"
 	"github.com/trezutil/trezutil/internal/application/reservations"
 	"github.com/trezutil/trezutil/internal/application/vertical"
 	whatsappapp "github.com/trezutil/trezutil/internal/application/whatsapp"
@@ -233,6 +235,30 @@ func main() {
 	mux.HandleFunc("POST /api/v1/missions/{id}/run", missions.RunH)
 	mux.HandleFunc("POST /api/v1/missions/{id}/resume", missions.ResumeH)
 	mux.HandleFunc("GET /api/v1/missions/{id}/execution", missions.ExecutionH)
+	// Negotiation (docs/architecture/NEGOTIATION_ENGINE.md): buyers ask suppliers for their best price within a
+	// mandate; suppliers answer in their portal; an accepted offer becomes an order at the agreed price.
+	negotiationStore := postgres.NewNegotiationStore(db)
+	negotiations := negotiation.NewService(negotiationStore, listingRepo, orgRepo, orgRepo, orderUseCases, auditLog, negotiation.Config{
+		PortalURL: supplierPortalURL(),
+		WhatsApp:  waSender != nil,
+	})
+	negotiationHandler := api.NewNegotiationHandler(negotiations, logger)
+	negotiationHandler.Register(mux)
+	var templateSender negotiation.TemplateSender
+	if s, ok := waSender.(negotiation.TemplateSender); ok {
+		templateSender = s
+	}
+	deliverer := negotiation.NewDeliverer(negotiationStore, templateSender, common.Getenv("NEGOTIATION_WHATSAPP_TEMPLATE", ""), common.Getenv("NEGOTIATION_WHATSAPP_TEMPLATE_LANG", "fr"), logger)
+	if common.Getenv("NEGOTIATION_WHATSAPP_TEMPLATE", "") == "" {
+		logger.Warn().Msg("NEGOTIATION_WHATSAPP_TEMPLATE not set: suppliers are told in their portal only (WhatsApp messages are recorded as skipped)")
+	}
+	go every(time.Minute, func(ctx context.Context) { negotiationHandler.RunTick(ctx) })
+	go every(15*time.Second, func(ctx context.Context) {
+		if _, err := deliverer.Run(ctx); err != nil {
+			logger.Warn().Err(err).Msg("negotiation outbox failed")
+		}
+	})
+
 	mux.HandleFunc("/api/v1/packs", packRoutes)
 	mux.HandleFunc("/api/v1/packs/", packRoutes)
 	mux.HandleFunc("GET /api/v1/webhooks/whatsapp", api.VerifySubscriptionH(common.Getenv("WHATSAPP_VERIFY_TOKEN", "")))
@@ -342,6 +368,9 @@ func buildIntentClassifier(logger zerolog.Logger, usage domain.UsageService, cat
 		}
 		if err != nil {
 			return 0, false, err
+		}
+		if !exchangerate.Plausible(r.Rate) {
+			return 0, false, nil
 		}
 		return r.Rate, true, nil
 	}
@@ -482,6 +511,31 @@ func (m *allPacksEnabledRepo) Disable(ctx interface{}, orgID string, packCode do
 }
 func (m *allPacksEnabledRepo) IsPackEnabled(ctx interface{}, orgID string, packCode domain.PackCode) (bool, error) {
 	return true, nil
+}
+
+// supplierPortalURL is where a supplier answers a request: PUBLIC_WEB_URL, else the first allowed web origin.
+func supplierPortalURL() string {
+	base := strings.TrimRight(common.Getenv("PUBLIC_WEB_URL", ""), "/")
+	if base == "" {
+		origins := strings.Split(common.Getenv("CORS_ALLOWED_ORIGINS", ""), ",")
+		base = strings.TrimRight(strings.TrimSpace(origins[0]), "/")
+	}
+	if !strings.HasPrefix(base, "https://") && !strings.HasPrefix(base, "http://") {
+		return ""
+	}
+	return base + "/supplier/requests"
+}
+
+// every runs fn now and then at each interval, each run bounded in time.
+func every(interval time.Duration, fn func(context.Context)) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for {
+		ctx, cancel := context.WithTimeout(context.Background(), interval)
+		fn(ctx)
+		cancel()
+		<-ticker.C
+	}
 }
 
 // releaseOrphanedCreditReservations periodically returns credits held by

@@ -94,6 +94,8 @@ func (g *Gateway) routes() []apiRoute {
 		{"/api/v1/exchange-rate", "identity"},
 		{"/api/v1/packs", "conversation"},
 		{"/api/v1/missions", "conversation"},
+		{"/api/v1/negotiations", "conversation"},
+		{"/api/v1/supplier-requests", "conversation"},
 		{"/api/v1/webhooks/whatsapp", "conversation"},
 		{"/api/v1/payments", "payment"},
 		{"/api/v1/webhooks/payments", "payment"},
