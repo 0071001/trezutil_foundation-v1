@@ -97,3 +97,30 @@ func entity(i *domain.ConversationIntent, name string) string {
 	}
 	return ""
 }
+
+func TestOpeningAListedOfferKeepsTheListAndRemembersTheOffer(t *testing.T) {
+	p := &ConversationProcessor{}
+	cx := listedResults()
+	p.storeOpenedListing(context.Background(), "c1", cx, &domain.Listing{ID: "l1", Title: "Collier oiseau en or"})
+	if len(cx.ResultItems) != 3 {
+		t.Fatalf("the list was replaced: %+v", cx.ResultItems)
+	}
+	if got := currentListingID(cx); got != "l1" {
+		t.Fatalf("current listing = %q", got)
+	}
+	if got := referencedResultID("et le deuxième ?", cx); got != "l2" {
+		t.Fatalf("the next reference = %q", got)
+	}
+
+	// An offer that was not in the list becomes the only result.
+	p.storeOpenedListing(context.Background(), "c1", cx, &domain.Listing{ID: "other", Title: "Autre"})
+	if len(cx.ResultItems) != 1 || currentListingID(cx) != "other" {
+		t.Fatalf("outside offer: %+v / %q", cx.ResultItems, currentListingID(cx))
+	}
+
+	// A new search forgets the opened offer.
+	p.storeSearchResult(context.Background(), "c1", cx, nil)
+	if cx.CurrentListing != nil {
+		t.Fatal("a new search keeps the old offer")
+	}
+}

@@ -983,7 +983,7 @@ func (p *ConversationProcessor) updateContextFromResult(
 		}
 	case domain.ActionGetListing:
 		if data != nil {
-			p.storeSingleResult(ctx, conv.ID, cx, "listing", data)
+			p.storeOpenedListing(ctx, conv.ID, cx, data)
 		}
 	case domain.ActionGetOrder:
 		if data != nil {
@@ -1007,6 +1007,27 @@ func (p *ConversationProcessor) updateContextFromResult(
 func (p *ConversationProcessor) storeSearchResult(ctx context.Context, convID string, cx *domain.ConversationContext, data interface{}) {
 	items := extractResultItems(data)
 	cx.ResultItems = items
+	cx.CurrentListing = nil
+}
+
+// storeOpenedListing remembers the offer just opened ("achète-le" then means
+// it). An offer opened from the listed results keeps that list, so "et le
+// deuxième ?" still points into it.
+func (p *ConversationProcessor) storeOpenedListing(ctx context.Context, convID string, cx *domain.ConversationContext, data interface{}) {
+	l, ok := data.(*domain.Listing)
+	if !ok || l == nil {
+		p.storeSingleResult(ctx, convID, cx, "listing", data)
+		return
+	}
+	cx.CurrentListing = &domain.ListingRef{ID: l.ID, Title: l.Title, OrganizationID: l.OrganizationID, Status: string(l.Status)}
+	if len(cx.ResultItems) > 1 {
+		for _, item := range cx.ResultItems {
+			if item.ID == l.ID {
+				return
+			}
+		}
+	}
+	p.storeSingleResult(ctx, convID, cx, "listing", data)
 }
 
 func (p *ConversationProcessor) storeSingleResult(ctx context.Context, convID string, cx *domain.ConversationContext, refType string, data interface{}) {
@@ -1269,6 +1290,9 @@ var listingScopedActions = map[domain.CommerceActionType]bool{
 // currentListingID returns the listing in focus: the single listing last
 // shown (e.g. after opening a result).
 func currentListingID(cx *domain.ConversationContext) string {
+	if cx != nil && cx.CurrentListing != nil && cx.CurrentListing.ID != "" {
+		return cx.CurrentListing.ID
+	}
 	if cx == nil || len(cx.ResultItems) != 1 {
 		return ""
 	}
