@@ -28,6 +28,8 @@ export interface Offer {
   verified: boolean
   trustLevel: number
   vertical: string
+  /** The shop: an order is for one shop. */
+  storeId: string
 }
 
 const SHADES = ['#183c34', '#303b53', '#654a27', '#3d4b45', '#4a3552', '#27505c']
@@ -69,6 +71,7 @@ export function toOffer(r: SearchResult, index: number): Offer {
     verified: (r.seller?.trust_level ?? 0) > 0,
     trustLevel: r.seller?.trust_level ?? 0,
     vertical: r.vertical,
+    storeId: r.store?.store_id ?? '',
   }
 }
 

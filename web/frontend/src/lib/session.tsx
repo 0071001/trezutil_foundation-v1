@@ -47,6 +47,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
   const signOut = useCallback(() => {
     authApi.signOut()
+    try { localStorage.removeItem('trezutil_cart') } catch { /* ignore */ }
+    window.dispatchEvent(new StorageEvent('storage', { key: 'trezutil_cart' }))
     resetConversationChannel()
     try { sessionStorage.removeItem('trezutil_thread') } catch { /* ignore */ }
     setSignedOut(true)

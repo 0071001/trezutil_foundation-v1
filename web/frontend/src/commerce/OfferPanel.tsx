@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { listingsApi } from '@/api/listings'
 import { formatMoney, safeImage } from '@/lib/format'
 import { useAsync } from '@/lib/useAsync'
@@ -7,6 +7,8 @@ import { Icon } from '@/ui/Icon'
 import { Badge, ErrorNote, Loading } from '@/ui/kit'
 import { locale, t } from '@/lib/i18n'
 import { approx, useExchangeRate } from '@/lib/exchangeRate'
+import { canBuy, cart, MAX_QUANTITY, useCart } from '@/commerce/cart'
+import { useBuy } from '@/commerce/useBuy'
 
 /*
  * The detail of one offer, read from the catalogue (GET /listings?listing_id=) beside the conversation: pictures,
@@ -25,6 +27,11 @@ function facts(metadata: Record<string, unknown>): [string, string][] {
 export function OfferPanel({ offer, onClose, onAsk, onCompare }: { offer: Offer; onClose: () => void; onAsk?: () => void; onCompare: () => void }) {
   const rate = useExchangeRate()
   const listing = useAsync(() => listingsApi.get(offer.id), [offer.id])
+  const [quantity, setQuantity] = useState(1)
+  const [added, setAdded] = useState(false)
+  const inCart = useCart().find((i) => i.listingId === offer.id)
+  const { buyNow, busy, error, signedIn } = useBuy()
+  const buyable = canBuy(offer)
   useEffect(() => {
     const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     document.addEventListener('keydown', esc)
@@ -65,9 +72,23 @@ export function OfferPanel({ offer, onClose, onAsk, onCompare }: { offer: Offer;
           {l?.description && <><h3 className="memory-heading">{t('Description')}</h3><p className="offer-description">{l.description}</p></>}
           <p className="muted-line">{t('Livraison, garantie et conditions de paiement ne sont pas indiquées dans le catalogue : demande-les avant de décider.')}</p>
         </div>
+        {buyable && (
+          <div className="offer-buy">
+            <div className="qty" role="group" aria-label={t('Quantité')}>
+              <button type="button" onClick={() => setQuantity((q) => Math.max(1, q - 1))} disabled={quantity <= 1} aria-label={t('Retirer un')}>−</button>
+              <span aria-live="polite">{quantity}</span>
+              <button type="button" onClick={() => setQuantity((q) => Math.min(MAX_QUANTITY, q + 1))} disabled={quantity >= MAX_QUANTITY} aria-label={t('Ajouter un')}>+</button>
+            </div>
+            <button type="button" className="secondary-btn" onClick={() => { cart.add(offer, quantity); setAdded(true) }}><Icon name="cart" size={15} />{t('Ajouter au panier')}</button>
+            <button type="button" className="primary-btn" disabled={busy} aria-busy={busy} onClick={() => void buyNow(offer, quantity)}>{signedIn ? t('Acheter maintenant') : t('Se connecter pour acheter')} <Icon name="arrow" size={15} /></button>
+            {(added || inCart) && <p className="muted-line" role="status"><Icon name="check" size={13} /> {t('Dans ton panier : {n}', { n: inCart?.quantity ?? quantity })}</p>}
+            {error && <p className="form-error" role="alert">{error}</p>}
+            <p className="muted-line"><Icon name="lock" size={13} /> {t('La commande est créée en attente de paiement : rien n’est débité avant que tu valides le paiement.')}</p>
+          </div>
+        )}
         <div className="drawer-foot offer-actions">
           <button type="button" className="secondary-btn" onClick={onCompare}><Icon name="layers" size={15} />{t('Comparer')}</button>
-          {onAsk && <button type="button" className="primary-btn" onClick={onAsk}>{t('Demander à Trezutil')} <Icon name="arrow" size={15} /></button>}
+          {onAsk && <button type="button" className={buyable ? 'secondary-btn' : 'primary-btn'} onClick={onAsk}>{t('Demander à Trezutil')} <Icon name="arrow" size={15} /></button>}
         </div>
       </aside>
     </>

@@ -4,6 +4,8 @@ import { useSession } from '@/lib/session'
 import { conversationStore, useConversations } from '@/conversation/store'
 import { setMemoryOwner } from '@/memory/memory'
 import { NotificationsDrawer } from '@/notifications/NotificationsDrawer'
+import { CartDrawer } from '@/commerce/CartDrawer'
+import { useCart } from '@/commerce/cart'
 import { noticePrefs, useNotices } from '@/notifications/notifications'
 import { profileStore } from '@/shell/profile'
 import { Sidebar } from '@/shell/Sidebar'
@@ -97,6 +99,9 @@ function Frame() {
   const title = titleOf(pathname, conv?.title)
   const wide = pathname.startsWith('/c/') && pathname.includes('/compare') || /^\/operations\/.+/.test(pathname)
   const name = user?.display_name || user?.phone || ''
+  const cartItems = useCart()
+  const cartCount = cartItems.reduce((n, i) => n + i.quantity, 0)
+  const [cartOpen, setCartOpen] = useState(false)
 
   return (
     <div className="app-shell">
@@ -113,6 +118,11 @@ function Frame() {
             <button type="button" className="icon-btn menu-trigger" onClick={() => setMobileOpen(true)} aria-label={t('Ouvrir le menu')}><Icon name="menu" /></button>
             {conv ? <ConversationMenu id={conv.id} title={title} operationId={conv.operationId} /> : <div className="top-title"><span>{title}</span></div>}
             <div className="top-actions">
+              {cartCount > 0 && (
+                <button type="button" className="icon-btn notification-btn" onClick={() => setCartOpen(true)} aria-label={t('Panier, {n} article(s)', { n: cartCount })}>
+                  <Icon name="cart" /><i>{cartCount > 9 ? '9+' : cartCount}</i>
+                </button>
+              )}
               <button type="button" className="icon-btn notification-btn" onClick={() => setDrawer(true)} aria-label={unread ? t('Notifications, {unread} non lues', { unread }) : t('Notifications')}>
                 <Icon name="bell" />{unread > 0 && <i>{unread > 9 ? '9+' : unread}</i>}
               </button>
@@ -124,6 +134,7 @@ function Frame() {
         <div className="view-container"><Outlet /></div>
       </main>
       {drawer && <NotificationsDrawer notices={notices} read={prefs.read} onClose={() => setDrawer(false)} />}
+      {cartOpen && <CartDrawer onClose={() => setCartOpen(false)} />}
     </div>
   )
 }
