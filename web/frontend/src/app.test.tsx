@@ -44,6 +44,18 @@ function signedInRoutes(extra: Record<string, (c: MockCall) => { status?: number
   })
 }
 
+async function fillPayer() {
+  const set = async (label: RegExp, value: string) => {
+    const input = await screen.findByLabelText(label)
+    fireEvent.change(input, { target: { value } })
+  }
+  await screen.findByRole('radio', { name: /M-Pesa/ })
+  if (screen.queryByLabelText(/Numéro mobile money/)) await set(/Numéro mobile money/, '0817127253')
+  await set(/^Prénom/, 'Gilio')
+  await set(/^Nom$/, 'Kapapa')
+  await set(/^E-mail/, 'g@example.cd')
+}
+
 async function send(text: string) {
   const field = await screen.findByLabelText('Ton besoin')
   fireEvent.change(field, { target: { value: text } })
@@ -203,9 +215,33 @@ describe('server history and catalogue', () => {
       'POST /payments': () => ({ status: 503, body: { error: { code: 'PAYMENT_PROVIDER_UNAVAILABLE', message: 'no provider' } } }),
     })
     renderAt('/purchases/o-1')
-    await userEvent.click(await screen.findByRole('button', { name: /Payer en toute sécurité/ }))
+    await userEvent.click(await screen.findByRole('radio', { name: /M-Pesa/ }))
+    await fillPayer()
+    await userEvent.click(screen.getByRole('button', { name: /^Payer / }))
     expect(await screen.findByText(/paiement en ligne n’est pas encore activé/)).toBeInTheDocument()
   })
+
+  it('pays by mobile money: the request goes to the phone, and the order is paid only once SasPay confirms it', async () => {
+    const order = { id: 'o-2', organization_id: 'org-s', status: 'pending_payment', currency: 'CDF', total_amount: { amount_minor: 50000, currency: 'CDF' }, items: [{ listing_id: 'l1', title: 'Ciment', quantity: 1, unit_price: { amount_minor: 50000 } }], created_at: 1700000000 }
+    let approved = false
+    const { calls } = signedInRoutes({
+      'GET /orders/o-2': () => ({ body: { ...order, status: approved ? 'paid' : 'pending_payment' } }),
+      'POST /payments': () => ({ status: 201, body: { payment_id: 'pay-1', status: 'PENDING', client_action: { provider_code: 'saspay' } } }),
+      'GET /payments/pay-1/status': () => ({ body: { payment_id: 'pay-1', status: approved ? 'CAPTURED' : 'PENDING' } }),
+    })
+    renderAt('/purchases/o-2')
+    await fillPayer()
+    await userEvent.click(screen.getByRole('button', { name: /^Payer / }))
+    expect(await screen.findByText(/demande de paiement a été envoyée sur ton téléphone/)).toBeInTheDocument()
+    const sent = calls.find((c) => c.method === 'POST' && c.path.startsWith('/payments'))!.body as Record<string, unknown>
+    expect(sent).toMatchObject({ order_id: 'o-2', amount_minor: 50000, currency: 'CDF', payment_method_type: 'MOBILE_MONEY', payment_method_id: 'vodacom_cd' })
+    expect(sent.metadata).toMatchObject({ phone: '0817127253', email: 'g@example.cd', first_name: 'Gilio', last_name: 'Kapapa' })
+    // Not paid until SasPay says so: the first read-back is still pending.
+    await waitFor(() => expect(calls.some((c) => c.path.startsWith('/payments/pay-1/status'))).toBe(true), { timeout: 6000 })
+    expect(screen.getByText(/En attente de la confirmation/)).toBeInTheDocument()
+    approved = true
+    await waitFor(() => expect(screen.queryByText(/En attente de la confirmation/)).not.toBeInTheDocument(), { timeout: 6000 })
+  }, 20000)
 })
 
 describe('memory', () => {

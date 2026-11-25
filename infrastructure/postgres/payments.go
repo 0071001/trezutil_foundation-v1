@@ -149,7 +149,8 @@ func (r *PaymentRepository) FindByProviderPaymentID(ctx context.Context, tenantI
 			payment_method_id, provider_id, provider_payment_id, status, idempotency_key,
 			authorized_at, captured_at, cancelled_at, failed_at, failure_reason,
 			refunded_amount_minor, refunded_currency, metadata, version, created_at, updated_at
-		FROM payments WHERE provider_id = $1 AND provider_payment_id = $2 AND organization_id = $3
+		FROM payments WHERE provider_id = $1 AND provider_payment_id = $2 AND ($3 = '' OR organization_id::text = $3)
+		ORDER BY created_at DESC LIMIT 1
 	`, providerID, providerPaymentID, tenantID)
 	return r.scan(row)
 }

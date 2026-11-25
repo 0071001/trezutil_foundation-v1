@@ -144,20 +144,33 @@ export interface PaymentStart {
   client_action?: ClientAction
 }
 
+/** How the payer pays: a DR Congo mobile money network (SasPay pushes the request to the phone) or a card. */
+export type PayNetwork = 'vodacom_cd' | 'airtel_cd' | 'orange_cd' | 'card'
+
+/** Who pays: SasPay asks for the payer's name, email and (mobile money) phone. */
+export interface Payer { phone: string; email: string; first_name: string; last_name: string }
+
 export const paymentsApi = {
   /**
-   * Starts (or, on retry, resumes) the payment of an order. Amount and
-   * currency must equal the order total (server-validated); the idempotency
-   * key makes a retry return the same payment instead of charging twice.
+   * Starts the payment of an order. Amount and currency are the order total (server-validated, never converted). The
+   * idempotency key is the attempt's: a retried request returns the same payment instead of charging twice, and a new
+   * attempt (another network, or after a failure) gets a new key.
    */
-  payOrder(order: OrderSummary): Promise<PaymentStart> {
+  payOrder(order: OrderSummary, attempt: string, network: PayNetwork = 'card', payer?: Payer): Promise<PaymentStart> {
+    const metadata: Record<string, string> = payer ? { ...payer, reference: order.id, description: `Trezutil ${order.id.slice(0, 8)}` } : {}
+    if (network === 'card') metadata.return_url = `${window.location.origin}/purchases/${order.id}?payment=return`
     return http.post<PaymentStart>(`/payments${query({ organization_id: order.organization_id })}`, {
       order_id: order.id,
       amount_minor: order.total_minor,
       currency: order.currency,
-      payment_method_type: 'CARD',
-      payment_method_id: 'card',
-      idempotency_key: `pay-${order.id}`,
+      payment_method_type: network === 'card' ? 'CARD' : 'MOBILE_MONEY',
+      payment_method_id: network,
+      idempotency_key: `pay-${order.id}-${attempt}`,
+      metadata,
     })
+  },
+  /** Reads the payment back; the server asks the provider, so an approval on the phone shows even without a webhook. */
+  status(paymentId: string, organizationId: string): Promise<PaymentStart> {
+    return http.get<PaymentStart>(`/payments/${encodeURIComponent(paymentId)}/status${query({ organization_id: organizationId })}`)
   },
 }

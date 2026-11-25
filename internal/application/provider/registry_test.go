@@ -184,3 +184,29 @@ func TestProviderRegistry_TenantIsolation(t *testing.T) {
 		t.Errorf("expected org-1, got %s", entries[0].GetProvider().OrganizationID)
 	}
 }
+
+func TestPlatformProviderServesOrganisationsWithoutTheirOwn(t *testing.T) {
+	r := NewProviderRegistry()
+	platform := &domain.IntegrationProvider{ID: "sp", OrganizationID: "trezutil", Code: "saspay", Status: domain.ProviderStatusActive,
+		Capabilities: []domain.Capability{domain.CapabilityPayment}, Configuration: domain.ProviderConfig{Settings: map[string]string{"scope": "platform"}}}
+	own := &domain.IntegrationProvider{ID: "st", OrganizationID: "seller-b", Code: "stripe", Status: domain.ProviderStatusActive,
+		Capabilities: []domain.Capability{domain.CapabilityPayment}}
+	for _, p := range []*domain.IntegrationProvider{platform, own} {
+		if err := r.Register(p, &mockProviderAdapter{id: p.ID, caps: p.Capabilities, health: domain.ProviderHealthHealthy}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx := context.Background()
+	if got, _ := r.FindByCapability(ctx, "seller-a", domain.CapabilityPayment); len(got) != 1 || got[0].Provider.ID != "sp" {
+		t.Errorf("a seller without a provider is not served by the platform: %v", got)
+	}
+	if got, _ := r.FindByCapability(ctx, "seller-b", domain.CapabilityPayment); len(got) != 1 || got[0].Provider.ID != "st" {
+		t.Errorf("a seller's own provider must come first: %v", got)
+	}
+	if e, err := r.FindByID(ctx, "seller-a", "sp"); err != nil || e.Provider.ID != "sp" {
+		t.Errorf("platform provider not found by id for a seller: %v", err)
+	}
+	if _, err := r.FindByID(ctx, "seller-a", "st"); err == nil {
+		t.Error("another seller's own provider was lent out")
+	}
+}

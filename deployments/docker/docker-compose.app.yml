@@ -165,6 +165,9 @@ services:
       STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
       STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
       PAYPAL_WEBHOOK_SECRET: ${PAYPAL_WEBHOOK_SECRET:-}
+      # Trezutil's own SasPay account (platform 'saspay' providers row, scripts/ops/set-saspay.sh).
+      SASPAY_SECRET_KEY: ${SASPAY_SECRET_KEY:-}
+      SASPAY_WEBHOOK_SECRET: ${SASPAY_WEBHOOK_SECRET:-}
       PAYMENT_PROVIDER_REFRESH_SECONDS: ${PAYMENT_PROVIDER_REFRESH_SECONDS:-60}
 
   api-gateway:

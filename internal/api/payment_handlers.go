@@ -490,6 +490,10 @@ func (h *PaymentHandler) WebhookPaymentH(w http.ResponseWriter, r *http.Request)
 	if signature == "" {
 		signature = r.Header.Get("Stripe-Signature")
 	}
+	// SasPay sends the signature and its timestamp in two headers.
+	if sig := r.Header.Get("X-Webhook-Signature"); signature == "" && sig != "" {
+		signature = "t=" + r.Header.Get("X-Webhook-Timestamp") + ",v1=" + sig
+	}
 
 	if h.webhookHandler == nil {
 		writeJSON(w, ErrorResponse{Error: Error{Code: "WEBHOOK_HANDLER_UNAVAILABLE", Message: "Webhook handler not configured"}}, http.StatusServiceUnavailable)

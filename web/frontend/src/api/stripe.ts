@@ -63,6 +63,10 @@ export interface ClientAction {
   provider_code?: string
   client_secret?: string
   publishable_key?: string
+  /** SasPay: the hosted page to open (cards, and networks that need it). */
+  checkout_url?: string
+  /** SasPay: what the payer must do on their phone, when the network needs it. */
+  instructions?: string
 }
 
 export function isStripeAction(action: ClientAction | undefined): action is Required<Pick<ClientAction, 'client_secret' | 'publishable_key'>> & ClientAction {

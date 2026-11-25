@@ -266,7 +266,7 @@ func withStatus(resp domain.PaymentProviderResponse) map[string]interface{} {
 // clientAction extracts payer-facing completion data (never persisted).
 func clientAction(data map[string]interface{}) map[string]string {
 	out := map[string]string{}
-	for _, k := range []string{"client_secret", "publishable_key", "provider_code"} {
+	for _, k := range []string{"client_secret", "publishable_key", "provider_code", "checkout_url", "instructions"} {
 		if v, ok := data[k].(string); ok && v != "" {
 			out[k] = v
 		}
@@ -795,8 +795,20 @@ func (s *PaymentService) GetPaymentStatus(ctx context.Context, orgID, actorID, p
 	}
 
 	statusStr, _ := result.Data["status"].(string)
+	before := p.Status
 	if err := s.applyProviderResult(ctx, p, statusStr, result.ExternalReference); err != nil {
 		s.logger.Debug().Err(err).Str("payment", p.ID).Msg("provider status sync failed")
+		return p, nil
+	}
+	// A payment confirmed by reading it back (the payer approved on their phone, the webhook is late or lost) settles
+	// the order exactly as the webhook would.
+	if p.Status != before {
+		if p.Status == domain.PaymentStatusCaptured {
+			if lerr := s.postLedgerForCapture(ctx, p); lerr != nil {
+				s.logger.Warn().Err(lerr).Str("payment", p.ID).Msg("ledger posting for polled capture failed")
+			}
+		}
+		syncOrderWithPayment(ctx, s.orders, p, s.logger)
 	}
 	return p, nil
 }

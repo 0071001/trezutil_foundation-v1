@@ -14,6 +14,7 @@ import (
 	"github.com/trezutil/trezutil/internal/application/payment"
 	"github.com/trezutil/trezutil/internal/application/provider"
 	payverifier "github.com/trezutil/trezutil/internal/infrastructure/payment"
+	"github.com/trezutil/trezutil/internal/infrastructure/payment/saspay"
 	"github.com/trezutil/trezutil/internal/infrastructure/payment/stripe"
 	"github.com/trezutil/trezutil/packages/auth"
 	"github.com/trezutil/trezutil/packages/common"
@@ -55,8 +56,18 @@ func main() {
 	} else {
 		logger.Info().Int("providers", n).Msg("Stripe payment providers registered")
 	}
+	// Trezutil's own SasPay account (mobile money in DR Congo, cards in USD): a providers row with scope "platform"
+	// serves every organisation without a payment provider of its own.
+	saspayLoader := &saspay.Loader{Providers: providerRepo, Registry: providerRegistry, Logger: logger}
+	if n, err := saspayLoader.Load(context.Background()); err != nil {
+		logger.Error().Err(err).Msg("failed to load SasPay providers")
+	} else if n > 0 {
+		logger.Info().Int("providers", n).Msg("SasPay payment providers registered")
+	}
 	// New or changed provider rows are picked up without a restart.
-	go stripeLoader.Run(context.Background(), time.Duration(common.GetenvInt("PAYMENT_PROVIDER_REFRESH_SECONDS", 60))*time.Second)
+	refresh := time.Duration(common.GetenvInt("PAYMENT_PROVIDER_REFRESH_SECONDS", 60)) * time.Second
+	go stripeLoader.Run(context.Background(), refresh)
+	go saspayLoader.Run(context.Background(), refresh)
 
 	orchestrator := provider.NewProviderOrchestrator(providerRegistry, executionRepo, provider.OrchestratorConfig{
 		Logger: logger,
@@ -92,6 +103,7 @@ func main() {
 		Orders:            orderRepo,
 		Normalizers: map[string]payment.WebhookNormalizer{
 			stripe.ProviderCode: &stripe.WebhookNormalizer{SecretFor: stripeLoader.WebhookSecret},
+			saspay.ProviderCode: &saspay.WebhookNormalizer{SecretFor: saspayLoader.WebhookSecret},
 		},
 		Logger: logger,
 	})

@@ -90,9 +90,21 @@ func (r *ProviderRegistry) FindByID(ctx context.Context, orgID, providerID strin
 	key := r.registryKey(orgID, providerID)
 	entry, exists := r.providers[key]
 	if !exists {
+		// A platform provider (Trezutil's own account) serves every organisation.
+		for _, e := range r.providers {
+			if e.Provider.ID == providerID && IsPlatform(e.Provider) {
+				return e, nil
+			}
+		}
 		return nil, domain.ErrProviderNotFound
 	}
 	return entry, nil
+}
+
+// IsPlatform reports whether a provider is Trezutil's own account (configuration setting scope = "platform"),
+// used for every organisation that has no usable provider of its own for a capability.
+func IsPlatform(p *domain.IntegrationProvider) bool {
+	return p != nil && p.Configuration.Settings["scope"] == "platform"
 }
 
 func (r *ProviderRegistry) FindByCapability(ctx context.Context, orgID string, capability domain.Capability) ([]*RegistryEntry, error) {
@@ -111,6 +123,15 @@ func (r *ProviderRegistry) FindByCapability(ctx context.Context, orgID string, c
 			continue
 		}
 		results = append(results, entry)
+	}
+
+	if len(results) == 0 {
+		// No provider of its own: Trezutil's platform providers serve the organisation.
+		for _, entry := range r.providers {
+			if IsPlatform(entry.Provider) && entry.Provider.IsUsable() && entry.Provider.SupportsCapability(capability) {
+				results = append(results, entry)
+			}
+		}
 	}
 
 	sort.Slice(results, func(i, j int) bool {

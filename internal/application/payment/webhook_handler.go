@@ -182,7 +182,13 @@ func (h *WebhookHandler) reconcilePayment(ctx context.Context, payload *WebhookP
 		return fmt.Errorf("failed to resolve provider: %w", err)
 	}
 
-	p, err := h.payments.FindByProviderPaymentID(ctx, payload.OrgID, providerEntry.ID, payload.ProviderPaymentID)
+	// A platform provider (Trezutil's own account) collects for every organisation: its payments belong to the
+	// order's organisation, not to the platform's, so they are found by the provider's reference alone.
+	lookupOrg := payload.OrgID
+	if providerEntry.Configuration.Settings["scope"] == "platform" {
+		lookupOrg = ""
+	}
+	p, err := h.payments.FindByProviderPaymentID(ctx, lookupOrg, providerEntry.ID, payload.ProviderPaymentID)
 	if err != nil {
 		if err == domain.ErrPaymentNotFound {
 			h.logger.Warn().
