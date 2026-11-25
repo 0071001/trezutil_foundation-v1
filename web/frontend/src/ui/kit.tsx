@@ -1,3 +1,4 @@
+import { Trezy, type TrezyPose } from '@/ui/Trezy'
 import { useEffect, useState, type ReactNode } from 'react'
 import type { ApiError } from '@/api/client'
 import { Icon, type IconName } from '@/ui/Icon'
@@ -65,10 +66,10 @@ export function ErrorNote({ error, onRetry }: { error: ApiError; onRetry?: () =>
   )
 }
 
-export function Empty({ icon, title, children, action }: { icon: IconName; title: string; children?: ReactNode; action?: ReactNode }) {
+export function Empty({ icon, title, children, action, trezy }: { icon: IconName; title: string; children?: ReactNode; action?: ReactNode; trezy?: TrezyPose }) {
   return (
     <div className="empty-setting">
-      <span><Icon name={icon} size={26} /></span>
+      {trezy ? <Trezy pose={trezy} size={132} /> : <span><Icon name={icon} size={26} /></span>}
       <h2>{title}</h2>
       {children && <p>{children}</p>}
       {action}

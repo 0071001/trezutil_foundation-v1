@@ -1,3 +1,4 @@
+import { Trezy, type TrezyPose } from '@/ui/Trezy'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { toApiError, type ApiError } from '@/api/client'
@@ -56,7 +57,7 @@ export function OperationsList() {
         : missions.loading && !missions.data ? <Loading />
           : missions.error ? <ErrorNote error={missions.error} onRetry={missions.reload} />
             : !missions.data?.length ? (
-              <Empty icon="flow" title={t('Aucune opération')} action={<Link className="primary-btn" to="/">{t('Nouvelle conversation')}</Link>}>
+              <Empty trezy="accueil" icon="flow" title={t('Aucune opération')} action={<Link className="primary-btn" to="/">{t('Nouvelle conversation')}</Link>}>
                 {t('Dans une conversation, après une recherche, choisis « Suivre en opération » : Trezutil garde le but, les fournisseurs, les étapes et tes décisions au même endroit.')}
               </Empty>
             ) : (
@@ -103,7 +104,7 @@ export function Purchases() {
         : tab === 'orders' ? (
           orders.loading && !orders.data ? <Loading />
             : orders.error ? <ErrorNote error={orders.error} onRetry={orders.reload} />
-              : !orders.data?.length ? <Empty icon="orders" title={t('Aucune commande')}>{t('Quand tu confirmes une commande dans une conversation, elle apparaît ici.')}</Empty>
+              : !orders.data?.length ? <Empty trezy="accueil" icon="orders" title={t('Aucune commande')}>{t('Quand tu confirmes une commande dans une conversation, elle apparaît ici.')}</Empty>
                 : (
                   <div className="list">
                     {orders.data.map((o) => {
@@ -121,7 +122,7 @@ export function Purchases() {
         ) : (
           bookings.loading ? <Loading />
             : bookings.error ? <ErrorNote error={bookings.error} onRetry={bookings.reload} />
-              : !bookings.data?.length ? <Empty icon="calendar" title={t('Aucune réservation')}>{t('Les réservations confirmées dans tes conversations apparaissent ici.')}</Empty>
+              : !bookings.data?.length ? <Empty trezy="accueil" icon="calendar" title={t('Aucune réservation')}>{t('Les réservations confirmées dans tes conversations apparaissent ici.')}</Empty>
                 : (
                   <div className="list">
                     {bookings.data.map((r) => (
@@ -144,6 +145,17 @@ export function Purchases() {
         )}
     </Page>
   )
+}
+
+/** What Trezy shows on an order: on its way, or a success; nothing while it waits or after a cancellation. */
+export function orderPose(o: { status: string; delivery_status: string }): TrezyPose | null {
+  if (['cancelled', 'refunded', 'expired', 'disputed', 'draft', 'pending', 'pending_payment'].includes(o.status)) return null
+  // "unassigned" is the value of an order nobody delivers yet.
+  const delivery = o.delivery_status.toLowerCase()
+  if (o.status === 'completed' || delivery === 'delivered' || delivery === 'completed') return 'commande-reussie'
+  const moving = !!delivery && !['unassigned', 'pending', 'cancelled', 'failed'].includes(delivery)
+  if (moving || o.status === 'shipped' || o.status === 'fulfilled') return 'en-livraison'
+  return ['paid', 'confirmed', 'processing', 'ready_for_fulfillment'].includes(o.status) ? 'commande-reussie' : null
 }
 
 export function OrderView() {
@@ -174,6 +186,7 @@ export function OrderView() {
         <div><small>{t('PAIEMENT')}</small><b>{o.payment_status || '—'}</b></div>
         <div><small>{t('LIVRAISON')}</small><b>{o.delivery_status || '—'}{o.tracking_no ? ` · ${o.tracking_no}` : ''}</b></div>
       </div>
+      {orderPose(o) && <div className="trezy-state"><Trezy pose={orderPose(o)!} size={132} /></div>}
       <h3 className="memory-heading">{t('Articles')}</h3>
       <div className="memory-list">
         {o.items.map((it) => (
@@ -217,7 +230,7 @@ export function Suppliers() {
         </>
       )}
       <h3 className="memory-heading">{t('Rencontrés dans tes conversations')} <Badge>{met.length}</Badge></h3>
-      {!met.length ? <Empty icon="building" title={t('Aucun fournisseur pour l’instant')}>{t('Les vendeurs renvoyés par tes recherches apparaissent ici, avec leur niveau de confiance.')}</Empty> : (
+      {!met.length ? <Empty trezy="clin-d-oeil" icon="building" title={t('Aucun fournisseur pour l’instant')}>{t('Les vendeurs renvoyés par tes recherches apparaissent ici, avec leur niveau de confiance.')}</Empty> : (
         <div className="list">
           {met.map((s) => (
             <div className="list-row" key={s.name}>

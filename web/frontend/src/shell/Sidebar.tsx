@@ -1,3 +1,4 @@
+import { commercialMenu, isActiveEntry } from '@/shell/menu'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router'
 import { useSession } from '@/lib/session'
@@ -5,7 +6,7 @@ import { isStaff } from '@/api/admin'
 import { setTheme, useTheme, type Theme } from '@/lib/theme'
 import { conversationStore, type Conversation } from '@/conversation/store'
 import { profileStore, useOrganizations } from '@/shell/profile'
-import { Icon, type IconName } from '@/ui/Icon'
+import { Icon } from '@/ui/Icon'
 import { dayLabel, initials, Logo } from '@/ui/kit'
 import { LANGUAGES, switchLanguage, t, useLang } from '@/lib/i18n'
 
@@ -26,13 +27,11 @@ interface Props {
   onNotifications: () => void
 }
 
-interface CommercialItem { icon: IconName; label: string; to?: string; action?: () => void; soon?: boolean; count?: number }
-
 /**
  * The account menu, like ChatGPT's: who is signed in, the profile in use (personal or a business), quick links, and
  * "change account" / "sign out". Signing out clears this device's session (and Google's automatic re-selection).
  */
-function ProfileMenu({ name, subtitle, account, orgs, activeOrg, collapsed, onNavigate }: {
+export function ProfileMenu({ name, subtitle, account, orgs, activeOrg, collapsed, onNavigate }: {
   name: string; subtitle: string; account: string; orgs: { organization_id: string; display_name: string; role?: string }[]
   activeOrg: string; collapsed: boolean; onNavigate: () => void
 }) {
@@ -165,10 +164,7 @@ function HistoryItem({ conv, active, busy, collapsed, onNavigate }: { conv: Conv
 export function Sidebar({ collapsed, onCollapse, mobileOpen, onClose, conversations, pending, activeOperations, onNotifications }: Props) {
   const { user, signedIn } = useSession()
   const { pathname, search: params } = useLocation()
-  const isActive = (to: string) => {
-    const [path, q] = to.split('?')
-    return pathname.startsWith(path!) && (q ? params.includes(q) : !params.includes('tab='))
-  }
+  const isActive = (to: string) => isActiveEntry(to, pathname, params)
   const [searching, setSearching] = useState(false)
   const [query, setQuery] = useState('')
   const profile = profileStore.use()
@@ -190,18 +186,7 @@ export function Sidebar({ collapsed, onCollapse, mobileOpen, onClose, conversati
     return q ? list.filter((c) => norm(c.title).includes(q) || c.turns.some((x) => norm(x.text).includes(q))) : list
   }, [conversations, query])
 
-  const commercial: CommercialItem[] = [
-    { icon: 'target', label: t('Vue d’ensemble'), to: '/overview' },
-    { icon: 'flow', label: t('Opérations'), to: '/operations', count: activeOperations },
-    { icon: 'handshake', label: t('Négociations'), to: '/negotiations' },
-    { icon: 'orders', label: t('Achats et commandes'), to: '/purchases' },
-    { icon: 'calendar', label: t('Réservations et organisation'), to: '/purchases?tab=bookings' },
-    { icon: 'building', label: t('Fournisseurs'), to: '/suppliers' },
-    // A supplier answers price requests and publishes its offers.
-    ...(orgs.length > 0 ? [{ icon: 'handshake', label: t('Demandes de prix'), to: '/supplier/requests' }, { icon: 'layers', label: t('Mes offres'), to: '/supplier/offers' }] as CommercialItem[] : []),
-    { icon: 'refresh', label: t('Automatisations'), soon: true },
-    { icon: 'bell', label: t('Alertes et opportunités'), action: () => { onNotifications(); onClose() } },
-  ]
+  const commercial = commercialMenu({ supplier: orgs.length > 0, activeOperations, onAlerts: () => { onNotifications(); onClose() } })
 
   const org = profile.kind !== 'personal' ? orgs.find((o) => o.organization_id === profile.organizationId) : undefined
   const name = org?.display_name || user?.display_name || user?.phone || ''

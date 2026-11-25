@@ -1,3 +1,4 @@
+import { preloadTrezy } from '@/ui/Trezy'
 import { useEffect, useRef, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router'
 import { useSession } from '@/lib/session'
@@ -91,6 +92,8 @@ function Frame() {
     if (owner) void conversationStore.syncFromServer()
   }, [user])
 
+  useEffect(() => { preloadTrezy('je-m-en-occupe', 'commande-reussie') }, [])
+
   // A thread written in another tab shows up here too.
   useEffect(() => {
     const onStorage = (e: StorageEvent) => { if (e.key?.startsWith('trezutil_conversations:')) conversationStore.reload() }
@@ -124,7 +127,7 @@ function Frame() {
     || pathname === '/operations' || pathname === '/settings' || pathname === '/settings/credits' || pathname.startsWith('/confirmed/')
 
   // List pages whose heading would repeat the header's title.
-  const titled = ['/purchases', '/bookings', '/negotiations', '/suppliers', '/supplier/requests', '/supplier/offers'].includes(pathname)
+  const titled = ['/overview', '/purchases', '/bookings', '/negotiations', '/suppliers', '/supplier/requests', '/supplier/offers'].includes(pathname)
 
   if (mobile) {
     return (

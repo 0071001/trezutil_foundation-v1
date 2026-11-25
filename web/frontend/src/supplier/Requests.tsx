@@ -42,7 +42,7 @@ export function SupplierRequests() {
       ) : list.loading && !list.data ? <Loading />
         : list.error ? <ErrorNote error={list.error} onRetry={list.reload} />
           : !list.data?.length ? (
-            <Empty icon="handshake" title={t('Aucune demande de prix')} action={<Link className="primary-btn" to="/supplier/offers">{t('Publier une offre')}</Link>}>
+            <Empty trezy="accueil" icon="handshake" title={t('Aucune demande de prix')} action={<Link className="primary-btn" to="/supplier/offers">{t('Publier une offre')}</Link>}>
               {t('Quand un acheteur demande ton meilleur prix sur une de tes offres, la demande arrive ici. Publie tes offres pour être trouvé.')}
             </Empty>
           ) : (

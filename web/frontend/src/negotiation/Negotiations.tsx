@@ -55,7 +55,7 @@ export function NegotiationsList() {
         : list.loading && !list.data ? <Loading />
           : list.error ? <ErrorNote error={list.error} onRetry={list.reload} />
             : !list.data?.length ? (
-              <Empty icon="handshake" title={t('Aucune négociation')}>
+              <Empty trezy="accueil" icon="handshake" title={t('Aucune négociation')}>
                 {t('Ouvre une offre dans une conversation et choisis « Négocier » : Trezutil demande le meilleur prix au fournisseur, sans révéler ton plafond.')}
               </Empty>
             ) : (

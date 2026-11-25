@@ -1,3 +1,4 @@
+import { Trezy } from '@/ui/Trezy'
 import { asDateField } from '@/lib/dates'
 import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
@@ -27,11 +28,6 @@ const PROMPTS: [IconName, string, string, string][] = [
   ['layers', t('Comparer des offres'), t('Décider avec les bons critères'), t('Compare pour moi les offres de ')],
   ['calendar', t('Organiser un événement'), t('Coordonner prestataires et budget'), t('J’organise un événement : ')],
 ]
-
-/** The logo's three dots, appearing one after the other (the green one last, then breathing once). */
-function BrandDots() {
-  return <span className="brand-dots" aria-hidden="true"><i /><i /><i /></span>
-}
 
 /** Words of the welcome title, each rising in turn; the three verbs get the logo's green underline. */
 type TitleWord = { w: string; verb?: boolean; br?: boolean; tail?: string }
@@ -64,7 +60,7 @@ function DesktopWelcome() {
   }
   return (
     <div className="welcome welcome-anim">
-      <div className="welcome-mark"><BrandDots /></div>
+      <div className="welcome-mark"><Trezy pose="accueil" size={132} /></div>
       <h1 aria-label={t('Qu’est-ce que tu souhaites acheter, vendre ou faire réaliser ?')}>
         {TITLE().map((word, i) => (
           <span key={word.w} aria-hidden="true">

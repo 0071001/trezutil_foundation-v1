@@ -1,18 +1,15 @@
+import { Logo } from '@/ui/kit'
 import { createContext, useContext, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { t } from '@/lib/i18n'
 import { MIcon, type MIconName } from '@/mobile/icons'
 
-/* Pieces of the mobile design: the logo, the app header, list rows and the switch. */
+/* Pieces of the mobile design: the app header, list rows and the switch. */
 
 /** What the frame provides to the mobile screens: the drawer, the cart and the unread notifications. */
 export interface MobileFrame { openDrawer: () => void; openCart: () => void; cartCount: number; unread: number }
 export const MobileFrameContext = createContext<MobileFrame>({ openDrawer: () => {}, openCart: () => {}, cartCount: 0, unread: 0 })
 export const useMobileFrame = () => useContext(MobileFrameContext)
-
-export function MLogo({ small = false }: { small?: boolean }) {
-  return <span className={small ? 'mx-logo small' : 'mx-logo'} aria-hidden="true"><span>t</span></span>
-}
 
 /**
  * The header of the design: menu (or back) on the left, the title in the middle, an action on the right. The home and
@@ -27,7 +24,7 @@ export function AppHeader({ title = 'Trezutil', back, onNew }: { title?: string;
       <button type="button" className="mx-icon-btn" onClick={back ? goBack : openDrawer} aria-label={back ? t('Retour') : t('Ouvrir le menu')}>
         <MIcon name={back ? 'back' : 'menu'} />
       </button>
-      <div className="mx-title"><span>{title}</span>{!back && <span className="mx-pill">Commerce OS</span>}</div>
+      <div className="mx-title">{!back && title === 'Trezutil' ? <Logo /> : <span>{title}</span>}{!back && <span className="mx-pill">Commerce OS</span>}</div>
       <div className="mx-header-end">
         {!back && cartCount > 0 && (
           <button type="button" className="mx-icon-btn mx-badge" onClick={openCart} aria-label={t('Panier, {n} article(s)', { n: cartCount })}>

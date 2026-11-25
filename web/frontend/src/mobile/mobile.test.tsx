@@ -60,6 +60,34 @@ describe('the mobile layout', () => {
     expect(screen.queryByLabelText('Partenaires')).not.toBeInTheDocument()
   })
 
+  it('shows the Trezutil logo and Trezy on the home', async () => {
+    mockApi({ 'GET /site/content': noSite })
+    renderAt('/')
+    expect(await screen.findByRole('img', { name: 'Trezy vous souhaite la bienvenue' })).toHaveAttribute('src', expect.stringContaining('/trezy/trezy-accueil'))
+    expect(screen.getAllByRole('img', { name: 'Trezutil' }).length).toBeGreaterThan(0)
+  })
+
+  it('offers every menu of the sidebar in the drawer, with the account menu', async () => {
+    account()
+    renderAt('/')
+    await userEvent.click(await screen.findByRole('button', { name: 'Ouvrir le menu' }))
+    const drawer = screen.getByRole('dialog', { name: 'Menu' })
+    const menu = within(drawer).getByRole('navigation', { name: 'Espace commercial' })
+    for (const name of ['Vue d’ensemble', 'Opérations', 'Négociations', 'Achats et commandes', 'Réservations et organisation', 'Fournisseurs', 'Alertes et opportunités']) {
+      expect(within(menu).getByRole('button', { name: new RegExp(name) })).toBeInTheDocument()
+    }
+    expect(within(menu).getByText('Automatisations').closest('[aria-disabled]')).toHaveAttribute('aria-disabled', 'true')
+    expect(within(drawer).getByRole('button', { name: 'Paramètres' })).toBeInTheDocument()
+    await userEvent.click(await within(drawer).findByRole('button', { name: 'Compte : Jean Mukendi' }))
+    for (const name of ['Mon profil', 'Crédits et usage', 'Devenir fournisseur', 'Informations légales', 'Changer de compte', 'Se déconnecter']) {
+      expect(within(drawer).getByRole('menuitem', { name })).toBeInTheDocument()
+    }
+    expect(within(drawer).getByRole('radiogroup', { name: 'Thème' })).toBeInTheDocument()
+    await userEvent.click(within(menu).getByRole('button', { name: /Négociations/ }))
+    expect(screen.queryByRole('dialog', { name: 'Menu' })).not.toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Négociations' })).toBeInTheDocument()
+  })
+
   it('shows only the partners published on the site', async () => {
     mockApi({ 'GET /site/content': () => ({ body: { trust: [], sections: [], partners: [{ id: 'p1', name: 'Partenaire Test', kind: 'other', logo_url: 'https://images.example.com/partenaire.png', link_url: '' }] } }) })
     renderAt('/')

@@ -10,7 +10,7 @@ import { errorText, LanguageToggle, Logo } from '@/ui/kit'
 import { t } from '@/lib/i18n'
 import { useMobile } from '@/lib/useMobile'
 import { MIcon } from '@/mobile/icons'
-import { MLogo } from '@/mobile/ui'
+import { Trezy } from '@/ui/Trezy'
 
 /*
  * Sign-in: with Google (POST /auth/google, the official Google button) when the server offers it, or with a one-time
@@ -116,7 +116,8 @@ export function Login() {
       <div className="mx-auth">
         <button type="button" className="mx-auth-close" onClick={leave} aria-label={t('Fermer')}><MIcon name="close" /></button>
         <div className="mx-auth-content">
-          <MLogo />
+          <Logo />
+          <Trezy pose="accueil" size={128} />
           <h1>{requestId ? t('Saisis le code reçu') : t('Bienvenue sur Trezutil')}</h1>
           <p>{requestId ? `${t('Un code a été envoyé au')} ${phone}${t('. Il expire dans quelques minutes.')}` : t('Votre assistant pour acheter, vendre et faire réaliser simplement.')}</p>
           {!requestId && !byPhone && (

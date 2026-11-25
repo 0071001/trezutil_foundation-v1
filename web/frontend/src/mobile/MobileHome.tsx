@@ -7,10 +7,11 @@ import { useAsync } from '@/lib/useAsync'
 import { safeImage } from '@/lib/format'
 import { t, tx } from '@/lib/i18n'
 import { MIcon, type MIconName } from '@/mobile/icons'
-import { AppHeader, MLogo } from '@/mobile/ui'
+import { AppHeader } from '@/mobile/ui'
+import { Trezy } from '@/ui/Trezy'
 
 /*
- * The home of the mobile design: the logo, the question, three suggestions, the partners the team published on the
+ * The home of the mobile design: Trezy, the question, three suggestions, the partners the team published on the
  * site (nothing is shown when there are none), and the composer at the bottom.
  */
 
@@ -38,7 +39,7 @@ export function MobileHome() {
       <AppHeader onNew={() => { setDraft(''); composer.current?.focus() }} />
       <div className="mx-home">
         <div className="mx-welcome">
-          <MLogo />
+          <Trezy pose="accueil" size={148} />
           <h1>{t('Que souhaites-tu acheter,')}<br />{t('vendre ou faire réaliser ?')}</h1>
           <p>{t('Exprime simplement ton besoin.')}<br />{t('Trezutil s’occupe du reste.')}</p>
         </div>

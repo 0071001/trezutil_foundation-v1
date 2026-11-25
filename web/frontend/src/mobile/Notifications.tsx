@@ -1,3 +1,4 @@
+import { Trezy } from '@/ui/Trezy'
 import { useEffect } from 'react'
 import { useNavigate } from 'react-router'
 import { useConversations } from '@/conversation/store'
@@ -18,7 +19,7 @@ export function Notifications() {
   useEffect(() => { document.title = `${t('Notifications')} — Trezutil` }, [])
   return (
     <Screen title={t('Notifications')}>
-      {!notices.length ? <p className="mx-empty">{t('Les décisions à prendre, tes missions et tes commandes en cours apparaîtront ici.')}</p> : (
+      {!notices.length ? <div className="trezy-state"><Trezy pose="clin-d-oeil" size={132} /><p className="mx-empty">{t('Les décisions à prendre, tes missions et tes commandes en cours apparaîtront ici.')}</p></div> : (
         <div className="mx-notifications">
           {notices.map((n) => {
             const unread = !prefs.read[n.id]

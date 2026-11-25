@@ -4,7 +4,7 @@ import { ordersApi } from '@/api/commerce'
 import { formatDateTime, formatMinor } from '@/lib/format'
 import { useAsync } from '@/lib/useAsync'
 import { t } from '@/lib/i18n'
-import { MIcon } from '@/mobile/icons'
+import { Trezy } from '@/ui/Trezy'
 import { AppHeader } from '@/mobile/ui'
 import { ErrorNote, Loading } from '@/ui/kit'
 
@@ -28,7 +28,7 @@ export function Confirmation() {
       <div className="mx-confirmation">
         {order.loading && !o ? <Loading /> : order.error || !o ? (order.error ? <ErrorNote error={order.error} onRetry={order.reload} /> : null) : (
           <>
-            <div className="mx-success-mark"><MIcon name="check" size={30} /></div>
+            <Trezy pose="commande-reussie" size={150} />
             <h1>{awaiting ? t('Commande enregistrée') : t('Commande confirmée')}</h1>
             <p>{awaiting ? t('Ta commande est enregistrée. Elle attend ton paiement.') : t('Ta commande est enregistrée auprès du vendeur.')}</p>
             <div className="mx-receipt">

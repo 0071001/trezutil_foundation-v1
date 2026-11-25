@@ -1514,8 +1514,6 @@ export const en: Record<string, string> = {
   "{n} crédits": "{n} credits",
   "Menu": "Menu",
   "Panier ({n})": "Cart ({n})",
-  "Profil : {name}": "Profile: {name}",
-  "Retrouve tes conversations et tes commandes": "Find your conversations and orders again",
   "Missions": "Missions",
   "Filtrer les missions": "Filter missions",
   "Terminées": "Finished",
@@ -1607,4 +1605,13 @@ export const en: Record<string, string> = {
   "les {n} offres": "the {n} offers",
   "Négocier ces {n} offres": "Negotiate these {n} offers",
   "Se connecter pour vérifier la disponibilité": "Sign in to check availability",
+
+  // Trezy and the phone menus
+  "Afficher moins": "Show less",
+  "Toutes les conversations ({n})": "All conversations ({n})",
+  "Trezy vous souhaite la bienvenue": "Trezy welcomes you",
+  "Trezy traite votre demande": "Trezy is handling your request",
+  "Trezy livre votre commande": "Trezy is delivering your order",
+  "Trezy célèbre votre commande réussie": "Trezy celebrates your successful order",
+  "Trezy vous fait un clin d’œil": "Trezy winks at you",
 }

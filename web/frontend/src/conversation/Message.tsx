@@ -13,7 +13,7 @@ import { t, tn } from '@/lib/i18n'
 import { useMobile } from '@/lib/useMobile'
 import { OfferResults, ProgressList } from '@/mobile/Answer'
 import { MIcon } from '@/mobile/icons'
-import { MLogo } from '@/mobile/ui'
+import { Trezy } from '@/ui/Trezy'
 
 /*
  * One message. A user message is a bubble (copy, edit and send again). An answer of Trezutil is its text (streamed
@@ -98,11 +98,10 @@ export function UserMessage({ turn, conversationId, busy }: { turn: Turn; conver
  * the server reports. Nothing here is simulated: an empty text shows the step only.
  */
 export function StreamingAnswer({ text, label }: { text: string; label: string }) {
-  const mobile = useMobile()
   if (!text) return <Typing label={label} />
   return (
     <div className="assistant-message streaming" aria-busy="true">
-      <div className="assistant-mark">{mobile ? <MLogo small /> : <Logo compact />}</div>
+      <div className="assistant-mark"><Logo compact /></div>
       <div className="message-content">
         <RichText text={text} />
         <p className="working small" role="status" aria-live="polite"><span className="stream-caret" aria-hidden="true" />{label}</p>
@@ -115,12 +114,12 @@ export function Typing({ label }: { label: string }) {
   const mobile = useMobile()
   if (mobile) {
     return (
-      <div className="mx-thinking" role="status" aria-live="polite"><MLogo small /><span /><span /><span /><em>{label}</em></div>
+      <div className="mx-thinking" role="status" aria-live="polite"><Trezy pose="je-m-en-occupe" size={64} /><span /><span /><span /><em>{label}</em></div>
     )
   }
   return (
-    <div className="assistant-message compact-response" role="status" aria-live="polite">
-      <div className="assistant-mark"><Logo compact /></div>
+    <div className="assistant-message compact-response working-trezy" role="status" aria-live="polite">
+      <Trezy pose="je-m-en-occupe" size={72} />
       <div className="message-content"><p className="working">{label}</p><div className="typing"><i /><i /><i /></div></div>
     </div>
   )
@@ -252,6 +251,8 @@ export function AssistantMessage(p: AssistantProps) {
         </div>
       )}
 
+      {latest && (reply.refs.order_id || (reply.refs.reservation_id && reply.action_type === 'CREATE_RESERVATION')) && <Trezy pose="commande-reussie" size={112} className="trezy-success" />}
+
       {reply.refs.order_id && (
         <div className="activity success">
           <span className="activity-check"><Icon name="orders" size={13} /></span>
@@ -292,7 +293,7 @@ export function AssistantMessage(p: AssistantProps) {
     ] : []
     return (
       <div className="assistant-message mx-answer">
-        <div className="assistant-mark"><MLogo small /></div>
+        <div className="assistant-mark"><Logo compact /></div>
         <div className="message-content">
           <RichText text={turn.text} />
           {interrupted}

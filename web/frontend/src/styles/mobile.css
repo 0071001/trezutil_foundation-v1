@@ -59,10 +59,6 @@
   .mx-title { justify-self: center; display: flex; align-items: center; gap: 7px; font-size: 15px; font-weight: 650; min-width: 0; }
   .mx-title > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52vw; }
   .mx-pill { font-size: 9px; font-weight: 700; letter-spacing: .03em; color: var(--mx-brand); background: var(--mx-brand-soft); padding: 4px 6px; border-radius: 5px; text-transform: uppercase; white-space: nowrap; }
-  .mx-logo { width: 42px; height: 42px; display: grid; place-items: center; background: var(--mx-strong); color: var(--mx-on-strong); border-radius: 13px 13px 13px 4px; flex: none; }
-  .mx-logo span { font-size: 27px; font-weight: 700; font-style: italic; line-height: 1; transform: translateY(-1px); }
-  .mx-logo.small { width: 29px; height: 29px; border-radius: 9px 9px 9px 3px; }
-  .mx-logo.small span { font-size: 19px; }
 
   /* Screens */
   .mx-screen { display: flex; flex-direction: column; height: 100%; min-height: 0; background: var(--mx-bg); }
@@ -77,7 +73,6 @@
   /* Home */
   .mx-home { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; justify-content: center; padding: 12px 20px 6px; }
   .mx-welcome { text-align: center; margin-top: auto; }
-  .mx-welcome .mx-logo { margin: 0 auto 24px; }
   .mx-welcome h1 { font-size: 23px; line-height: 1.3; letter-spacing: -.045em; font-weight: 650; margin: 0; }
   .mx-welcome p { color: var(--mx-muted); font-size: 14px; line-height: 1.55; margin: 13px 0 0; }
   .mx-suggestions { margin-top: 30px; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
@@ -143,10 +138,9 @@
   .mx-chat .message-actions button { width: 31px; height: 31px; display: grid; place-items: center; border: 0; background: transparent; color: var(--mx-muted); border-radius: 7px; padding: 0; }
   .mx-chat .turn-time { font-size: 10px; color: var(--mx-faint); }
   .mx-thinking { display: flex; align-items: center; gap: 4px; margin-bottom: 20px; }
-  .mx-thinking .mx-logo { margin-right: 8px; }
-  .mx-thinking > span:not(.mx-logo) { width: 5px; height: 5px; background: var(--mx-muted); border-radius: 50%; animation: mx-bounce 1.2s infinite; }
-  .mx-thinking > span:nth-child(3) { animation-delay: .15s; }
-  .mx-thinking > span:nth-child(4) { animation-delay: .3s; }
+  .mx-thinking > span { width: 5px; height: 5px; background: var(--mx-muted); border-radius: 50%; animation: mx-bounce 1.2s infinite; }
+  .mx-thinking > span:nth-of-type(2) { animation-delay: .15s; }
+  .mx-thinking > span:nth-of-type(3) { animation-delay: .3s; }
   .mx-thinking em { margin-left: 6px; font-style: normal; font-size: 11px; color: var(--mx-muted); }
   .mx-chat .jump-latest { bottom: 112px; }
 
@@ -168,7 +162,6 @@
   .mx-item-menu button { width: 100%; border: 0; background: transparent; display: flex; align-items: center; gap: 8px; padding: 9px; font-size: 12px; border-radius: 6px; color: var(--mx-ink); }
   .mx-item-menu button.danger { color: var(--mx-danger); }
   .mx-drawer-bottom { border-top: 1px solid var(--mx-line); padding-top: 8px; }
-  .mx-drawer-bottom > button { width: 100%; border: 0; background: transparent; display: grid; grid-template-columns: 36px 1fr 25px; align-items: center; gap: 9px; padding: 8px; text-align: left; border-radius: 10px; color: var(--mx-ink); }
   .mx-avatar { width: 34px; height: 34px; background: var(--mx-brand-soft); color: var(--mx-brand); border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; }
   .mx-row-text { display: flex; flex-direction: column; min-width: 0; }
   .mx-row-text strong { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -306,7 +299,6 @@
   .mx-auth { min-height: 100dvh; display: flex; flex-direction: column; padding: calc(14px + env(safe-area-inset-top)) 22px calc(30px + env(safe-area-inset-bottom)); background: var(--mx-bg); }
   .mx-auth-close { align-self: flex-end; width: 39px; height: 39px; border: 1px solid var(--mx-line); background: var(--mx-card); color: var(--mx-ink); border-radius: 50%; display: grid; place-items: center; padding: 0; }
   .mx-auth-content { margin: auto 0; text-align: center; }
-  .mx-auth-content .mx-logo { margin: 0 auto 22px; }
   .mx-auth-content h1 { font-size: 23px; letter-spacing: -.04em; margin: 0 0 9px; }
   .mx-auth-content > p { color: var(--mx-muted); font-size: 12px; line-height: 1.5; max-width: 290px; margin: 0 auto 28px; }
   .mx-auth .google-signin { display: flex; flex-direction: column; align-items: center; gap: 0; }
@@ -381,4 +373,33 @@
   .mx-app .offer-cta small, .mx-app .similar-card small { font-size: 10px; }
   .mx-app .similar-card b { font-size: 12px; }
   .mx-app .similar-card strong { font-size: 13px; }
+}
+
+@media (max-width: 760px) {
+  /* The Trezutil logo in the header, the drawer, the answers and the sign-in. */
+  .mx-title .logo-full { width: 100px; }
+  .mx-drawer-top .logo-full { width: 118px; }
+  .mx-chat .assistant-mark .logo-mark { width: 28px; margin-top: 7px; }
+  .mx-auth-content > .logo { justify-content: center; margin-bottom: 18px; }
+  .mx-auth-content > .trezy { margin: 0 auto 8px; }
+  .mx-welcome .trezy { margin: 0 auto 10px; }
+  .mx-thinking .trezy { margin-right: 6px; }
+  .mx-confirmation .trezy { margin: 0 auto 8px; }
+  @media (max-width: 370px) { .mx-title .mx-pill { display: none; } }
+
+  /* The menus of the sidebar in the drawer. */
+  .mx-nav-label { margin: 14px 11px 6px; color: var(--mx-muted); font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .045em; }
+  .mx-history > .mx-nav-label:first-child { margin-top: 0; }
+  .mx-history-more { width: 100%; border: 0; background: transparent; padding: 9px 11px; text-align: left; font-size: 12px; font-weight: 600; color: var(--mx-brand); }
+  .mx-commercial { border-top: 1px solid var(--mx-line); margin-top: 10px; }
+  .mx-nav-item { width: 100%; min-height: 36px; flex: none; display: flex; align-items: center; gap: 11px; padding: 0 11px; border: 0; border-radius: 10px; background: transparent; color: var(--mx-ink); font-size: 13px; text-align: left; }
+  .mx-nav-item > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mx-nav-item svg { flex: none; color: var(--mx-icon); }
+  .mx-nav-item.active { background: var(--mx-hover); font-weight: 600; }
+  .mx-nav-item i { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--mx-brand); color: #fff; font: 700 10px/18px var(--mx-font); font-style: normal; text-align: center; }
+  .mx-nav-item.soon { color: var(--mx-faint); }
+  .mx-nav-item.soon em { font-style: normal; font-size: 10px; padding: 2px 7px; border: 1px solid var(--mx-line); border-radius: 9px; }
+  .mx-drawer-bottom .profile { padding: 7px 9px; }
+  .mx-drawer-bottom .avatar { background: var(--mx-brand-soft); color: var(--mx-brand); }
+  .mx-drawer-bottom .profile-menu { max-height: min(70dvh, 520px); overflow-y: auto; }
 }
