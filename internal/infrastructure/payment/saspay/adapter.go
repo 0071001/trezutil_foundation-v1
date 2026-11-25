@@ -18,6 +18,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -93,12 +94,39 @@ func (a *Adapter) Health(ctx context.Context) domain.ProviderHealthStatus {
 }
 
 type sasPayment struct {
-	ID           string `json:"id"`
-	Status       string `json:"status"`
-	CheckoutURL  string `json:"checkout_url"`
-	Instructions string `json:"instructions"`
-	NetAmount    string `json:"net_amount"`
-	Currency     string `json:"currency"`
+	ID          string `json:"id"`
+	Status      string `json:"status"`
+	CheckoutURL string `json:"checkout_url"`
+	// Instructions is a list of strings in live answers (["Payment pushed successfully"]) and a string in the
+	// documentation's examples: both are read.
+	Instructions json.RawMessage `json:"instructions"`
+	NetAmount    string          `json:"net_amount"`
+	Currency     string          `json:"currency"`
+	// Amounts is what the payer is debited: SasPay may add its fees on top (fee_charge_mode ADD_ON).
+	Amounts struct {
+		Charged       string `json:"charged"`
+		Fee           string `json:"fee"`
+		FeeChargeMode string `json:"fee_charge_mode"`
+	} `json:"amounts"`
+}
+
+// instructions returns what the payer must do, leaving out SasPay's own status messages.
+func (p sasPayment) instructions() string {
+	var list []string
+	var one string
+	if json.Unmarshal(p.Instructions, &one) == nil {
+		list = []string{one}
+	} else {
+		_ = json.Unmarshal(p.Instructions, &list)
+	}
+	out := []string{}
+	for _, s := range list {
+		s = strings.TrimSpace(s)
+		if s != "" && !strings.EqualFold(s, "Payment pushed successfully") {
+			out = append(out, s)
+		}
+	}
+	return strings.Join(out, " ")
 }
 
 type customer struct {
@@ -207,8 +235,12 @@ func (a *Adapter) response(p sasPayment) domain.PaymentProviderResponse {
 	if p.CheckoutURL != "" {
 		data["checkout_url"] = p.CheckoutURL
 	}
-	if p.Instructions != "" {
-		data["instructions"] = p.Instructions
+	if s := p.instructions(); s != "" {
+		data["instructions"] = s
+	}
+	if p.Amounts.Charged != "" {
+		data["charged_amount"] = p.Amounts.Charged
+		data["fee_amount"] = p.Amounts.Fee
 	}
 	return domain.PaymentProviderResponse{ProviderPaymentID: p.ID, Status: Status(p.Status), Data: data}
 }
@@ -331,6 +363,10 @@ func (a *Adapter) do(ctx context.Context, method, path string, body interface{},
 	if detail == "" {
 		detail = sanitize(envelope.Error.Message)
 	}
+	if detail == "" {
+		// Validation errors come as a map of field -> messages: {"amount":["Le montant minimum est de 799 CDF."]}.
+		detail = sanitize(fieldErrors(raw))
+	}
 	switch {
 	case resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden:
 		e.code, e.message = domain.ErrCodeProviderAuthFailed, "saspay unauthorized: check the configured secret key and its scope ("+detail+")"
@@ -346,6 +382,28 @@ func (a *Adapter) do(ctx context.Context, method, path string, body interface{},
 		e.code, e.message = domain.ErrCodeInvalidRequest, "saspay invalid request: "+detail
 	}
 	return e
+}
+
+// fieldErrors renders SasPay's per-field validation errors as "field: message; …".
+func fieldErrors(raw []byte) string {
+	var body struct {
+		Error map[string]json.RawMessage `json:"error"`
+	}
+	if json.Unmarshal(raw, &body) != nil {
+		return ""
+	}
+	parts := []string{}
+	for field, v := range body.Error {
+		var msgs []string
+		var msg string
+		if json.Unmarshal(v, &msgs) == nil {
+			parts = append(parts, field+": "+strings.Join(msgs, " "))
+		} else if json.Unmarshal(v, &msg) == nil && field != "message" && field != "code" {
+			parts = append(parts, field+": "+msg)
+		}
+	}
+	sort.Strings(parts)
+	return strings.Join(parts, "; ")
 }
 
 // sanitize keeps provider messages short and strips anything that looks like a key.

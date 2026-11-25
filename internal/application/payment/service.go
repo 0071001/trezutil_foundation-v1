@@ -266,7 +266,7 @@ func withStatus(resp domain.PaymentProviderResponse) map[string]interface{} {
 // clientAction extracts payer-facing completion data (never persisted).
 func clientAction(data map[string]interface{}) map[string]string {
 	out := map[string]string{}
-	for _, k := range []string{"client_secret", "publishable_key", "provider_code", "checkout_url", "instructions"} {
+	for _, k := range []string{"client_secret", "publishable_key", "provider_code", "checkout_url", "instructions", "charged_amount", "fee_amount"} {
 		if v, ok := data[k].(string); ok && v != "" {
 			out[k] = v
 		}

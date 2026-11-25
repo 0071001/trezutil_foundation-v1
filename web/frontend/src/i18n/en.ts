@@ -914,6 +914,8 @@ export const en: Record<string, string> = {
   "pour le reçu de paiement": "for the payment receipt",
   "Le paiement par carte se fait en USD uniquement ; cette commande est en {currency}. Choisis le mobile money.": "Card payments are in USD only; this order is in {currency}. Choose mobile money.",
   "Payer {amount}": "Pay {amount}",
-  "Tu recevras une demande de paiement sur ton téléphone, à valider avec ton code PIN. Trezutil ne connaît jamais ton code.": "You will receive a payment request on your phone, to approve with your PIN. Trezutil never knows your PIN.",
+  "Tu recevras une demande de paiement sur ton téléphone, à valider avec ton code PIN. Trezutil ne connaît jamais ton code. Des frais SasPay peuvent s’ajouter au montant débité : ils sont affichés sur ton téléphone avant que tu valides.": "You will receive a payment request on your phone, to approve with your PIN. Trezutil never knows your PIN. SasPay fees may be added to the amount debited: your phone shows them before you approve.",
+  "Montant débité : {charged} (dont {fee} de frais SasPay).": "Amount debited: {charged} (including {fee} of SasPay fees).",
+  "Le mobile money demande au moins 799 FC par paiement.": "Mobile money needs at least 799 FC per payment.",
   "La carte est saisie sur la page sécurisée de SasPay ; Trezutil ne voit jamais ses données.": "The card is entered on SasPay’s secure page; Trezutil never sees its details.",
 }

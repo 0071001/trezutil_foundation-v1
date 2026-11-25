@@ -222,19 +222,19 @@ describe('server history and catalogue', () => {
   })
 
   it('pays by mobile money: the request goes to the phone, and the order is paid only once SasPay confirms it', async () => {
-    const order = { id: 'o-2', organization_id: 'org-s', status: 'pending_payment', currency: 'CDF', total_amount: { amount_minor: 50000, currency: 'CDF' }, items: [{ listing_id: 'l1', title: 'Ciment', quantity: 1, unit_price: { amount_minor: 50000 } }], created_at: 1700000000 }
+    const order = { id: 'o-2', organization_id: 'org-s', status: 'pending_payment', currency: 'CDF', total_amount: { amount_minor: 80000, currency: 'CDF' }, items: [{ listing_id: 'l1', title: 'Ciment', quantity: 1, unit_price: { amount_minor: 80000 } }], created_at: 1700000000 }
     let approved = false
     const { calls } = signedInRoutes({
       'GET /orders/o-2': () => ({ body: { ...order, status: approved ? 'paid' : 'pending_payment' } }),
-      'POST /payments': () => ({ status: 201, body: { payment_id: 'pay-1', status: 'PENDING', client_action: { provider_code: 'saspay' } } }),
+      'POST /payments': () => ({ status: 201, body: { payment_id: 'pay-1', status: 'PENDING', client_action: { provider_code: 'saspay', charged_amount: '844.00', fee_amount: '44.00' } } }),
       'GET /payments/pay-1/status': () => ({ body: { payment_id: 'pay-1', status: approved ? 'CAPTURED' : 'PENDING' } }),
     })
     renderAt('/purchases/o-2')
     await fillPayer()
     await userEvent.click(screen.getByRole('button', { name: /^Payer / }))
-    expect(await screen.findByText(/demande de paiement a été envoyée sur ton téléphone/)).toBeInTheDocument()
+    expect(await screen.findByText(/demande de paiement a été envoyée sur ton téléphone.*Montant débité : 844.*dont 44.*frais SasPay/)).toBeInTheDocument()
     const sent = calls.find((c) => c.method === 'POST' && c.path.startsWith('/payments'))!.body as Record<string, unknown>
-    expect(sent).toMatchObject({ order_id: 'o-2', amount_minor: 50000, currency: 'CDF', payment_method_type: 'MOBILE_MONEY', payment_method_id: 'vodacom_cd' })
+    expect(sent).toMatchObject({ order_id: 'o-2', amount_minor: 80000, currency: 'CDF', payment_method_type: 'MOBILE_MONEY', payment_method_id: 'vodacom_cd' })
     expect(sent.metadata).toMatchObject({ phone: '0817127253', email: 'g@example.cd', first_name: 'Gilio', last_name: 'Kapapa' })
     // Not paid until SasPay says so: the first read-back is still pending.
     await waitFor(() => expect(calls.some((c) => c.path.startsWith('/payments/pay-1/status'))).toBe(true), { timeout: 6000 })

@@ -67,6 +67,9 @@ export interface ClientAction {
   checkout_url?: string
   /** SasPay: what the payer must do on their phone, when the network needs it. */
   instructions?: string
+  /** SasPay: what the payer's phone is debited (fees included when SasPay adds them) and the fee part. */
+  charged_amount?: string
+  fee_amount?: string
 }
 
 export function isStripeAction(action: ClientAction | undefined): action is Required<Pick<ClientAction, 'client_secret' | 'publishable_key'>> & ClientAction {

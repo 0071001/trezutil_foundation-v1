@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { toApiError } from '@/api/client'
 import { ordersApi, paymentsApi, type OrderSummary, type Payer, type PayNetwork } from '@/api/commerce'
 import { isStripeAction, loadStripe, type ClientAction, type StripeClient, type StripeElements } from '@/api/stripe'
-import { formatMinor } from '@/lib/format'
+import { formatMinor, formatMoney } from '@/lib/format'
 import { useSession } from '@/lib/session'
 import { Icon } from '@/ui/Icon'
 import { Loading, newId } from '@/ui/kit'
@@ -159,7 +159,10 @@ export function PaymentPanel({ order, onUpdated }: { order: OrderSummary; onUpda
       }
       try { sessionStorage.setItem(PENDING_KEY(order.id), payment.payment_id) } catch { /* ignore */ }
       if (act?.checkout_url) { window.location.assign(act.checkout_url); return }
-      setNotice({ tone: 'info', text: act?.instructions || t('Une demande de paiement a été envoyée sur ton téléphone. Valide-la avec ton code PIN.') })
+      const charged = act?.charged_amount && Number(act.fee_amount) > 0
+        ? ' ' + t('Montant débité : {charged} (dont {fee} de frais SasPay).', { charged: formatMoney(Number(act.charged_amount), order.currency), fee: formatMoney(Number(act.fee_amount), order.currency) })
+        : ''
+      setNotice({ tone: 'info', text: (act?.instructions || t('Une demande de paiement a été envoyée sur ton téléphone. Valide-la avec ton code PIN.')) + charged })
       setWaiting(payment.payment_id)
     } catch (err) {
       const e = toApiError(err)
@@ -176,6 +179,8 @@ export function PaymentPanel({ order, onUpdated }: { order: OrderSummary; onUpda
   if (!isAwaitingPayment(order)) return null
   const field = (k: keyof Payer) => ({ value: payer[k], onChange: (e: { target: { value: string } }) => setPayer((p) => ({ ...p, [k]: e.target.value })) })
   const cardOnlyUSD = network === 'card' && order.currency !== 'USD'
+  // SasPay's minimum for a mobile money payment in Congolese francs (seen in production, 2026-11-25).
+  const belowMinimum = mobile && order.currency === 'CDF' && order.total_minor < 79900
   return (
     <div className="payment-panel">
       <h3 className="memory-heading">{t('Paiement')}</h3>
@@ -198,11 +203,12 @@ export function PaymentPanel({ order, onUpdated }: { order: OrderSummary; onUpda
           </div>
           <label>{t('E-mail')} <small>{t('pour le reçu de paiement')}</small><input type="email" autoComplete="email" required {...field('email')} /></label>
           {cardOnlyUSD && <p className="form-error" role="alert">{t('Le paiement par carte se fait en USD uniquement ; cette commande est en {currency}. Choisis le mobile money.', { currency: order.currency })}</p>}
-          <button type="submit" className="primary-btn" disabled={busy || cardOnlyUSD} aria-busy={busy}>
+          {belowMinimum && <p className="form-error" role="alert">{t('Le mobile money demande au moins 799 FC par paiement.')}</p>}
+          <button type="submit" className="primary-btn" disabled={busy || cardOnlyUSD || belowMinimum} aria-busy={busy}>
             {busy ? t('Démarrage du paiement sécurisé…') : t('Payer {amount}', { amount: formatMinor(order.total_minor, order.currency) })} <Icon name="arrow" size={15} />
           </button>
           <p className="muted-line"><Icon name="lock" size={13} /> {mobile
-            ? t('Tu recevras une demande de paiement sur ton téléphone, à valider avec ton code PIN. Trezutil ne connaît jamais ton code.')
+            ? t('Tu recevras une demande de paiement sur ton téléphone, à valider avec ton code PIN. Trezutil ne connaît jamais ton code. Des frais SasPay peuvent s’ajouter au montant débité : ils sont affichés sur ton téléphone avant que tu valides.')
             : t('La carte est saisie sur la page sécurisée de SasPay ; Trezutil ne voit jamais ses données.')}</p>
         </form>
       )}

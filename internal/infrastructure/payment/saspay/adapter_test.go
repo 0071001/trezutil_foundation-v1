@@ -185,3 +185,30 @@ func TestWebhookIsVerifiedAndMappedLikeSasPayDocumentsIt(t *testing.T) {
 		t.Error("accepted without a configured secret")
 	}
 }
+
+func TestReadsSasPaysLiveAnswersAndFieldErrors(t *testing.T) {
+	// Shapes seen in production on 2026-11-25: instructions is a list, and validation errors are per field.
+	a := fakeSasPay(t, func(w http.ResponseWriter, r *http.Request, body map[string]interface{}) {
+		if body["amount"] == "5.00" {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"success":false,"error":{"amount":["Le montant minimum est de 799 CDF."]},"code":400}`)
+			return
+		}
+		w.WriteHeader(http.StatusCreated)
+		_, _ = io.WriteString(w, `{"success":true,"data":{"message":"Payment pushed successfully","id":"b98","status":"PENDING","checkout_url":"","instructions":["Payment pushed successfully"],"bank_transfer":{},"amounts":{"requested":"800.00","fee":"44.00","charged":"844.00","fee_charge_mode":"ADD_ON"}},"code":201}`)
+	})
+	resp, err := a.CreatePayment(context.Background(), domain.PaymentProviderRequest{Amount: domain.Money{AmountMinor: 80000, Currency: "CDF"}, PaymentMethodID: "vodacom_cd", Metadata: payer})
+	if err != nil || resp.ProviderPaymentID != "b98" || resp.Status != "pending" {
+		t.Fatalf("a pushed payment was not read: %+v %v", resp, err)
+	}
+	if _, ok := resp.Data["instructions"]; ok {
+		t.Errorf("SasPay's own status message was shown as an instruction: %v", resp.Data["instructions"])
+	}
+	if resp.Data["charged_amount"] != "844.00" || resp.Data["fee_amount"] != "44.00" {
+		t.Errorf("what the payer is debited is lost: %+v", resp.Data)
+	}
+	_, err = a.CreatePayment(context.Background(), domain.PaymentProviderRequest{Amount: domain.Money{AmountMinor: 500, Currency: "CDF"}, PaymentMethodID: "vodacom_cd", Metadata: payer})
+	if err == nil || !strings.Contains(err.Error(), "amount: Le montant minimum est de 799 CDF.") {
+		t.Errorf("the field error is lost: %v", err)
+	}
+}
