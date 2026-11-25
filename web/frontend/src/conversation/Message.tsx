@@ -1,3 +1,6 @@
+import { asksForCount, asksForDate, CountAnswer, DateAnswer } from '@/conversation/Answers'
+import { isReservable } from '@/commerce/offers'
+import { NegotiateDialog } from '@/negotiation/NegotiateDialog'
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { conversationStore, type Turn } from '@/conversation/store'
@@ -7,6 +10,10 @@ import { sizeText } from '@/conversation/Composer'
 import { Icon, type IconName } from '@/ui/Icon'
 import { clock, Logo } from '@/ui/kit'
 import { t, tn } from '@/lib/i18n'
+import { useMobile } from '@/lib/useMobile'
+import { OfferResults, ProgressList } from '@/mobile/Answer'
+import { MIcon } from '@/mobile/icons'
+import { MLogo } from '@/mobile/ui'
 
 /*
  * One message. A user message is a bubble (copy, edit and send again). An answer of Trezutil is its text (streamed
@@ -46,6 +53,7 @@ export function UserMessage({ turn, conversationId, busy }: { turn: Turn; conver
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(turn.text)
   const { copied, copy } = useCopy()
+  const mobile = useMobile()
   if (editing) {
     return (
       <div className="user-message editing">
@@ -62,7 +70,7 @@ export function UserMessage({ turn, conversationId, busy }: { turn: Turn; conver
   }
   return (
     <div className="user-turn">
-      <div className="user-message">
+      <div className="user-message" tabIndex={mobile ? 0 : undefined}>
         {turn.attachments?.length ? (
           <div className="turn-files">
             {turn.attachments.map((a) => <span key={`${a.name}-${a.size}`} title={t('Non transmis : le serveur n’accepte pas encore les fichiers')}><Icon name={a.type.startsWith('image/') ? 'image' : 'file'} size={14} />{a.name}<small>{sizeText(a.size)} {t('· non transmis')}</small></span>)}
@@ -90,10 +98,11 @@ export function UserMessage({ turn, conversationId, busy }: { turn: Turn; conver
  * the server reports. Nothing here is simulated: an empty text shows the step only.
  */
 export function StreamingAnswer({ text, label }: { text: string; label: string }) {
+  const mobile = useMobile()
   if (!text) return <Typing label={label} />
   return (
     <div className="assistant-message streaming" aria-busy="true">
-      <div className="assistant-mark"><Logo compact /></div>
+      <div className="assistant-mark">{mobile ? <MLogo small /> : <Logo compact />}</div>
       <div className="message-content">
         <RichText text={text} />
         <p className="working small" role="status" aria-live="polite"><span className="stream-caret" aria-hidden="true" />{label}</p>
@@ -103,12 +112,30 @@ export function StreamingAnswer({ text, label }: { text: string; label: string }
 }
 
 export function Typing({ label }: { label: string }) {
+  const mobile = useMobile()
+  if (mobile) {
+    return (
+      <div className="mx-thinking" role="status" aria-live="polite"><MLogo small /><span /><span /><span /><em>{label}</em></div>
+    )
+  }
   return (
     <div className="assistant-message compact-response" role="status" aria-live="polite">
       <div className="assistant-mark"><Logo compact /></div>
       <div className="message-content"><p className="working">{label}</p><div className="typing"><i /><i /><i /></div></div>
     </div>
   )
+}
+
+/** The picture of a suggested reply, from what it asks. */
+function suggestionIcon(text: string): IconName {
+  const s = text.toLowerCase()
+  if (/r[ée]serv|book/.test(s)) return 'calendar'
+  if (/ach[èe]t|buy|panier|cart/.test(s)) return 'cart'
+  if (/command|order/.test(s)) return 'orders'
+  if (/cher|cheap|prix|price/.test(s)) return 'wallet'
+  if (/similaire|similar|r[ée]sultats|results/.test(s)) return 'layers'
+  if (/date|aujourd|today|week/.test(s)) return 'clock'
+  return 'message'
 }
 
 const TRACE: Record<string, [IconName, string]> = {
@@ -140,10 +167,13 @@ interface AssistantProps {
   onCompare: (turnId: string, offer?: Offer) => void
   /** Opens the detail of one offer beside the conversation. */
   onOpenOffer: (turnId: string, offer: Offer, latest: boolean) => void
+  /** The date the person last typed or picked: an end date comes after it. */
+  lastDate?: string
 }
 
 export function AssistantMessage(p: AssistantProps) {
   const { turn, latest } = p
+  const mobile = useMobile()
   const reply = turn.reply
   const [reading, setReading] = useState(false)
   const { copied, copy } = useCopy()
@@ -152,21 +182,143 @@ export function AssistantMessage(p: AssistantProps) {
   const questions = reply?.missing_params.filter((q) => q.name !== 'listing_id') ?? []
   const confirmation = reply?.is_confirmation ? reply.confirmation : undefined
   const canRegenerate = latest && !p.busy && conversationStore.canRegenerate(p.conversationId, turn.id)
+  const [negotiating, setNegotiating] = useState(false)
+  const asked = reply?.is_clarification ? questions[0]?.name ?? '' : ''
+  // A date or a number has its own picker below the question: nothing more to spell out.
+  const worded = questions.filter((q) => !asksForDate(q.name) && !asksForCount(q.name))
+  // The latest answer's offers get action buttons; earlier answers keep their comparison link.
+  const actionable = offers.length > 0 && latest && !confirmation
+  // Offers a price can be asked for: one currency, five at most.
+  const currency = offers.find((o) => o.priceValue > 0)?.currency
+  const negotiable = offers.filter((o) => o.priceValue > 0 && o.currency === currency).slice(0, 5)
+  const reservable = offers.find(isReservable)
+
+  const interrupted = turn.interrupted ? (
+    <div className="interrupted-note" role="status">
+      <span>{t('Réponse interrompue.')}</span>
+      <button type="button" className="secondary-btn small-btn" disabled={reading || p.busy}
+        onClick={() => { setReading(true); void conversationStore.completeInterrupted(p.conversationId, turn.id).finally(() => setReading(false)) }}>
+        {reading ? 'Lecture…' : t('Afficher la réponse complète')}
+      </button>
+    </div>
+  ) : null
+
+  const extras = reply ? (
+    <>
+      {offers.length === 0 && reply.cards.length > 0 && (
+        <div className="choice-list">
+          {reply.cards.map((card) => (
+            <button type="button" key={card.id} onClick={() => p.onSend(String(card.position || card.title))} disabled={!latest || p.busy}>
+              {card.position > 0 && <b>{card.position}</b>}
+              <span><strong>{card.title}</strong>{card.description && <small>{card.description}</small>}</span>
+              <Icon name="arrow" size={14} />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {reply.is_clarification && worded.length > 0 && (
+        <div className="insight question">
+          <span><Icon name="message" size={17} /></span>
+          <div>{worded.map((q) => <p key={q.name}>{q.prompt && !technical.test(q.prompt) ? q.prompt : t('Précise : {name}.', { name: q.name.replace(/_/g, ' ') })}</p>)}</div>
+        </div>
+      )}
+
+      {latest && asked && asksForDate(asked) && <DateAnswer key={asked} param={asked} after={p.lastDate} disabled={p.busy} onSend={p.onSend} />}
+      {latest && asked && asksForCount(asked) && <CountAnswer key={asked} param={asked} disabled={p.busy} onSend={p.onSend} />}
+
+      {confirmation && (
+        <div className={`approval-box ${turn.resolution ? 'resolved' : ''}`} role="group" aria-label={t('Confirmation requise')}>
+          <Icon name="shield" />
+          <div>
+            <b>{turn.resolution ? t('Décision enregistrée') : t('Ton approbation est requise')}</b>
+            {/* A summary written as a code (ACTION_REQUIRES_CONFIRMATION) is not shown to the person. */}
+            <p>{confirmation.summary && !/^[A-Z0-9_]+$/.test(confirmation.summary) ? confirmation.summary : t('Confirme pour continuer. Rien ne se passe tant que tu ne l’as pas fait.')}</p>
+            {turn.resolution ? (
+              <p className="resolution"><Icon name={turn.resolution === 'confirmed' ? 'check' : 'x'} size={13} />
+                {turn.resolution === 'confirmed' ? t('Tu as approuvé.') : turn.resolution === 'rejected' ? t('Tu as refusé. Rien n’a été modifié.') : t('Cette confirmation a expiré.')}
+              </p>
+            ) : latest ? (
+              p.signedIn ? (
+                <div className="approval-actions">
+                  <button type="button" className="secondary-btn" disabled={p.confirming} onClick={() => void conversationStore.answer(p.conversationId, turn.id, false)}>{t('Refuser')}</button>
+                  <button type="button" className="primary-btn" disabled={p.confirming} aria-busy={p.confirming} onClick={() => void conversationStore.answer(p.conversationId, turn.id, true)}>{p.confirming ? 'Envoi…' : t('Approuver')}</button>
+                </div>
+              ) : (
+                <div className="approval-actions"><Link className="primary-btn" to={p.signInHref}>{t('Se connecter pour approuver')}</Link></div>
+              )
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      {reply.refs.order_id && (
+        <div className="activity success">
+          <span className="activity-check"><Icon name="orders" size={13} /></span>
+          <div><b>{t('Commande créée')}</b><small>{t('Elle est enregistrée dans tes achats.')}</small></div>
+          <Link className="activity-link" to={`/purchases/${encodeURIComponent(reply.refs.order_id)}`}>{t('Voir la commande')} <Icon name="arrow" size={13} /></Link>
+        </div>
+      )}
+      {reply.refs.reservation_id && reply.action_type === 'CREATE_RESERVATION' && (
+        <div className="activity success">
+          <span className="activity-check"><Icon name="calendar" size={13} /></span>
+          <div><b>{t('Réservation enregistrée')}</b><small>{t('Retrouve-la dans tes achats et réservations.')}</small></div>
+          <Link className="activity-link" to="/purchases?tab=bookings">{t('Voir')} <Icon name="arrow" size={13} /></Link>
+        </div>
+      )}
+
+      {actionable && (
+        <div className="action-bar" role="group" aria-label={t('Actions sur ces offres')}>
+          {!mobile && offers.length > 1 && <button type="button" className="cta primary" onClick={() => p.onCompare(turn.id)}><Icon name="layers" size={15} />{t('Comparer')} {offers.length > 3 ? tn(offers.length, 'l’offre', 'les {n} offres') : t('ces offres')}</button>}
+          {negotiable.length > 0 && <button type="button" className="cta" onClick={() => setNegotiating(true)}><Icon name="handshake" size={15} />{tn(negotiable.length, 'Négocier cette offre', 'Négocier ces {n} offres')}</button>}
+          {reservable && <button type="button" className="cta" disabled={p.busy} onClick={() => p.onSend(t('Réserve le numéro {n}', { n: reservable.n }))}><Icon name="calendar" size={15} />{t('Réserver le n° {n} avec des dates', { n: reservable.n })}</button>}
+        </div>
+      )}
+      {negotiating && <NegotiateDialog offers={negotiable} conversationId={p.conversationId} onClose={() => setNegotiating(false)} />}
+
+      {latest && !confirmation && reply.suggestions.length > 0 && (
+        <div className="quick-replies" role="group" aria-label={t('Réponses suggérées')}>
+          {reply.suggestions.map((s) => <button type="button" key={s} onClick={() => p.onSend(s)} disabled={p.busy}><Icon name={suggestionIcon(s)} size={14} />{s}</button>)}
+        </div>
+      )}
+    </>
+  ) : null
+
+  if (mobile) {
+    const steps: { label: string; state: 'done' }[] = reply && trace ? [
+      { label: t('Besoin analysé'), state: 'done' },
+      { label: trace[1], state: 'done' },
+      ...(reply.action_type === 'SEARCH_LISTINGS' ? [{ label: offers.length ? tn(offers.length, '{n} offre pertinente identifiée', '{n} offres pertinentes identifiées') : t('Aucune offre correspondante pour l’instant'), state: 'done' as const }] : []),
+    ] : []
+    return (
+      <div className="assistant-message mx-answer">
+        <div className="assistant-mark"><MLogo small /></div>
+        <div className="message-content">
+          <RichText text={turn.text} />
+          {interrupted}
+          {steps.length > 0 && <ProgressList steps={steps} />}
+          {p.operationId && <Link className="mx-text-action" to={`/operations/${encodeURIComponent(p.operationId)}`}>{t('Voir la mission')} <MIcon name="chevron" size={15} /></Link>}
+          {offers.length > 0 && <OfferResults offers={offers} onOpen={(o) => p.onOpenOffer(turn.id, o, latest)} onCompare={() => p.onCompare(turn.id)} />}
+          {!p.operationId && offers.length > 0 && latest && (p.signedIn
+            ? <button type="button" className="mx-text-action" onClick={p.onOpenOperation} disabled={p.openingOperation}>{p.openingOperation ? t('Ouverture…') : t('Suivre en mission')} <MIcon name="chevron" size={15} /></button>
+            : <Link className="mx-text-action" to={p.signInHref}>{t('Se connecter pour suivre')} <MIcon name="chevron" size={15} /></Link>)}
+          {extras}
+          <div className="message-actions">
+            <button type="button" onClick={() => copy(turn.text)} aria-label={t('Copier la réponse')}>{copied ? <MIcon name="check" size={16} /> : <Icon name="copy" size={15} />}</button>
+            {canRegenerate && <button type="button" onClick={() => conversationStore.regenerate(p.conversationId, turn.id)} aria-label={t('Régénérer la réponse')}><Icon name="refresh" size={15} /></button>}
+            <span className="turn-time">{clock(turn.at)}</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="assistant-message">
-      <div className="assistant-mark"><Logo compact /><span className="m-mark" aria-hidden="true">T</span></div>
+      <div className="assistant-mark"><Logo compact /></div>
       <div className="message-content">
         <RichText text={turn.text} />
-        {turn.interrupted && (
-          <div className="interrupted-note" role="status">
-            <span>{t('Réponse interrompue.')}</span>
-            <button type="button" className="secondary-btn small-btn" disabled={reading || p.busy}
-              onClick={() => { setReading(true); void conversationStore.completeInterrupted(p.conversationId, turn.id).finally(() => setReading(false)) }}>
-              {reading ? 'Lecture…' : t('Afficher la réponse complète')}
-            </button>
-          </div>
-        )}
+        {interrupted}
         {reply && (
           <>
             {trace && (
@@ -184,84 +336,21 @@ export function AssistantMessage(p: AssistantProps) {
             {offers.length > 0 && (
               <>
                 <div className="supplier-stack">
-                  {offers.slice(0, 3).map((o) => <SupplierCard key={o.id} offer={o} onOpen={() => p.onOpenOffer(turn.id, o, latest)} onAsk={latest ? () => p.onSend(t('Parle-moi de l’offre {n} : {title}', { n: o.n, title: o.title })) : undefined} />)}
+                  {offers.slice(0, 3).map((o) => <SupplierCard key={o.id} offer={o} onReserve={latest && !p.busy && isReservable(o) ? () => p.onSend(t('Réserve le numéro {n}', { n: o.n })) : undefined} onOpen={() => p.onOpenOffer(turn.id, o, latest)} onAsk={latest ? () => p.onSend(t('Parle-moi de l’offre {n} : {title}', { n: o.n, title: o.title })) : undefined} />)}
                 </div>
-                {offers.length > 1 && (
+                {offers.length > 1 && !actionable && (
                   <button type="button" className="compare-link" onClick={() => p.onCompare(turn.id)}>
-                    <Icon name="layers" size={15} />{t('Comparer')} {offers.length > 3 ? `les ${offers.length} offres` : t('ces offres')}
+                    <Icon name="layers" size={15} />{t('Comparer')} {offers.length > 3 ? tn(offers.length, 'l’offre', 'les {n} offres') : t('ces offres')}
                   </button>
                 )}
               </>
             )}
 
-            {offers.length === 0 && reply.cards.length > 0 && (
-              <div className="choice-list">
-                {reply.cards.map((card) => (
-                  <button type="button" key={card.id} onClick={() => p.onSend(String(card.position || card.title))} disabled={!latest || p.busy}>
-                    {card.position > 0 && <b>{card.position}</b>}
-                    <span><strong>{card.title}</strong>{card.description && <small>{card.description}</small>}</span>
-                    <Icon name="arrow" size={14} />
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {reply.is_clarification && questions.length > 0 && (
-              <div className="insight question">
-                <span><Icon name="message" size={17} /></span>
-                <div>{questions.map((q) => <p key={q.name}>{q.prompt && !technical.test(q.prompt) ? q.prompt : t('Précise : {name}.', { name: q.name.replace(/_/g, ' ') })}</p>)}</div>
-              </div>
-            )}
-
-            {confirmation && (
-              <div className={`approval-box ${turn.resolution ? 'resolved' : ''}`} role="group" aria-label={t('Confirmation requise')}>
-                <Icon name="shield" />
-                <div>
-                  <b>{turn.resolution ? t('Décision enregistrée') : t('Ton approbation est requise')}</b>
-                  <p>{confirmation.summary || t('Confirme pour continuer. Rien ne se passe tant que tu ne l’as pas fait.')}</p>
-                  {turn.resolution ? (
-                    <p className="resolution"><Icon name={turn.resolution === 'confirmed' ? 'check' : 'x'} size={13} />
-                      {turn.resolution === 'confirmed' ? t('Tu as approuvé.') : turn.resolution === 'rejected' ? t('Tu as refusé. Rien n’a été modifié.') : t('Cette confirmation a expiré.')}
-                    </p>
-                  ) : latest ? (
-                    p.signedIn ? (
-                      <div className="approval-actions">
-                        <button type="button" className="secondary-btn" disabled={p.confirming} onClick={() => void conversationStore.answer(p.conversationId, turn.id, false)}>{t('Refuser')}</button>
-                        <button type="button" className="primary-btn" disabled={p.confirming} aria-busy={p.confirming} onClick={() => void conversationStore.answer(p.conversationId, turn.id, true)}>{p.confirming ? 'Envoi…' : t('Approuver')}</button>
-                      </div>
-                    ) : (
-                      <div className="approval-actions"><Link className="primary-btn" to={p.signInHref}>{t('Se connecter pour approuver')}</Link></div>
-                    )
-                  ) : null}
-                </div>
-              </div>
-            )}
-
-            {reply.refs.order_id && (
-              <div className="activity success">
-                <span className="activity-check"><Icon name="orders" size={13} /></span>
-                <div><b>{t('Commande créée')}</b><small>{t('Elle est enregistrée dans tes achats.')}</small></div>
-                <Link className="activity-link" to={`/purchases/${encodeURIComponent(reply.refs.order_id)}`}>{t('Voir la commande')} <Icon name="arrow" size={13} /></Link>
-              </div>
-            )}
-            {reply.refs.reservation_id && reply.action_type === 'CREATE_RESERVATION' && (
-              <div className="activity success">
-                <span className="activity-check"><Icon name="calendar" size={13} /></span>
-                <div><b>{t('Réservation enregistrée')}</b><small>{t('Retrouve-la dans tes achats et réservations.')}</small></div>
-                <Link className="activity-link" to="/purchases?tab=bookings">{t('Voir')} <Icon name="arrow" size={13} /></Link>
-              </div>
-            )}
-
-            {latest && !confirmation && reply.suggestions.length > 0 && (
-              <div className="quick-replies" role="group" aria-label={t('Réponses suggérées')}>
-                {reply.suggestions.map((s) => <button type="button" key={s} onClick={() => p.onSend(s)} disabled={p.busy}>{s}</button>)}
-              </div>
-            )}
+            {extras}
           </>
         )}
         {(
           <div className="message-actions">
-            <span className="turn-time m-time">{clock(turn.at)}</span>
             <button type="button" onClick={() => copy(turn.text)} aria-label={t('Copier la réponse')} title={t('Copier')}><Icon name={copied ? 'check' : 'copy'} size={15} /></button>
             {canRegenerate && <button type="button" onClick={() => conversationStore.regenerate(p.conversationId, turn.id)} aria-label={t('Régénérer la réponse')} title={t('Redemander (la recherche est relancée)')}><Icon name="refresh" size={15} /></button>}
           </div>

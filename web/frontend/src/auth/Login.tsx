@@ -8,6 +8,9 @@ import { safeReturnTo, useSession } from '@/lib/session'
 import { Icon } from '@/ui/Icon'
 import { errorText, LanguageToggle, Logo } from '@/ui/kit'
 import { t } from '@/lib/i18n'
+import { useMobile } from '@/lib/useMobile'
+import { MIcon } from '@/mobile/icons'
+import { MLogo } from '@/mobile/ui'
 
 /*
  * Sign-in: with Google (POST /auth/google, the official Google button) when the server offers it, or with a one-time
@@ -76,6 +79,8 @@ export function Login() {
   const [requestId, setRequestId] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<ApiError | null>(null)
+  const mobile = useMobile()
+  const [byPhone, setByPhone] = useState(false)
 
   useEffect(() => { document.title = `${t('Connexion')} — Trezutil` }, [])
   useEffect(() => { if (user) navigate(returnTo, { replace: true }) }, [user, navigate, returnTo])
@@ -100,6 +105,45 @@ export function Login() {
       await refreshUser()
       navigate(returnTo, { replace: true })
     } catch (err) { setError(toApiError(err)) } finally { setBusy(false) }
+  }
+
+  if (mobile) {
+    const leave = () => {
+      if (!requestId && !byPhone) { navigate('/'); return }
+      setRequestId(''); setCode(''); setByPhone(false); setError(null)
+    }
+    return (
+      <div className="mx-auth">
+        <button type="button" className="mx-auth-close" onClick={leave} aria-label={t('Fermer')}><MIcon name="close" /></button>
+        <div className="mx-auth-content">
+          <MLogo />
+          <h1>{requestId ? t('Saisis le code reçu') : t('Bienvenue sur Trezutil')}</h1>
+          <p>{requestId ? `${t('Un code a été envoyé au')} ${phone}${t('. Il expire dans quelques minutes.')}` : t('Votre assistant pour acheter, vendre et faire réaliser simplement.')}</p>
+          {!requestId && !byPhone && (
+            <>
+              <GoogleSignIn onSignedIn={async () => { await refreshUser(); navigate(returnTo, { replace: true }) }} />
+              <button type="button" className="mx-phone-btn" onClick={() => setByPhone(true)}><MIcon name="phone" size={19} />{t('Continuer avec un numéro')}</button>
+            </>
+          )}
+          {!requestId && byPhone && (
+            <form onSubmit={(e) => void request(e)}>
+              <input type="tel" inputMode="tel" autoComplete="tel" aria-label={t('Numéro de téléphone')} placeholder="+243 81 234 5678" value={phone} onChange={(e) => setPhone(e.target.value)} required autoFocus />
+              {error && <p className="form-error" role="alert">{errorText(error)}</p>}
+              <button type="submit" className="mx-phone-btn" disabled={busy || normalisePhone(phone).length < 8}>{busy ? t('Envoi…') : t('Recevoir le code')}</button>
+              <small>{t('Le code arrive sur WhatsApp.')}</small>
+            </form>
+          )}
+          {requestId && (
+            <form onSubmit={(e) => void verify(e)}>
+              <input inputMode="numeric" autoComplete="one-time-code" aria-label={t('Code de connexion')} placeholder="••••••" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 8))} required autoFocus />
+              {error && <p className="form-error" role="alert">{errorText(error)}</p>}
+              <button type="submit" className="mx-phone-btn" disabled={busy || code.length < 4}>{busy ? t('Vérification…') : t('Se connecter')}</button>
+            </form>
+          )}
+          <small className="mx-legal">{LEGAL.reviewed ? t('En continuant, tu acceptes les ') : t('Consulte les ')}<Link to="/legal/conditions">{t('conditions d’utilisation')}</Link> {t('et la')} <Link to="/legal/confidentialite">{t('politique de confidentialité')}</Link>.</small>
+        </div>
+      </div>
+    )
   }
 
   return (

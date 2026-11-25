@@ -193,10 +193,12 @@ export function Sidebar({ collapsed, onCollapse, mobileOpen, onClose, conversati
   const commercial: CommercialItem[] = [
     { icon: 'target', label: t('Vue d’ensemble'), to: '/overview' },
     { icon: 'flow', label: t('Opérations'), to: '/operations', count: activeOperations },
-    { icon: 'handshake', label: t('Négociations'), soon: true },
+    { icon: 'handshake', label: t('Négociations'), to: '/negotiations' },
     { icon: 'orders', label: t('Achats et commandes'), to: '/purchases' },
     { icon: 'calendar', label: t('Réservations et organisation'), to: '/purchases?tab=bookings' },
     { icon: 'building', label: t('Fournisseurs'), to: '/suppliers' },
+    // A supplier answers price requests and publishes its offers.
+    ...(orgs.length > 0 ? [{ icon: 'handshake', label: t('Demandes de prix'), to: '/supplier/requests' }, { icon: 'layers', label: t('Mes offres'), to: '/supplier/offers' }] as CommercialItem[] : []),
     { icon: 'refresh', label: t('Automatisations'), soon: true },
     { icon: 'bell', label: t('Alertes et opportunités'), action: () => { onNotifications(); onClose() } },
   ]

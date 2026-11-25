@@ -3,6 +3,9 @@ import { useVoiceInput } from '@/lib/voice'
 import type { TurnAttachment } from '@/conversation/store'
 import { Icon } from '@/ui/Icon'
 import { t } from '@/lib/i18n'
+import { useMobile } from '@/lib/useMobile'
+import { AttachmentSheet } from '@/mobile/AttachmentSheet'
+import { MIcon } from '@/mobile/icons'
 
 /*
  * The composer. Enter sends, Shift+Enter adds a line, the field grows with the text. The + adds files or a photo (on
@@ -34,14 +37,14 @@ interface Props {
   onStop?: () => void
   autoFocus?: boolean
   placeholder?: string
-  /** A line under the composer on a phone (the mobile design's hint). */
-  hint?: string
 }
 
-export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSubmit, onVoice, onStop, busy = false, autoFocus, placeholder, hint }, ref) {
+export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSubmit, onVoice, onStop, busy = false, autoFocus, placeholder }, ref) {
   const area = useRef<HTMLTextAreaElement>(null)
   const filesInput = useRef<HTMLInputElement>(null)
   const cameraInput = useRef<HTMLInputElement>(null)
+  const photosInput = useRef<HTMLInputElement>(null)
+  const mobile = useMobile()
   const [files, setFiles] = useState<Picked[]>([])
   const [menu, setMenu] = useState(false)
   const base = useRef('')
@@ -62,12 +65,12 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
   useEffect(() => () => { previews.current.forEach((p) => URL.revokeObjectURL(p)) }, [])
 
   useEffect(() => {
-    if (!menu) return
+    if (!menu || mobile) return
     const close = (e: Event) => { if (e.type === 'mousedown' || (e as globalThis.KeyboardEvent).key === 'Escape') setMenu(false) }
     const timer = window.setTimeout(() => document.addEventListener('mousedown', close), 0)
     document.addEventListener('keydown', close)
     return () => { window.clearTimeout(timer); document.removeEventListener('mousedown', close); document.removeEventListener('keydown', close) }
-  }, [menu])
+  }, [menu, mobile])
 
   const add = (list: FileList | null) => {
     if (!list?.length) return
@@ -99,6 +102,50 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
   const dictate = () => {
     if (!voice.listening) base.current = value
     voice.toggle()
+  }
+
+  const hiddenInputs = (
+    <>
+      <input ref={filesInput} type="file" multiple accept={ACCEPT} hidden onChange={(e) => { add(e.target.files); e.target.value = '' }} data-testid="file-input" />
+      <input ref={photosInput} type="file" multiple accept="image/*" hidden onChange={(e) => { add(e.target.files); e.target.value = '' }} />
+      <input ref={cameraInput} type="file" accept="image/*" capture="environment" hidden onChange={(e) => { add(e.target.files); e.target.value = '' }} />
+    </>
+  )
+  const attached = files.length > 0 && (
+    <>
+      <div className="attachments" aria-label={t('Pièces jointes')}>
+        {files.map((f) => (
+          <div className="attachment" key={f.id}>
+            <span>{f.preview ? <img src={f.preview} alt="" /> : <Icon name="file" />}</span>
+            <div><b title={f.file.name}>{f.file.name}</b><small>{sizeText(f.file.size)} {t('· reste sur l’appareil')}</small></div>
+            <button type="button" onClick={() => removeFile(f.id)} aria-label={t('Retirer {name}', { name: f.file.name })}><Icon name="x" size={14} /></button>
+          </div>
+        ))}
+      </div>
+      <p className="composer-note" role="note"><Icon name="lock" size={13} />{t('L’envoi et l’analyse de fichiers ne sont pas encore disponibles : ton message partira sans eux. Décris l’essentiel par écrit.')}</p>
+    </>
+  )
+
+  // The composer of the mobile design: add (bottom sheet), the field, the microphone (voice mode), send or stop.
+  if (mobile) {
+    return (
+      <div className="mx-composer-wrap">
+        {attached}
+        {hiddenInputs}
+        <form className="mx-composer" onSubmit={(e) => { e.preventDefault(); submit() }}>
+          <button type="button" className="mx-composer-btn add" onClick={() => setMenu(true)} aria-label={t('Ajouter des fichiers ou une photo')} aria-expanded={menu} aria-haspopup="dialog"><MIcon name="plus" size={21} /></button>
+          <label className="sr-only" htmlFor="composer-field">{t('Ton besoin')}</label>
+          <textarea id="composer-field" ref={area} rows={1} value={value} maxLength={MAX} autoFocus={autoFocus}
+            placeholder={placeholder ?? t('Écrire à Trezutil')} onChange={(e) => onChange(e.target.value)} onKeyDown={onKey} />
+          {!hasText && !busy && onVoice && <button type="button" className="mx-composer-btn" onClick={onVoice} aria-label={t('Dicter')}><MIcon name="mic" size={21} /></button>}
+          {busy && onStop
+            ? <button type="button" className="mx-send active" onClick={onStop} aria-label={t('Arrêter la réponse')}><MIcon name="stop" size={18} /></button>
+            : <button type="submit" className={`mx-send${hasText ? ' active' : ''}`} disabled={!hasText || busy} aria-label={t('Envoyer')}><MIcon name="arrow" size={18} /></button>}
+        </form>
+        <p className="mx-composer-note">{t('Trezutil peut faire des erreurs. Vérifiez les informations importantes.')}</p>
+        {menu && <AttachmentSheet close={() => setMenu(false)} onCamera={() => cameraInput.current?.click()} onPhotos={() => photosInput.current?.click()} onFiles={() => filesInput.current?.click()} />}
+      </div>
+    )
   }
 
   return (
@@ -153,7 +200,6 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
           </div>
         </div>
       </div>
-      {hint && <small className="m-composer-hint">{hint}</small>}
       <small className="disclaimer">{t('Trezutil peut faire des erreurs. Vérifie les informations importantes avant toute décision commerciale.')}</small>
     </div>
   )

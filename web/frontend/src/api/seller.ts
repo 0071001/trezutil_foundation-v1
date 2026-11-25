@@ -95,6 +95,12 @@ export const sellerApi = {
     return arr(data.items).map(mapListing)
   },
 
+  /** Opens the shop of a business (an offer is published in a shop). Owner, admin or manager only. */
+  async createStore(organizationId: string, name: string, phone: string): Promise<{ id: string; name: string }> {
+    const slug = `${name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'boutique'}-${Math.random().toString(36).slice(2, 7)}`
+    const raw = obj(await http.post<unknown>('/stores', { OrganizationID: organizationId, Name: name, Slug: slug, Country: 'CD', Phone: phone, Status: 'active' }))
+    return { id: str(read(raw, 'id', 'ID')), name: str(read(raw, 'name', 'Name')) }
+  },
   /** Creates a draft; the server assigns the ID, the organization and the status. */
   async createListing(input: NewListing, idempotencyKey: string): Promise<ListingDetail> {
     const media = input.image_urls.map((url, i) => ({ Type: 'image', URL: url, Primary: i === 0 }))

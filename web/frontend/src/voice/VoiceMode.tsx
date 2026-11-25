@@ -4,6 +4,8 @@ import { getLang, t } from '@/lib/i18n'
 import { conversationStore, useConversations } from '@/conversation/store'
 import { Icon } from '@/ui/Icon'
 import { Logo } from '@/ui/kit'
+import { useMobile } from '@/lib/useMobile'
+import { MIcon } from '@/mobile/icons'
 
 /*
  * The voice mode: a screen of its own, an animation driven by the real level of the microphone, listening, answering,
@@ -46,6 +48,7 @@ const COPY: Record<Phase, [string, string]> = {
 }
 
 export function VoiceMode() {
+  const mobile = useMobile()
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { conversations, pending } = useConversations()
@@ -196,6 +199,24 @@ export function VoiceMode() {
   const [title, copy] = COPY[phase]
   const active = phase === 'listening' || phase === 'speaking'
   const scale = phase === 'listening' ? 1 + level * 0.18 : 1
+  if (mobile) {
+    const orb = phase === 'thinking' || phase === 'starting' ? 'think' : phase === 'speaking' ? 'speak' : phase === 'listening' ? 'listen' : 'off'
+    const text = phase === 'speaking' && answer ? `« ${answer.length > 120 ? `${answer.slice(0, 117)}…` : answer} »` : phase === 'listening' && heard ? heard : copy
+    return (
+      <div className="mx-voice">
+        <div className="mx-voice-top"><span>{t('Conversation vocale')}</span><button type="button" onClick={() => close(false)} aria-label={t('Fermer le mode vocal')}><MIcon name="close" /></button></div>
+        <button type="button" className={`mx-orb ${orb}`} style={{ transform: phase === 'listening' ? `scale(${1 + level * 0.18})` : undefined }} onClick={interrupt} disabled={phase !== 'speaking'}
+          aria-label={phase === 'speaking' ? t('Interrompre la réponse') : t('Activité audio')}><i /><i /><i /><i /></button>
+        <div className="mx-voice-copy" aria-live="polite"><h2>{title}</h2><p>{text}</p></div>
+        {phase === 'confirm' && <button type="button" className="mx-primary" onClick={() => close(true)}>{t('Voir et approuver')}</button>}
+        <div className="mx-voice-controls">
+          <button type="button" className={phase === 'muted' ? 'muted' : ''} onClick={toggleMute} disabled={phase === 'unsupported' || phase === 'denied'}><MIcon name="mic" /><span>{phase === 'muted' ? t('Réactiver') : t('Micro')}</span></button>
+          <button type="button" className="end-call" onClick={() => close(!!convId)}><MIcon name="close" /><span>{t('Terminer')}</span></button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={`voice-screen phase-${phase}`}>
       <div className="voice-top"><Logo /><button type="button" className="voice-close" onClick={() => close(false)} aria-label={t('Fermer le mode vocal')}><Icon name="x" /></button></div>

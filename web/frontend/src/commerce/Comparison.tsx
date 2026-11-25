@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
-import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
+import { useNavigate, useParams, useSearchParams } from 'react-router'
 import { conversationStore, useConversations } from '@/conversation/store'
 import { offersOf, trustLabel, type Offer } from '@/commerce/offers'
 import { rememberSupplier } from '@/memory/memory'
+import { NegotiateDialog } from '@/negotiation/NegotiateDialog'
 import { Icon } from '@/ui/Icon'
-import { Badge, Empty, NotConnected } from '@/ui/kit'
+import { Empty } from '@/ui/kit'
 import { t, tn } from '@/lib/i18n'
+import { useMobile } from '@/lib/useMobile'
+import { MobileCompare } from '@/mobile/Compare'
 import { approx, useExchangeRate, type ExchangeRate } from '@/lib/exchangeRate'
 
 /*
@@ -47,12 +50,14 @@ export function Comparison() {
   const [params] = useSearchParams()
   const navigate = useNavigate()
   const { conversations } = useConversations()
+  const mobile = useMobile()
   const conv = conversations.find((c) => c.id === id)
   const turn = conv?.turns.find((x) => x.id === turnId)
   const offers = turn?.reply ? offersOf(turn.reply.result_items) : []
   const [selected, setSelected] = useState(() => Math.max(0, Number(params.get('offer') ?? 1) - 1))
   const [negotiating, setNegotiating] = useState(false)
   const [saved, setSaved] = useState<Record<string, string>>({})
+  const rate = useExchangeRate()
   useEffect(() => { document.title = t('Comparer les propositions — Trezutil') }, [])
 
   const back = () => navigate(`/c/${id}`)
@@ -65,7 +70,7 @@ export function Comparison() {
     )
   }
   const pick = offers[Math.min(selected, offers.length - 1)]!
-  const rate = useExchangeRate()
+  if (mobile) return <MobileCompare conversationId={id} title={conv.title} offers={offers} initial={Number(params.get('offer') ?? 0) || undefined} />
   const table = rows(offers, rate)
   const choose = () => {
     conversationStore.send(id, t('Je retiens l’offre {n} : {title} ({supplier}). Quelles sont les prochaines étapes ?', { n: pick.n, title: pick.title, supplier: pick.supplier }))
@@ -144,41 +149,7 @@ export function Comparison() {
           <button type="button" className="primary-btn" onClick={choose}>{t('Continuer avec l’offre')} {pick.n} <Icon name="arrow" size={16} /></button>
         </div>
       </div>
-      {negotiating && <NegotiationPanel offer={pick} conversationId={id} onClose={() => setNegotiating(false)} />}
-    </div>
-  )
-}
-
-export function NegotiationPanel({ offer, conversationId, onClose }: { offer: Offer; conversationId: string; onClose: () => void }) {
-  const navigate = useNavigate()
-  useEffect(() => {
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    document.addEventListener('keydown', esc)
-    return () => document.removeEventListener('keydown', esc)
-  }, [onClose])
-  const draft = t('Je souhaite négocier l’offre {n} de {supplier} ({title}, {price}). Mon objectif : ', { n: offer.n, supplier: offer.supplier, title: offer.title, price: offer.price })
-  return (
-    <div className="modal-layer" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose() }}>
-      <div className="negotiation-panel" role="dialog" aria-modal="true" aria-labelledby="nego-title">
-        <div className="modal-head">
-          <div><p className="eyebrow">{t('NÉGOCIATION')}</p><h2 id="nego-title">{offer.supplier}</h2></div>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label={t('Fermer')}><Icon name="x" /></button>
-        </div>
-        <div className="negotiation-summary">
-          <div><small>{t('Offre actuelle')}</small><strong>{offer.price}</strong></div>
-          <div><small>{t('Produit')}</small><b>{offer.title}</b></div>
-          {offer.verified ? <Badge tone="green">{trustLabel(offer.trustLevel)}</Badge> : <Badge>{t('Inscrit')}</Badge>}
-        </div>
-        <NotConnected title={t('La négociation automatique n’est pas encore disponible')}>
-          {t('Trezutil ne peut pas encore solliciter le fournisseur, recevoir ses propositions ni lui envoyer une contre-proposition. Aucune négociation n’est simulée ici.')}
-        </NotConnected>
-        <p className="panel-copy">{t('Tu peux préparer ta demande dans la conversation : objectif de prix, quantité, délai, garantie. Trezutil te répondra avec ce qu’il sait faire aujourd’hui.')}</p>
-        <div className="modal-actions">
-          <button type="button" className="secondary-btn" onClick={onClose}>{t('Fermer')}</button>
-          <button type="button" className="primary-btn" onClick={() => navigate(`/c/${conversationId}`, { state: { draft } })}>{t('Préparer ma demande')} <Icon name="arrow" size={15} /></button>
-        </div>
-        <p className="panel-foot"><Link to="/settings/services">{t('Voir ce qui est branché')}</Link></p>
-      </div>
+      {negotiating && <NegotiateDialog offers={[pick]} conversationId={id} onClose={() => setNegotiating(false)} />}
     </div>
   )
 }

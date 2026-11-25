@@ -1,10 +1,10 @@
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { resetCatalog } from '@/mobile/catalog'
+import { conversationStore } from '@/conversation/store'
 import { me, mockApi, renderAt, searchItem, signIn, type MockCall } from '@/test/utils'
 
-/* The mobile layout (Design Trezutil Mobile App) on a phone-sized screen, fed with the real catalogue only. */
+/* The mobile layout ("Concevoir l’application mobile Trezutil") on a phone-sized screen, on real API shapes. */
 
 function phone() {
   vi.stubGlobal('matchMedia', (q: string) => ({
@@ -13,110 +13,140 @@ function phone() {
   }))
 }
 
-const TOTALS: Record<string, number> = { REAL_ESTATE: 15, RESTAURANT: 12, RETAIL: 83, SERVICES: 0, HOTEL: 4, EVENTS: 0 }
+const noSite = () => ({ body: { trust: [], partners: [], sections: [] } })
+const searchReply = {
+  conversation_id: 'conv-1',
+  response: {
+    text: 'Voici des offres.',
+    metadata: { action_type: 'SEARCH_LISTINGS', result_data: { items: [searchItem('a', 'Café A', { PriceAmount: 90 }), searchItem('b', 'Café B', { PriceAmount: 70 })] } },
+  },
+}
+const account = (extra: Record<string, (c: MockCall) => { status?: number; body?: unknown }> = {}) => {
+  signIn()
+  return mockApi({
+    'GET /site/content': noSite,
+    'GET /auth/users/me': () => ({ body: me }),
+    'GET /orders': () => ({ body: { items: [] } }),
+    'GET /reservations': () => ({ body: { items: [] } }),
+    'GET /missions': () => ({ body: { items: [], total: 0 } }),
+    'GET /conversations': () => ({ body: { items: [] } }),
+    'GET /sellers/me': () => ({ body: { organizations: [] } }),
+    'GET /me/credits': () => ({ body: { period_id: '2026-11', personal: { opened: true, granted: 100, reserved: 0, consumed: 20, balance: 80 }, ledger: [], metering: { active: true, costs: [] } } }),
+    ...extra,
+  })
+}
 
-const search = (call: MockCall) => {
-  const body = call.body as { vertical?: string; page_size?: number; text?: string }
-  if (body.vertical && body.page_size === 1) {
-    const total = TOTALS[body.vertical] ?? 0
-    return { body: { items: total ? [searchItem(`${body.vertical}-1`, `Une offre ${body.vertical}`)] : [], total } }
-  }
-  if (body.vertical === 'HOTEL') return { body: { items: [searchItem('h1', 'Makala City Hotel', { Vertical: 'HOTEL' })], total: 4 } }
-  return { body: { items: [searchItem('c1', 'Collier oiseau en or', { Vertical: 'RETAIL', PriceAmount: 79.99 }), searchItem('r1', 'Noki Pizzeria', { Vertical: 'RESTAURANT' })], total: 2 } }
+async function send(text: string) {
+  const field = await screen.findByLabelText('Ton besoin')
+  fireEvent.change(field, { target: { value: text } })
+  fireEvent.keyDown(field, { key: 'Enter' })
 }
 
 describe('the mobile layout', () => {
-  beforeEach(() => { phone(); resetCatalog() })
+  beforeEach(() => { phone(); conversationStore.setOwner('__reset__'); conversationStore.setOwner('') })
   afterEach(() => vi.unstubAllGlobals())
 
-  it('opens on the mobile home: the composer, the real kinds of offers and published offers, with the tab bar', async () => {
-    mockApi({ 'POST /search': search })
+  it('opens on the design home: logo, question, three suggestions, composer; no sidebar and no tab bar', async () => {
+    mockApi({ 'GET /site/content': noSite })
     renderAt('/')
-    expect(await screen.findByRole('heading', { name: /Que cherches-tu/ })).toBeInTheDocument()
-    expect(screen.getByLabelText('Ton besoin')).toBeInTheDocument()
-    const nav = screen.getByRole('navigation', { name: 'Navigation principale' })
-    expect(within(nav).getByRole('button', { name: 'Accueil' })).toHaveAttribute('aria-current', 'page')
-    // Only kinds with published offers are offered.
-    expect(await screen.findByRole('button', { name: 'Immobilier' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Produits' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Services' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Expériences' })).not.toBeInTheDocument()
-    expect(await screen.findByRole('button', { name: 'Voir l’offre Collier oiseau en or' })).toBeInTheDocument()
-    // No rating is shown: the backend has none.
-    expect(screen.queryByText(/★|4\.\d/)).not.toBeInTheDocument()
+    expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Que souhaites-tu acheter,vendre ou faire réaliser ?')
+    expect(screen.getByRole('button', { name: 'Trouver un fournisseur' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Comparer des offres' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Négocier un prix' })).toBeInTheDocument()
+    expect(screen.getByText('Commerce OS')).toBeInTheDocument()
+    expect(screen.queryByRole('navigation', { name: 'Navigation principale' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('complementary')).not.toBeInTheDocument()
+    // No partner is shown unless the team published one.
+    expect(screen.queryByLabelText('Partenaires')).not.toBeInTheDocument()
   })
 
-  it('starts a conversation from the home composer', async () => {
-    const { calls } = mockApi({
-      'POST /search': search,
-      'POST /conversations/message': () => ({ body: { conversation_id: 'conv-1', response: { text: 'Voici des colliers.', metadata: { action_type: 'SEARCH_LISTINGS', result_data: { items: [] } } } } }),
-    })
+  it('shows only the partners published on the site', async () => {
+    mockApi({ 'GET /site/content': () => ({ body: { trust: [], sections: [], partners: [{ id: 'p1', name: 'Partenaire Test', kind: 'other', logo_url: 'https://images.example.com/partenaire.png', link_url: '' }] } }) })
     renderAt('/')
-    const field = await screen.findByLabelText('Ton besoin')
-    fireEvent.change(field, { target: { value: 'un collier en or' } })
-    fireEvent.keyDown(field, { key: 'Enter' })
-    expect(await screen.findByText('Voici des colliers.')).toBeInTheDocument()
-    expect(calls.some((c) => c.path === '/conversations/message' && (c.body as { message_text: string }).message_text === 'un collier en or')).toBe(true)
-    // The conversation has the mobile header.
-    expect(screen.getByRole('button', { name: 'Retour à l’accueil' })).toBeInTheDocument()
-    expect(screen.getByText('Disponible')).toBeInTheDocument()
+    expect(await screen.findByRole('img', { name: 'Partenaire Test' })).toBeInTheDocument()
   })
 
-  it('discovers by kind with the real number of offers', async () => {
-    mockApi({ 'POST /search': search })
-    renderAt('/discover')
-    expect(await screen.findByText('Tendances à Kinshasa')).toBeInTheDocument()
-    // The busiest kind is trending and a collection, with its real count.
-    expect(await screen.findAllByText('83 produits')).toHaveLength(2)
-    await userEvent.click(screen.getByRole('button', { name: 'Hôtels', pressed: false }))
-    expect(await screen.findByRole('button', { name: 'Voir l’offre Makala City Hotel' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Hôtels', pressed: true })).toBeInTheDocument()
+  it('answers with the progress, the cheapest offer first and the comparison', async () => {
+    const { calls } = mockApi({ 'GET /site/content': noSite, 'POST /conversations/message': () => ({ body: searchReply }) })
+    renderAt('/')
+    await send('du café pour le bureau')
+    expect(await screen.findByText('Voici des offres.')).toBeInTheDocument()
+    expect(screen.getByText('Besoin analysé')).toBeInTheDocument()
+    expect(screen.getByText('2 offres pertinentes identifiées')).toBeInTheDocument()
+    const card = screen.getByRole('article', { name: 'Offre 2 : Café B' })
+    expect(within(card).getByText('Meilleur prix')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /Comparer les 2 offres/ }))
+    expect(await screen.findByRole('heading', { name: '2 offres' })).toBeInTheDocument()
+    expect(screen.getByText('MEILLEUR PRIX')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Continuer avec cette offre' }))
+    await waitFor(() => expect(calls.filter((c) => c.path === '/conversations/message')).toHaveLength(2))
+    expect((calls.at(-1)!.body as { message_text: string }).message_text).toContain('Je retiens l’offre 2')
   })
 
-  it('shows a guest how to see orders and bookings, and lists the account’s activity once signed in', async () => {
-    mockApi({ 'POST /search': search })
-    const { unmount } = renderAt('/activity')
-    expect(await screen.findByRole('heading', { name: 'Historique' })).toBeInTheDocument()
-    expect(await screen.findByRole('link', { name: 'Se connecter' })).toBeInTheDocument()
-    unmount()
-
-    signIn()
-    mockApi({
-      'GET /auth/users/me': () => ({ body: me }),
-      'GET /orders': () => ({ body: { items: [{ id: 'o1', status: 'pending_payment', currency: 'CDF', total_amount: { amount_minor: 4200000, currency: 'CDF' }, items: [{ listing_id: 'l1', title: 'Ciment CPJ 42.5', quantity: 1 }], created_at: 1700000000 }] } }),
-      'GET /reservations': () => ({ body: { items: [] } }),
-      'GET /missions': () => ({ body: { items: [], total: 0 } }),
-      'GET /conversations': () => ({ body: { items: [] } }),
-      'GET /sellers/me': () => ({ body: { organizations: [] } }),
-    })
-    renderAt('/activity')
-    expect(await screen.findByText('Ciment CPJ 42.5')).toBeInTheDocument()
-    expect(screen.getByText('Paiement attendu')).toBeInTheDocument()
-    expect(screen.getByText('Aucune réservation.')).toBeInTheDocument()
-    // Something waits for the person: they are not told they are up to date.
-    expect(await screen.findByText('1 commande à payer')).toBeInTheDocument()
-    expect(screen.queryByText('Tu es à jour')).not.toBeInTheDocument()
+  it('opens the drawer with the history, and renames and archives from it', async () => {
+    mockApi({ 'GET /site/content': noSite, 'POST /conversations/message': () => ({ body: searchReply }) })
+    renderAt('/')
+    await send('du café')
+    await screen.findByText('Voici des offres.')
+    await userEvent.click(screen.getByRole('button', { name: 'Ouvrir le menu' }))
+    const drawer = screen.getByRole('dialog', { name: 'Menu' })
+    expect(within(drawer).getByRole('button', { name: 'du café' })).toBeInTheDocument()
+    await userEvent.click(within(drawer).getByRole('button', { name: 'Actions pour du café' }))
+    await userEvent.click(within(drawer).getByRole('menuitem', { name: 'Archiver' }))
+    // Archiving the open conversation leaves it: the home, with the drawer closed.
+    expect(screen.queryByRole('dialog', { name: 'Menu' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Ouvrir le menu' }))
+    expect(within(screen.getByRole('dialog', { name: 'Menu' })).queryByRole('button', { name: 'du café' })).not.toBeInTheDocument()
   })
 
-  it('shows the signed-in profile with real counts and switches the theme', async () => {
-    signIn()
-    mockApi({
-      'GET /auth/users/me': () => ({ body: me }),
-      'GET /orders': () => ({ body: { items: [] } }),
-      'GET /reservations': () => ({ body: { items: [] } }),
-      'GET /missions': () => ({ body: { items: [], total: 0 } }),
-      'GET /conversations': () => ({ body: { items: [] } }),
-      'GET /sellers/me': () => ({ body: { organizations: [] } }),
-    })
+  it('adds files from the bottom sheet and says they stay on the device', async () => {
+    mockApi({ 'GET /site/content': noSite })
+    renderAt('/')
+    await userEvent.click(await screen.findByRole('button', { name: 'Ajouter des fichiers ou une photo' }))
+    const sheet = screen.getByRole('dialog', { name: 'Ajouter à la conversation' })
+    expect(within(sheet).getByRole('button', { name: /Prendre une photo/ })).toBeInTheDocument()
+    expect(within(sheet).getByRole('button', { name: /Photos/ })).toBeInTheDocument()
+    fireEvent.change(screen.getByTestId('file-input'), { target: { files: [new File(['x'], 'devis.pdf', { type: 'application/pdf' })] } })
+    expect(await screen.findByText('devis.pdf')).toBeInTheDocument()
+    expect(screen.getByRole('note')).toHaveTextContent('ton message partira sans eux')
+  })
+
+  it('shows the profile with the real credits and the settings of the design', async () => {
+    account()
     renderAt('/profile')
     expect(await screen.findByRole('heading', { name: 'Jean Mukendi' })).toBeInTheDocument()
-    expect(screen.getByText('+243810000001')).toBeInTheDocument()
-    await waitFor(() => expect(screen.getByText('Achats').previousSibling).toHaveTextContent('0'))
-    const theme = screen.getByRole('button', { name: /Mode sombre/ })
-    await userEvent.click(theme)
+    expect(await screen.findByText('80 crédits disponibles')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /Paramètres/ }))
+    expect(await screen.findByText('APPARENCE ET APPAREIL')).toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: 'Notifications' })).toHaveAttribute('aria-checked', 'true')
+    await userEvent.click(screen.getByRole('button', { name: 'Android' }))
+    expect(document.querySelector('.mx-app')).toHaveClass('android')
+    await userEvent.click(screen.getByRole('switch', { name: 'Mode sombre' }))
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
-    await userEvent.click(screen.getByRole('button', { name: /Mode clair/ }))
-    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
-    expect(screen.getByRole('button', { name: /Se déconnecter/ })).toBeInTheDocument()
+  })
+
+  it('shows the credit balance without a purchase button that does nothing', async () => {
+    account()
+    renderAt('/settings/credits')
+    expect(await screen.findByText('Solde disponible')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '80' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Ajouter des crédits/ })).not.toBeInTheDocument()
+  })
+
+  it('filters the missions', async () => {
+    account({ 'GET /missions': () => ({ body: { items: [{ id: 'm1', title: 'Négociation Kawa', status: 'active', objective: 'o', updated_at: '2026-11-21T10:00:00Z' }, { id: 'm2', title: 'Réservation salle', status: 'completed', objective: 'o', updated_at: '2026-11-20T10:00:00Z' }], total: 2 } }) })
+    renderAt('/operations')
+    expect(await screen.findByText('Négociation Kawa')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Terminées' }))
+    expect(screen.queryByText('Négociation Kawa')).not.toBeInTheDocument()
+    expect(screen.getByText('Réservation salle')).toBeInTheDocument()
+  })
+
+  it('shows the design sign-in, then the phone form', async () => {
+    mockApi({ 'GET /auth/providers': () => ({ body: { google: { enabled: false } } }) })
+    renderAt('/login')
+    expect(await screen.findByRole('heading', { name: 'Bienvenue sur Trezutil' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Continuer avec un numéro' }))
+    expect(screen.getByLabelText('Numéro de téléphone')).toBeInTheDocument()
   })
 })

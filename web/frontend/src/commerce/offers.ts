@@ -75,6 +75,11 @@ export function toOffer(r: SearchResult, index: number): Offer {
   }
 }
 
+/** Whether an offer is booked for a date (a room, a table, a service) rather than bought. */
+export function isReservable(offer: Pick<Offer, 'vertical'>): boolean {
+  return ['HOTEL', 'RESTAURANT', 'SERVICES'].includes((offer.vertical || '').toUpperCase())
+}
+
 export function offersOf(items: Record<string, unknown>[]): Offer[] {
   return items.map(mapSearchResult).filter((r) => r.listing_id).map(toOffer)
 }

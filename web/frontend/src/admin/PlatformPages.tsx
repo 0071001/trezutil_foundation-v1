@@ -3,6 +3,7 @@ import { adminApi, isAdmin, type AuditFilters } from '@/api/admin'
 import { toApiError, type ApiError } from '@/api/client'
 import { adminConsoleApi } from '@/api/console'
 import { adminManageApi } from '@/api/adminManage'
+import { formatMoney } from '@/lib/format'
 import { exchangeRateApi, loadExchangeRate, useExchangeRate } from '@/lib/exchangeRate'
 import { locale, t } from '@/lib/i18n'
 import { useSession } from '@/lib/session'
@@ -183,10 +184,14 @@ export function ExchangeRatePage() {
   const [saved, setSaved] = useState(false)
   useEffect(() => { void loadExchangeRate(true) }, [])
   const fmt = (v: number) => v.toLocaleString(locale(), { maximumFractionDigits: 2 })
+  const typed = Number(rate.replace(/\s/g, '').replace(',', '.'))
   const save = async (e: FormEvent) => {
     e.preventDefault()
+    // A large jump is more often a typo than the market: ask before every price shows it.
+    if (current && typed > 0 && Math.abs(typed - current.rate) / current.rate > 0.2
+      && !window.confirm(t('Ce taux s’écarte de plus de 20 % du taux actuel ({old}). Enregistrer {new} CDF pour 1 USD ?', { old: fmt(current.rate), new: fmt(typed) }))) return
     setBusy(true); setError(null); setSaved(false)
-    try { await exchangeRateApi.set(Number(rate.replace(/\s/g, '').replace(',', '.')), note); setRate(''); setNote(''); setSaved(true); history.reload() } catch (err) { setError(toApiError(err)) } finally { setBusy(false) }
+    try { await exchangeRateApi.set(typed, note); setRate(''); setNote(''); setSaved(true); history.reload() } catch (err) { setError(toApiError(err)) } finally { setBusy(false) }
   }
   return (
     <>
@@ -205,8 +210,9 @@ export function ExchangeRatePage() {
           {admin ? (
             <form className="cc-form" onSubmit={(e) => void save(e)}>
               <label>{t('Nouveau taux (francs congolais pour 1 USD)')}<input inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="2850" required /></label>
+              {typed > 0 && <p className="cc-muted" role="status">{t('Aperçu : 100 USD ≈ {cdf}', { cdf: formatMoney(Math.round(typed * 100), 'CDF') })}</p>}
               <label>{t('Source ou remarque')} <small>{t('facultatif')}</small><input value={note} onChange={(e) => setNote(e.target.value)} maxLength={200} placeholder={t('Ex. : taux BCC du jour')} /></label>
-              {error && <p className="cc-error" role="alert">{error.code === 'INVALID_RATE' ? t('Le taux doit être compris entre 100 et 100 000 francs pour 1 USD.') : errorText(error)}</p>}
+              {error && <p className="cc-error" role="alert">{error.code === 'INVALID_RATE' ? t('Le taux doit être compris entre 1 000 et 10 000 francs pour 1 USD.') : errorText(error)}</p>}
               {saved && <p className="cc-ok" role="status">{t('Taux enregistré.')}</p>}
               <button type="submit" className="cc-primary" disabled={busy || !rate.trim()}>{busy ? t('Enregistrement…') : t('Enregistrer le taux')}</button>
             </form>

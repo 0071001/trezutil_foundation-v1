@@ -8,7 +8,7 @@ import { canBuy, cart, useCart } from '@/commerce/cart'
 
 /* A small commercial card in the thread: picture, supplier and trust, product, availability, place, price. */
 
-export function SupplierCard({ offer, onOpen, onAsk }: { offer: Offer; onOpen: () => void; onAsk?: () => void }) {
+export function SupplierCard({ offer, onOpen, onAsk, onReserve }: { offer: Offer; onOpen: () => void; onAsk?: () => void; onReserve?: () => void }) {
   const rate = useExchangeRate()
   const inCart = useCart().find((i) => i.listingId === offer.id)
   const stop = (fn: () => void) => (e: { stopPropagation: () => void }) => { e.stopPropagation(); fn() }
@@ -16,8 +16,6 @@ export function SupplierCard({ offer, onOpen, onAsk }: { offer: Offer; onOpen: (
     <article className="supplier-card clickable" aria-label={t('Offre {n} : {title}', { n: offer.n, title: offer.title })} onClick={onOpen}>
       <div className="product-visual" style={{ background: offer.image ? '#eef1ef' : offer.color }}>
         {offer.image ? <img src={offer.image} alt="" loading="lazy" /> : <><span>{offer.initials}</span><small>{t('N°')}{offer.n}</small></>}
-        <b className="m-offer-n" aria-hidden="true">{offer.n}</b>
-        {offer.availability && <em className="m-offer-tag" aria-hidden="true">{offer.availability}</em>}
       </div>
       <div className="supplier-info">
         <div className="supplier-line">
@@ -37,6 +35,7 @@ export function SupplierCard({ offer, onOpen, onAsk }: { offer: Offer; onOpen: (
         {approx(offer.priceValue, offer.currency, rate) && <small className="price-approx" title={t('Conversion indicative au taux fixé par Trezutil. Le prix et le paiement restent dans la devise du fournisseur.')}>{approx(offer.priceValue, offer.currency, rate)}</small>}
         <span className="price-actions">
           {onAsk && <button type="button" onClick={stop(onAsk)}>{t('Demander')}</button>}
+          {onReserve && <button type="button" className="cart-add" onClick={stop(onReserve)}><Icon name="calendar" size={14} />{t('Réserver')}</button>}
           {canBuy(offer) && (
             <button type="button" className="cart-add" onClick={stop(() => cart.add(offer))} aria-label={t('Ajouter {title} au panier', { title: offer.title })}>
               <Icon name={inCart ? 'check' : 'cart'} size={14} />{inCart ? t('Dans le panier ({n})', { n: inCart.quantity }) : t('Panier')}

@@ -1,3 +1,4 @@
+import { asDateField } from '@/lib/dates'
 import { type CSSProperties, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { toApiError, type ApiError } from '@/api/client'
@@ -13,7 +14,7 @@ import { Empty, ErrorNote, Loading } from '@/ui/kit'
 import { getLang, t, type Lang } from '@/lib/i18n'
 import { useMobile } from '@/lib/useMobile'
 import { MobileHome } from '@/mobile/MobileHome'
-import { dayLabel } from '@/ui/kit'
+import { AppHeader } from '@/mobile/ui'
 
 /*
  * The conversation: where every operation starts. "/" asks the open question; "/c/:id" is a thread with the composer
@@ -109,6 +110,14 @@ export function Thread() {
   const lastAssistant = [...turns].reverse().find((x) => x.role === 'assistant')
   const lastIsUser = turns[turns.length - 1]?.role === 'user'
 
+  // On a phone, an order the person has just approved opens its confirmation (only for answers of this visit).
+  const seen = useRef(new Set(turns.map((x) => x.id)))
+  useEffect(() => {
+    const index = turns.findIndex((x) => !seen.current.has(x.id) && x.reply?.refs.order_id && x.reply.action_type === 'CREATE_ORDER')
+    turns.forEach((x) => seen.current.add(x.id))
+    if (mobile && index > 0 && turns[index - 1]!.resolution === 'confirmed') navigate(`/confirmed/${encodeURIComponent(turns[index]!.reply!.refs.order_id)}?c=${id}`)
+  }, [turns.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => { if (conv) document.title = `${conv.title} — Trezutil` }, [conv?.title]) // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const prefill = (location.state as { draft?: string } | null)?.draft
@@ -176,10 +185,10 @@ export function Thread() {
   const signInHref = `/login?returnTo=${encodeURIComponent(location.pathname)}`
 
   return (
-    <div className="chat-layout">
+    <div className={mobile ? 'chat-layout mx-chat' : 'chat-layout'}>
+      {mobile && <AppHeader onNew={() => navigate('/')} />}
       <div className="messages" ref={scroller} onScroll={onScroll}>
         <div className="messages-inner" aria-live="polite" aria-relevant="additions">
-          {mobile && <p className="m-context">{dayLabel(conv.createdAt)} · {conv.title}</p>}
           {transcript === 'loading' && conv.remote && <Loading label={t('Chargement de la conversation…')} />}
           {transcript === 'failed' && (
             <div className="state-error" role="alert"><span>{t('La conversation n’a pas pu être lue sur le serveur.')}</span>
@@ -189,7 +198,7 @@ export function Thread() {
           {conv.turns.length > 0 && conv.turns.every((x) => !x.reply) && conv.turns.some((x) => x.role === 'assistant') && conv.serverId && (
             <p className="restored-note">{t('Conversation reprise depuis le serveur : les réponses enregistrées avant la conservation des offres n’ont que leur texte.')}</p>
           )}
-          {turns.map((turn) => turn.role === 'user'
+          {turns.map((turn, index) => turn.role === 'user'
             ? <UserMessage key={turn.id} turn={turn} conversationId={id} busy={busy} />
             : (
               <AssistantMessage
@@ -197,6 +206,7 @@ export function Thread() {
                 confirming={confirming[id] === turn.id} signedIn={signedIn} signInHref={signInHref}
                 operationId={conv.operationId} openingOperation={opening} onOpenOperation={() => void openOperation()}
                 onSend={(text) => send(text)}
+                lastDate={turns.slice(0, index).reverse().map((x) => (x.role === 'user' ? asDateField(x.text) : '')).find(Boolean)}
                 onCompare={(turnId, offer) => navigate(`/c/${id}/compare/${turnId}${offer ? `?offer=${offer.n}` : ''}`)}
                 onOpenOffer={(turnId, offer, latest) => setOfferOpen({ turnId, offer, latest })}
               />
@@ -211,12 +221,12 @@ export function Thread() {
         </button>
       )}
       {offerOpen && (
-        <OfferPanel offer={offerOpen.offer} onClose={() => setOfferOpen(null)}
+        <OfferPanel offer={offerOpen.offer} conversationId={conv.id} onClose={() => setOfferOpen(null)}
           onCompare={() => navigate(`/c/${id}/compare/${offerOpen.turnId}?offer=${offerOpen.offer.n}`)}
+          onSend={offerOpen.latest && !busy ? (text) => { send(text); setOfferOpen(null) } : undefined}
           onAsk={offerOpen.latest && !busy ? () => { send(t('Parle-moi de l’offre {n} : {title}', { n: offerOpen.offer.n, title: offerOpen.offer.title })); setOfferOpen(null) } : undefined} />
       )}
-      <Composer ref={composer} value={draft} onChange={setDraft} onSubmit={send} busy={busy} onStop={() => conversationStore.stop(id)} onVoice={() => navigate(`/voice?c=${id}`)} placeholder={mobile ? t('Continuer la conversation…') : t('Réponds, précise un détail ou demande une comparaison…')}
-        hint={mobile && turns.some((x) => x.reply?.result_items.length) ? t('Tu peux aussi dire « le deuxième » ou « je prends le numéro 1 »') : undefined} />
+      <Composer ref={composer} value={draft} onChange={setDraft} onSubmit={send} busy={busy} onStop={() => conversationStore.stop(id)} onVoice={() => navigate(`/voice?c=${id}`)} placeholder={mobile ? undefined : t('Réponds, précise un détail ou demande une comparaison…')} />
     </div>
   )
 }

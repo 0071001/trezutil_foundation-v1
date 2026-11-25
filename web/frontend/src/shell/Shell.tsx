@@ -11,10 +11,11 @@ import { profileStore } from '@/shell/profile'
 import { Sidebar } from '@/shell/Sidebar'
 import { useWorkspace, WorkspaceProvider } from '@/shell/workspace'
 import { Icon } from '@/ui/Icon'
-import { initials, OfflineBar, useOnline } from '@/ui/kit'
-import { activeTab, TabBar } from '@/mobile/TabBar'
+import { initials, OfflineBar } from '@/ui/kit'
+import { Drawer } from '@/mobile/Drawer'
+import { AppHeader, MobileFrameContext } from '@/mobile/ui'
+import { haptic, mobilePrefs } from '@/mobile/prefs'
 import { useMobile } from '@/lib/useMobile'
-import { UnreadContext } from '@/mobile/parts'
 import { t } from '@/lib/i18n'
 
 /*
@@ -30,6 +31,10 @@ function titleOf(pathname: string, conversationTitle: string | undefined): strin
   if (pathname.startsWith('/purchases')) return t('Achats et réservations')
   if (pathname.startsWith('/suppliers')) return t('Fournisseurs')
   if (pathname === '/supplier') return t('Devenir fournisseur')
+  if (pathname.startsWith('/supplier/requests')) return t('Demandes de prix')
+  if (pathname.startsWith('/supplier/offers')) return t('Mes offres')
+  if (pathname.startsWith('/negotiations/')) return t('Négociation')
+  if (pathname.startsWith('/negotiations')) return t('Négociations')
   if (pathname.startsWith('/overview')) return t('Vue d’ensemble')
   if (pathname.startsWith('/settings')) return t('Paramètres')
   return t('Nouvelle conversation')
@@ -39,7 +44,7 @@ export function Shell() {
   return <WorkspaceProvider><Frame /></WorkspaceProvider>
 }
 
-function ConversationMenu({ id, title, operationId, more = false }: { id: string; title: string; operationId?: string; more?: boolean }) {
+function ConversationMenu({ id, title, operationId }: { id: string; title: string; operationId?: string }) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -51,9 +56,7 @@ function ConversationMenu({ id, title, operationId, more = false }: { id: string
   }, [open])
   return (
     <div className="top-title-wrap" ref={box}>
-      {more
-        ? <button type="button" className="m-icon-btn" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} aria-label={t('Options de la conversation')}><Icon name="more" size={18} /></button>
-        : <button type="button" className="top-title" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open}><span>{title}</span><Icon name="chevron" size={14} /></button>}
+      <button type="button" className="top-title" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open}><span>{title}</span><Icon name="chevron" size={14} /></button>
       {open && (
         <div className="menu" role="menu">
           <button type="button" role="menuitem" onClick={() => { setOpen(false); const next = window.prompt(t('Nouveau titre'), title); if (next) conversationStore.rename(id, next) }}><Icon name="edit" size={15} />{t('Renommer')}</button>
@@ -105,47 +108,54 @@ function Frame() {
   const cartItems = useCart()
   const cartCount = cartItems.reduce((n, i) => n + i.quantity, 0)
   const [cartOpen, setCartOpen] = useState(false)
-  const navigate = useNavigate()
-  const online = useOnline()
   const mobile = useMobile()
-  const tab = activeTab(pathname)
-  // On a phone the home, Discover, Activity and Profile draw their own header (Design Trezutil Mobile App).
-  // The mobile screens open the cart and the notifications through the frame.
+  const platform = mobilePrefs.use().platform
+  const [menu, setMenu] = useState(false)
+  useEffect(() => { setMenu(false) }, [pathname])
+  // A short vibration on taps, where the person kept it on.
   useEffect(() => {
-    const open = (e: Event) => { const which = (e as CustomEvent<string>).detail; if (which === 'cart') setCartOpen(true); if (which === 'notifications') setDrawer(true) }
-    window.addEventListener('trezutil:open', open)
-    return () => window.removeEventListener('trezutil:open', open)
-  }, [])
-  const ownHeader = pathname === '/' || pathname === '/discover' || pathname === '/activity' || pathname === '/profile'
+    if (!mobile) return
+    const tap = (e: Event) => { if ((e.target as Element | null)?.closest?.('button, a')) haptic() }
+    document.addEventListener('click', tap)
+    return () => document.removeEventListener('click', tap)
+  }, [mobile])
+  // On a phone these screens draw the header of the mobile design themselves; the others get a back header.
+  const ownHeader = pathname === '/' || pathname.startsWith('/c/') || pathname === '/search' || pathname === '/profile' || pathname === '/notifications'
+    || pathname === '/operations' || pathname === '/settings' || pathname === '/settings/credits' || pathname.startsWith('/confirmed/')
+
+  // List pages whose heading would repeat the header's title.
+  const titled = ['/purchases', '/bookings', '/negotiations', '/suppliers', '/supplier/requests', '/supplier/offers'].includes(pathname)
+
+  if (mobile) {
+    return (
+      <MobileFrameContext.Provider value={{ openDrawer: () => setMenu(true), openCart: () => setCartOpen(true), cartCount, unread }}>
+        <div className={`mx-app ${platform}`}>
+          <a className="skip-link" href="#main">{t('Aller au contenu')}</a>
+          <main className={`mx-main${titled ? ' mx-titled' : ''}`} id="main" tabIndex={-1}>
+            {!ownHeader && <AppHeader title={title} back />}
+            <OfflineBar />
+            <div className="view-container"><Outlet /></div>
+          </main>
+          {menu && <Drawer close={() => setMenu(false)} />}
+          {cartOpen && <CartDrawer onClose={() => setCartOpen(false)} />}
+        </div>
+      </MobileFrameContext.Provider>
+    )
+  }
 
   return (
-    <div className={`app-shell${tab ? ` m-tab-${tab}` : ''}`}>
+    <div className="app-shell">
       <a className="skip-link" href="#main">{t('Aller au contenu')}</a>
-      {/* On a phone the tab bar replaces the sidebar. */}
-      {!mobile && <Sidebar
+      <Sidebar
         collapsed={collapsed} onCollapse={() => setCollapsed((c) => { try { localStorage.setItem(SIDE_KEY, c ? '0' : '1') } catch { /* visit only */ } return !c })}
         mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} conversations={conversations} pending={pending}
         activeOperations={(missions.data ?? []).filter((m) => m.status === 'active').length} onNotifications={() => setDrawer(true)}
-      />}
+      />
       {mobileOpen && <div className="mobile-scrim" onClick={() => setMobileOpen(false)} aria-hidden="true" />}
       <main className="main-shell" id="main" tabIndex={-1}>
-        {mobile && conv && (
-          <header className="m-chat-head">
-            <button type="button" className="m-icon-btn" onClick={() => navigate('/')} aria-label={t('Retour à l’accueil')}><Icon name="back" size={18} /></button>
-            <div className="m-chat-title">
-              <b>Trezutil</b>
-              <small><i className={online ? 'on' : ''} />{online ? t('Disponible') : t('Hors ligne')}</small>
-            </div>
-            <div className="m-chat-actions">
-              {cartCount > 0 && <button type="button" className="m-icon-btn m-badge" onClick={() => setCartOpen(true)} aria-label={t('Panier, {n} article(s)', { n: cartCount })}><Icon name="cart" size={18} /><i>{cartCount > 9 ? '9+' : cartCount}</i></button>}
-              <ConversationMenu id={conv.id} title={title} operationId={conv.operationId} more />
-            </div>
-          </header>
-        )}
-        {!wide && !(mobile && (conv || ownHeader)) && (
-          <header className={`topbar${ownHeader ? ' m-own-header' : ''}${conv ? ' m-chat-topbar' : ''}`}>
+        {!wide && (
+          <header className="topbar">
             <button type="button" className="icon-btn menu-trigger" onClick={() => setMobileOpen(true)} aria-label={t('Ouvrir le menu')}><Icon name="menu" /></button>
-            {mobile && <button type="button" className="icon-btn m-back" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} aria-label={t('Retour')}><Icon name="back" /></button>}
             {conv ? <ConversationMenu id={conv.id} title={title} operationId={conv.operationId} /> : <div className="top-title"><span>{title}</span></div>}
             <div className="top-actions">
               {cartCount > 0 && (
@@ -161,8 +171,7 @@ function Frame() {
           </header>
         )}
         <OfflineBar />
-        <div className="view-container"><UnreadContext.Provider value={{ unread }}><Outlet /></UnreadContext.Provider></div>
-        {mobile && <TabBar />}
+        <div className="view-container"><Outlet /></div>
       </main>
       {drawer && <NotificationsDrawer notices={notices} read={prefs.read} onClose={() => setDrawer(false)} />}
       {cartOpen && <CartDrawer onClose={() => setCartOpen(false)} />}
