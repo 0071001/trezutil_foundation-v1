@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"github.com/trezutil/trezutil/internal/application/vertical"
 	"strconv"
 	"strings"
@@ -553,16 +554,12 @@ func (p *ConversationProcessor) interpretIntent(
 	req *ProcessRequest,
 	messages []domain.Message,
 ) (*domain.ConversationIntent, error) {
-	// A short reply pointing at a previous result ("2", "the second one")
-	// opens that listing.
-	if id := referencedResultID(req.MessageText, cx); id != "" {
-		return &domain.ConversationIntent{
-			Name:       "RESULT_REFERENCE",
-			Confidence: 1.0,
-			Source:     "SYSTEM",
-			ActionType: domain.ActionGetListing,
-			Entities:   []domain.ConversationEntity{{Name: "listing_id", Value: id, NormalizedValue: id, Source: "CONTEXT"}},
-		}, nil
+	// A reply pointing at a previous result ("2", "le deuxième",
+	// "Parle-moi du numéro 1") opens that listing, or orders or books it.
+	// Longer messages and requests to act go to the model first, which
+	// also reads dates and quantities; the keyword fallback resolves them too.
+	if intent := resultReferenceIntent(req.MessageText, cx); intent != nil && intent.ActionType == domain.ActionGetListing && isShortReference(req.MessageText) {
+		return intent, nil
 	}
 
 	// Try AI classification if available
@@ -624,6 +621,9 @@ func (p *ConversationProcessor) interpretIntent(
 // keywordIntent is the deterministic, AI-free intent resolver. For searches
 // the user's own words are the query text.
 func keywordIntent(p *ConversationProcessor, ctx context.Context, conv *domain.Conversation, cx *domain.ConversationContext, req *ProcessRequest) *domain.ConversationIntent {
+	if intent := resultReferenceIntent(req.MessageText, cx); intent != nil {
+		return intent
+	}
 	// A follow-up that only adjusts the last search ("moins cher", "et à Limete").
 	if cx != nil {
 		if merged, ok := refineSearch(cx.SearchCriteria, req.MessageText); ok {
@@ -1392,20 +1392,94 @@ func normalizedWords(text string) []string {
 	})
 }
 
-// referencedResultID resolves a short reply to one of the last listed results.
+// A number introduced as a position in the list: "numéro 1", "n° 2",
+// "#3", "l'offre 2", "option 1", "result 2".
+var resultNumberRef = regexp.MustCompile(`(?i)(?:\bnum[ée]ro|\bn[°º]|#|\boffres?|\boptions?|\br[ée]sultats?|\bresults?|\bnumber)\s*(\d{1,2})\b`)
+
+// A position said as a word: "le premier", "la 2e", "the second one", "le dernier".
+var resultOrdinalRef = regexp.MustCompile(`(?i)(?:^|[\s'’])(premi[eè]re?|1(?:er|re|ère)|deuxi[eè]me|2(?:e|ème|eme|nd)|seconde?|troisi[eè]me|3(?:e|ème|eme|rd)|quatri[eè]me|4(?:e|ème|eme|th)|cinqui[eè]me|5(?:e|ème|eme|th)|derni[eè]re?|first|third|fourth|fifth|last)(?:$|[\s.!?,])`)
+
+var resultOrdinals = map[string]int{
+	"premier": 1, "première": 1, "premiere": 1, "1er": 1, "1re": 1, "1ère": 1, "first": 1,
+	"deuxième": 2, "deuxieme": 2, "2e": 2, "2ème": 2, "2eme": 2, "2nd": 2, "second": 2, "seconde": 2,
+	"troisième": 3, "troisieme": 3, "3e": 3, "3ème": 3, "3eme": 3, "3rd": 3, "third": 3,
+	"quatrième": 4, "quatrieme": 4, "4e": 4, "4ème": 4, "4eme": 4, "4th": 4, "fourth": 4,
+	"cinquième": 5, "cinquieme": 5, "5e": 5, "5ème": 5, "5eme": 5, "5th": 5, "fifth": 5,
+	"dernier": -1, "dernière": -1, "derniere": -1, "last": -1,
+}
+
+// referencedResultID resolves a reply pointing at one of the last listed
+// results: a bare number ("2"), a numbered reference anywhere in the message
+// ("Parle-moi du numéro 1", "l’offre 2 : Collier en or") or, in a short
+// reply, an ordinal word ("le deuxième", "the last one").
 func referencedResultID(text string, cx *domain.ConversationContext) string {
-	if cx == nil || len(cx.ResultItems) == 0 || len(normalizedWords(text)) > 4 {
+	if cx == nil || len(cx.ResultItems) == 0 {
 		return ""
 	}
-	trimmed := strings.TrimSpace(text)
-	if n, err := strconv.Atoi(trimmed); err == nil {
-		if n >= 1 && n <= len(cx.ResultItems) {
-			return cx.ResultItems[n-1].ID
+	items := cx.ResultItems
+	at := func(n int) string {
+		if n == -1 {
+			return items[len(items)-1].ID
+		}
+		if n >= 1 && n <= len(items) {
+			return items[n-1].ID
 		}
 		return ""
 	}
-	if ref := domain.ResolveContextualReference(trimmed, cx); ref != nil && ref.Strategy == domain.StrategyOrdinal {
-		return ref.ResolvedItemID
+	trimmed := strings.TrimSpace(strings.TrimRight(strings.TrimSpace(text), ".!?"))
+	if n, err := strconv.Atoi(trimmed); err == nil {
+		return at(n)
+	}
+	if m := resultNumberRef.FindStringSubmatch(text); m != nil {
+		n, _ := strconv.Atoi(m[1])
+		return at(n)
+	}
+	// Ordinal words also appear in ordinary requests ("le premier prix",
+	// "first class"), so only a short reply counts as pointing at the list.
+	if len(strings.Fields(text)) > 6 {
+		return ""
+	}
+	if m := resultOrdinalRef.FindStringSubmatch(strings.ToLower(text)); m != nil {
+		if n, ok := resultOrdinals[m[1]]; ok {
+			return at(n)
+		}
 	}
 	return ""
+}
+
+// isShortReference reports whether the message is little more than the
+// reference itself: "2", "le deuxième", "Parle-moi de l’offre 1 : <titre>".
+func isShortReference(text string) bool {
+	if i := strings.Index(text, ":"); i >= 0 {
+		text = text[:i]
+	}
+	return len(strings.Fields(text)) <= 6
+}
+
+// resultReferenceIntent opens the referenced result, or acts on it when the
+// message asks to buy, book or check it ("je prends le numéro 2").
+func resultReferenceIntent(text string, cx *domain.ConversationContext) *domain.ConversationIntent {
+	id := referencedResultID(text, cx)
+	if id == "" {
+		return nil
+	}
+	action := domain.ActionGetListing
+	// The words after a colon are the offer's own title ("l’offre 2 : Commande
+	// groupée de pagnes"): only the user's part says what to do.
+	ask := text
+	if i := strings.IndexAny(ask, ":"); i >= 0 {
+		ask = ask[:i]
+	}
+	switch a := resolveActionTypeKeyword(ask); a {
+	case domain.ActionCreateOrder, domain.ActionCreateReservation, domain.ActionCheckAvailability:
+		action = a
+	}
+	return &domain.ConversationIntent{
+		Name:                 "RESULT_REFERENCE",
+		Confidence:           1.0,
+		Source:               "SYSTEM",
+		ActionType:           action,
+		RequiresConfirmation: domain.AIActionRequiresConfirmation(action),
+		Entities:             []domain.ConversationEntity{{Name: "listing_id", Value: id, NormalizedValue: id, Source: "CONTEXT"}},
+	}
 }
