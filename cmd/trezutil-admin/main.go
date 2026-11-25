@@ -38,8 +38,8 @@ import (
 const usage = `usage:
   trezutil-admin create-admin -email <address> [-name <display name>] [-roles admin,operator,moderator] [-password-stdin]
   trezutil-admin set-password -email <address> [-password-stdin]
-  trezutil-admin grant-role   -phone <E.164> -role <role>
-  trezutil-admin revoke-role  -phone <E.164> -role <role>
+  trezutil-admin grant-role   (-phone <E.164> | -email <address>) -role <role>
+  trezutil-admin revoke-role  (-phone <E.164> | -email <address>) -role <role>
 the password comes from $TREZUTIL_ADMIN_PASSWORD or, with -password-stdin, from standard input`
 
 func main() {
@@ -59,11 +59,17 @@ func main() {
 }
 
 func openDB(ctx context.Context) *postgres.UserRepository {
+	users, _ := openStores(ctx)
+	return users
+}
+
+// openStores opens the users and the audit trail (role changes are recorded there).
+func openStores(ctx context.Context) (*postgres.UserRepository, *postgres.AuditRepository) {
 	db, err := database.Open(ctx)
 	if err != nil {
 		fail(err)
 	}
-	return postgres.NewUserRepository(db)
+	return postgres.NewUserRepository(db), postgres.NewAuditRepository(db)
 }
 
 func staffCommand(cmd string, args []string) {
@@ -145,24 +151,36 @@ func readPassword(fromStdin bool) (string, error) {
 func roleCommand(cmd string, args []string) {
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	phone := fs.String("phone", "", "user phone number")
+	email := fs.String("email", "", "user email address (an account opened with Google has no phone)")
 	roleName := fs.String("role", "", "platform role")
 	_ = fs.Parse(args)
+	if (*phone == "") == (*email == "") {
+		fail(errors.New("give either -phone or -email"))
+	}
 
 	role := domain.Role(*roleName)
 	if !role.IsValid() {
 		fail(fmt.Errorf("unknown role %q", *roleName))
 	}
-	normalized, err := domain.NormalizePhone(*phone)
-	if err != nil {
-		fail(fmt.Errorf("invalid phone %q", *phone))
-	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	users := openDB(ctx)
-	user, err := users.FindByPhone(ctx, normalized)
-	if err != nil {
-		fail(fmt.Errorf("no account for %s (the user must sign in once first): %w", normalized, err))
+	users, audit := openStores(ctx)
+	var user *domain.User
+	var err error
+	who := strings.TrimSpace(*email)
+	if who != "" {
+		user, err = users.FindUserByEmail(ctx, who)
+	} else {
+		normalized, perr := domain.NormalizePhone(*phone)
+		if perr != nil {
+			fail(fmt.Errorf("invalid phone %q", *phone))
+		}
+		who = normalized
+		user, err = users.FindByPhone(ctx, normalized)
+	}
+	if err != nil || user == nil {
+		fail(fmt.Errorf("no account for %s (the user must sign in once first): %v", who, err))
 	}
 
 	switch cmd {
@@ -177,7 +195,15 @@ func roleCommand(cmd string, args []string) {
 	if err != nil {
 		fail(err)
 	}
-	fmt.Printf("%s %s for user %s (%s)\n", cmd, role, user.ID, normalized)
+	action := "user.role_granted"
+	if cmd == "revoke-role" {
+		action = "user.role_revoked"
+	}
+	if aerr := audit.Append(ctx, domain.AuditEntry{ActorID: "cli:trezutil-admin", Action: action, TargetType: "user", TargetID: user.ID,
+		Metadata: map[string]interface{}{"role": string(role), "via": "trezutil-admin " + cmd}}); aerr != nil {
+		fmt.Fprintf(os.Stderr, "warning: the role change was made but could not be written to the audit trail: %v\n", aerr)
+	}
+	fmt.Printf("%s %s for user %s (%s)\n", cmd, role, user.ID, who)
 }
 
 func isStaffRole(r domain.Role) bool {
