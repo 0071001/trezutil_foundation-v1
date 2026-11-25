@@ -16,6 +16,8 @@ export function SupplierCard({ offer, onOpen, onAsk }: { offer: Offer; onOpen: (
     <article className="supplier-card clickable" aria-label={t('Offre {n} : {title}', { n: offer.n, title: offer.title })} onClick={onOpen}>
       <div className="product-visual" style={{ background: offer.image ? '#eef1ef' : offer.color }}>
         {offer.image ? <img src={offer.image} alt="" loading="lazy" /> : <><span>{offer.initials}</span><small>{t('N°')}{offer.n}</small></>}
+        <b className="m-offer-n" aria-hidden="true">{offer.n}</b>
+        {offer.availability && <em className="m-offer-tag" aria-hidden="true">{offer.availability}</em>}
       </div>
       <div className="supplier-info">
         <div className="supplier-line">

@@ -11,7 +11,10 @@ import { profileStore } from '@/shell/profile'
 import { Sidebar } from '@/shell/Sidebar'
 import { useWorkspace, WorkspaceProvider } from '@/shell/workspace'
 import { Icon } from '@/ui/Icon'
-import { initials, OfflineBar } from '@/ui/kit'
+import { initials, OfflineBar, useOnline } from '@/ui/kit'
+import { activeTab, TabBar } from '@/mobile/TabBar'
+import { useMobile } from '@/lib/useMobile'
+import { UnreadContext } from '@/mobile/parts'
 import { t } from '@/lib/i18n'
 
 /*
@@ -36,7 +39,7 @@ export function Shell() {
   return <WorkspaceProvider><Frame /></WorkspaceProvider>
 }
 
-function ConversationMenu({ id, title, operationId }: { id: string; title: string; operationId?: string }) {
+function ConversationMenu({ id, title, operationId, more = false }: { id: string; title: string; operationId?: string; more?: boolean }) {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement>(null)
@@ -48,9 +51,9 @@ function ConversationMenu({ id, title, operationId }: { id: string; title: strin
   }, [open])
   return (
     <div className="top-title-wrap" ref={box}>
-      <button type="button" className="top-title" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open}>
-        <span>{title}</span><Icon name="chevron" size={14} />
-      </button>
+      {more
+        ? <button type="button" className="m-icon-btn" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open} aria-label={t('Options de la conversation')}><Icon name="more" size={18} /></button>
+        : <button type="button" className="top-title" onClick={() => setOpen((o) => !o)} aria-haspopup="menu" aria-expanded={open}><span>{title}</span><Icon name="chevron" size={14} /></button>}
       {open && (
         <div className="menu" role="menu">
           <button type="button" role="menuitem" onClick={() => { setOpen(false); const next = window.prompt(t('Nouveau titre'), title); if (next) conversationStore.rename(id, next) }}><Icon name="edit" size={15} />{t('Renommer')}</button>
@@ -102,20 +105,47 @@ function Frame() {
   const cartItems = useCart()
   const cartCount = cartItems.reduce((n, i) => n + i.quantity, 0)
   const [cartOpen, setCartOpen] = useState(false)
+  const navigate = useNavigate()
+  const online = useOnline()
+  const mobile = useMobile()
+  const tab = activeTab(pathname)
+  // On a phone the home, Discover, Activity and Profile draw their own header (Design Trezutil Mobile App).
+  // The mobile screens open the cart and the notifications through the frame.
+  useEffect(() => {
+    const open = (e: Event) => { const which = (e as CustomEvent<string>).detail; if (which === 'cart') setCartOpen(true); if (which === 'notifications') setDrawer(true) }
+    window.addEventListener('trezutil:open', open)
+    return () => window.removeEventListener('trezutil:open', open)
+  }, [])
+  const ownHeader = pathname === '/' || pathname === '/discover' || pathname === '/activity' || pathname === '/profile'
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${tab ? ` m-tab-${tab}` : ''}`}>
       <a className="skip-link" href="#main">{t('Aller au contenu')}</a>
-      <Sidebar
+      {/* On a phone the tab bar replaces the sidebar. */}
+      {!mobile && <Sidebar
         collapsed={collapsed} onCollapse={() => setCollapsed((c) => { try { localStorage.setItem(SIDE_KEY, c ? '0' : '1') } catch { /* visit only */ } return !c })}
         mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} conversations={conversations} pending={pending}
         activeOperations={(missions.data ?? []).filter((m) => m.status === 'active').length} onNotifications={() => setDrawer(true)}
-      />
+      />}
       {mobileOpen && <div className="mobile-scrim" onClick={() => setMobileOpen(false)} aria-hidden="true" />}
       <main className="main-shell" id="main" tabIndex={-1}>
-        {!wide && (
-          <header className="topbar">
+        {mobile && conv && (
+          <header className="m-chat-head">
+            <button type="button" className="m-icon-btn" onClick={() => navigate('/')} aria-label={t('Retour à l’accueil')}><Icon name="back" size={18} /></button>
+            <div className="m-chat-title">
+              <b>Trezutil</b>
+              <small><i className={online ? 'on' : ''} />{online ? t('Disponible') : t('Hors ligne')}</small>
+            </div>
+            <div className="m-chat-actions">
+              {cartCount > 0 && <button type="button" className="m-icon-btn m-badge" onClick={() => setCartOpen(true)} aria-label={t('Panier, {n} article(s)', { n: cartCount })}><Icon name="cart" size={18} /><i>{cartCount > 9 ? '9+' : cartCount}</i></button>}
+              <ConversationMenu id={conv.id} title={title} operationId={conv.operationId} more />
+            </div>
+          </header>
+        )}
+        {!wide && !(mobile && (conv || ownHeader)) && (
+          <header className={`topbar${ownHeader ? ' m-own-header' : ''}${conv ? ' m-chat-topbar' : ''}`}>
             <button type="button" className="icon-btn menu-trigger" onClick={() => setMobileOpen(true)} aria-label={t('Ouvrir le menu')}><Icon name="menu" /></button>
+            {mobile && <button type="button" className="icon-btn m-back" onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))} aria-label={t('Retour')}><Icon name="back" /></button>}
             {conv ? <ConversationMenu id={conv.id} title={title} operationId={conv.operationId} /> : <div className="top-title"><span>{title}</span></div>}
             <div className="top-actions">
               {cartCount > 0 && (
@@ -131,7 +161,8 @@ function Frame() {
           </header>
         )}
         <OfflineBar />
-        <div className="view-container"><Outlet /></div>
+        <div className="view-container"><UnreadContext.Provider value={{ unread }}><Outlet /></UnreadContext.Provider></div>
+        {mobile && <TabBar />}
       </main>
       {drawer && <NotificationsDrawer notices={notices} read={prefs.read} onClose={() => setDrawer(false)} />}
       {cartOpen && <CartDrawer onClose={() => setCartOpen(false)} />}

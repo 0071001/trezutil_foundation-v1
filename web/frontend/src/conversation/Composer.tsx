@@ -34,9 +34,11 @@ interface Props {
   onStop?: () => void
   autoFocus?: boolean
   placeholder?: string
+  /** A line under the composer on a phone (the mobile design's hint). */
+  hint?: string
 }
 
-export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSubmit, onVoice, onStop, busy = false, autoFocus, placeholder }, ref) {
+export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ value, onChange, onSubmit, onVoice, onStop, busy = false, autoFocus, placeholder, hint }, ref) {
   const area = useRef<HTMLTextAreaElement>(null)
   const filesInput = useRef<HTMLInputElement>(null)
   const cameraInput = useRef<HTMLInputElement>(null)
@@ -151,6 +153,7 @@ export const Composer = forwardRef<ComposerHandle, Props>(function Composer({ va
           </div>
         </div>
       </div>
+      {hint && <small className="m-composer-hint">{hint}</small>}
       <small className="disclaimer">{t('Trezutil peut faire des erreurs. Vérifie les informations importantes avant toute décision commerciale.')}</small>
     </div>
   )

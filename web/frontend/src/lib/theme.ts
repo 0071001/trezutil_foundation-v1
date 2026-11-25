@@ -32,7 +32,9 @@ export function applyTheme(theme: Theme = current) {
   const root = document.documentElement
   if (theme === 'system') root.removeAttribute('data-theme')
   else root.setAttribute('data-theme', theme)
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark(theme) ? '#212121' : '#ffffff')
+  // On a phone the mobile design's page colours; on a computer the neutral ones.
+  const phone = !!window.matchMedia?.('(max-width: 760px)').matches
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', isDark(theme) ? (phone ? '#080F1A' : '#212121') : (phone ? '#F9F8F5' : '#ffffff'))
 }
 
 export function setTheme(theme: Theme) {

@@ -12,6 +12,9 @@ import { SupplierOnboarding } from '@/pages/SupplierOnboarding'
 import { Shell } from '@/shell/Shell'
 import { VoiceMode } from '@/voice/VoiceMode'
 import { AdminApp } from '@/admin/AdminApp'
+import { Discover } from '@/mobile/Discover'
+import { Activity } from '@/mobile/Activity'
+import { Profile } from '@/mobile/Profile'
 
 /*
  * Trezutil on the web: a conversation first. Every address of the client space is here; the earlier addresses
@@ -37,6 +40,9 @@ export function AppRoutes() {
         <Route path="suppliers" element={<Suppliers />} />
         <Route path="supplier" element={<SupplierOnboarding />} />
         <Route path="overview" element={<Overview />} />
+        <Route path="discover" element={<Discover />} />
+        <Route path="activity" element={<Activity />} />
+        <Route path="profile" element={<Profile />} />
         <Route path="settings" element={<Settings />} />
         <Route path="settings/:section" element={<Settings />} />
         <Route path="*" element={<Navigate to="/" replace />} />

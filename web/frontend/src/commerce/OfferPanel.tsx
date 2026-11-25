@@ -24,7 +24,7 @@ function facts(metadata: Record<string, unknown>): [string, string][] {
     .map(([k, v]) => [k.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase()), typeof v === 'boolean' ? (v ? t('Oui') : t('Non')) : String(v)])
 }
 
-export function OfferPanel({ offer, onClose, onAsk, onCompare }: { offer: Offer; onClose: () => void; onAsk?: () => void; onCompare: () => void }) {
+export function OfferPanel({ offer, onClose, onAsk, onCompare }: { offer: Offer; onClose: () => void; onAsk?: () => void; onCompare?: () => void }) {
   const rate = useExchangeRate()
   const listing = useAsync(() => listingsApi.get(offer.id), [offer.id])
   const [quantity, setQuantity] = useState(1)
@@ -87,7 +87,7 @@ export function OfferPanel({ offer, onClose, onAsk, onCompare }: { offer: Offer;
           </div>
         )}
         <div className="drawer-foot offer-actions">
-          <button type="button" className="secondary-btn" onClick={onCompare}><Icon name="layers" size={15} />{t('Comparer')}</button>
+          {onCompare && <button type="button" className="secondary-btn" onClick={onCompare}><Icon name="layers" size={15} />{t('Comparer')}</button>}
           {onAsk && <button type="button" className={buyable ? 'secondary-btn' : 'primary-btn'} onClick={onAsk}>{t('Demander à Trezutil')} <Icon name="arrow" size={15} /></button>}
         </div>
       </aside>

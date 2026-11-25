@@ -155,7 +155,7 @@ export function AssistantMessage(p: AssistantProps) {
 
   return (
     <div className="assistant-message">
-      <div className="assistant-mark"><Logo compact /></div>
+      <div className="assistant-mark"><Logo compact /><span className="m-mark" aria-hidden="true">T</span></div>
       <div className="message-content">
         <RichText text={turn.text} />
         {turn.interrupted && (
@@ -261,6 +261,7 @@ export function AssistantMessage(p: AssistantProps) {
         )}
         {(
           <div className="message-actions">
+            <span className="turn-time m-time">{clock(turn.at)}</span>
             <button type="button" onClick={() => copy(turn.text)} aria-label={t('Copier la réponse')} title={t('Copier')}><Icon name={copied ? 'check' : 'copy'} size={15} /></button>
             {canRegenerate && <button type="button" onClick={() => conversationStore.regenerate(p.conversationId, turn.id)} aria-label={t('Régénérer la réponse')} title={t('Redemander (la recherche est relancée)')}><Icon name="refresh" size={15} /></button>}
           </div>

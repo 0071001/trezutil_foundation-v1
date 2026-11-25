@@ -11,6 +11,9 @@ import type { Offer } from '@/commerce/offers'
 import { Icon, type IconName } from '@/ui/Icon'
 import { Empty, ErrorNote, Loading } from '@/ui/kit'
 import { getLang, t, type Lang } from '@/lib/i18n'
+import { useMobile } from '@/lib/useMobile'
+import { MobileHome } from '@/mobile/MobileHome'
+import { dayLabel } from '@/ui/kit'
 
 /*
  * The conversation: where every operation starts. "/" asks the open question; "/c/:id" is a thread with the composer
@@ -45,6 +48,11 @@ const TITLES: Record<Lang, TitleWord[]> = {
 const TITLE = () => TITLES[getLang()]
 
 export function Welcome() {
+  // On a phone, the home of the mobile design (Design Trezutil Mobile App).
+  return useMobile() ? <MobileHome /> : <DesktopWelcome />
+}
+
+function DesktopWelcome() {
   const navigate = useNavigate()
   const [draft, setDraft] = useState('')
   const composer = useRef<ComposerHandle>(null)
@@ -96,6 +104,7 @@ export function Thread() {
   const [below, setBelow] = useState(false)
   const composer = useRef<ComposerHandle>(null)
   const busy = !!pending[id]
+  const mobile = useMobile()
   const turns = conv?.turns ?? []
   const lastAssistant = [...turns].reverse().find((x) => x.role === 'assistant')
   const lastIsUser = turns[turns.length - 1]?.role === 'user'
@@ -170,6 +179,7 @@ export function Thread() {
     <div className="chat-layout">
       <div className="messages" ref={scroller} onScroll={onScroll}>
         <div className="messages-inner" aria-live="polite" aria-relevant="additions">
+          {mobile && <p className="m-context">{dayLabel(conv.createdAt)} · {conv.title}</p>}
           {transcript === 'loading' && conv.remote && <Loading label={t('Chargement de la conversation…')} />}
           {transcript === 'failed' && (
             <div className="state-error" role="alert"><span>{t('La conversation n’a pas pu être lue sur le serveur.')}</span>
@@ -205,7 +215,8 @@ export function Thread() {
           onCompare={() => navigate(`/c/${id}/compare/${offerOpen.turnId}?offer=${offerOpen.offer.n}`)}
           onAsk={offerOpen.latest && !busy ? () => { send(t('Parle-moi de l’offre {n} : {title}', { n: offerOpen.offer.n, title: offerOpen.offer.title })); setOfferOpen(null) } : undefined} />
       )}
-      <Composer ref={composer} value={draft} onChange={setDraft} onSubmit={send} busy={busy} onStop={() => conversationStore.stop(id)} onVoice={() => navigate(`/voice?c=${id}`)} placeholder={t('Réponds, précise un détail ou demande une comparaison…')} />
+      <Composer ref={composer} value={draft} onChange={setDraft} onSubmit={send} busy={busy} onStop={() => conversationStore.stop(id)} onVoice={() => navigate(`/voice?c=${id}`)} placeholder={mobile ? t('Continuer la conversation…') : t('Réponds, précise un détail ou demande une comparaison…')}
+        hint={mobile && turns.some((x) => x.reply?.result_items.length) ? t('Tu peux aussi dire « le deuxième » ou « je prends le numéro 1 »') : undefined} />
     </div>
   )
 }

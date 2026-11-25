@@ -6,6 +6,9 @@ import { applyTheme } from '@/lib/theme'
 // The design of "Redesign Trezutil" (Figma Make) and the states the real data needs, in one stylesheet.
 import '@/styles/app.css'
 import '@/styles/production.css'
+// On a phone: the mobile design (Design Trezutil Mobile App), with its own typefaces served by Trezutil.
+import '@/styles/fonts.css'
+import '@/styles/mobile.css'
 
 // The light or dark theme is set before the first render, so the page never flashes the other one.
 applyTheme()
