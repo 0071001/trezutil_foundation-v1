@@ -177,6 +177,8 @@ func (e *Executor) run(ctx context.Context, m *domain.Mission, step *domain.Miss
 	action := domain.NewCommerceAction(step.ActionType, actor, "mission:"+m.ID).WithParameters(params).WithSource("USER")
 	action.ActionID = exec.ID
 	action.IdempotencyKey = "mission-step:" + step.ID + ":" + firstNonEmpty(exec.IdempotencyKey, exec.ID)
+	// A step tried again creates nothing twice, even when an earlier attempt succeeded without being recorded.
+	action.EffectKey = fmt.Sprintf("mission-step:%s:plan:%d", step.ID, step.PlanVersion)
 
 	runCtx, cancel := context.WithTimeout(ctx, e.timeout)
 	defer cancel()

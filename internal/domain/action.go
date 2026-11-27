@@ -34,6 +34,9 @@ type CommerceAction struct {
 	Source            string // USER, AI, SYSTEM
 	ConfirmationState ConfirmationState
 	ConfirmationData  *ConfirmationData
+	// EffectKey, set by the server only, names the business intention when it outlives one request (a mission step
+	// tried again). Empty: the idempotency key names it.
+	EffectKey string
 }
 
 // ConfirmationData represents confirmation details for actions requiring confirmation.

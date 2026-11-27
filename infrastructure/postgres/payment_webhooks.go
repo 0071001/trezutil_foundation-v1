@@ -38,10 +38,12 @@ ON CONFLICT (provider_code, provider_msg_id) DO NOTHING`
 func (s *PaymentWebhookEventStore) TryClaim(ctx context.Context, providerCode, providerMsgID string) (bool, error) {
 	row := s.db.QueryRowContext(ctx, `
 		UPDATE payment_webhook_events
-		SET status = 'processing'
-		WHERE provider_code = $1 AND provider_msg_id = $2 AND status = 'pending'
+		SET status = 'processing', claimed_at = NOW(), attempts = attempts + 1
+		WHERE provider_code = $1 AND provider_msg_id = $2
+		  AND (status IN ('pending', 'failed')
+		       OR (status = 'processing' AND COALESCE(claimed_at, created_at) < NOW() - make_interval(secs => $3)))
 		RETURNING 1
-	`, providerCode, providerMsgID)
+	`, providerCode, providerMsgID, domain.PaymentWebhookClaimTimeout)
 
 	var one int
 	err := row.Scan(&one)
@@ -81,6 +83,20 @@ func (s *PaymentWebhookEventStore) MarkFailed(ctx context.Context, providerCode,
 	}
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
+		return domain.ErrWebhookEventDuplicate
+	}
+	return nil
+}
+
+// MarkReview keeps a claimed event for a person.
+func (s *PaymentWebhookEventStore) MarkReview(ctx context.Context, providerCode, providerMsgID string, reason string) error {
+	result, err := s.db.ExecContext(ctx, `UPDATE payment_webhook_events
+		SET status = 'review', error_message = $3, processed_at = NOW()
+		WHERE provider_code = $1 AND provider_msg_id = $2 AND status = 'processing'`, providerCode, providerMsgID, reason)
+	if err != nil {
+		return fmt.Errorf("failed to mark payment webhook event for review: %w", err)
+	}
+	if rows, _ := result.RowsAffected(); rows == 0 {
 		return domain.ErrWebhookEventDuplicate
 	}
 	return nil

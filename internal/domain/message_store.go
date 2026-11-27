@@ -1,6 +1,9 @@
 package domain
 
-import "context"
+import (
+	"context"
+	"errors"
+)
 
 // MessageStore defines the interface for message persistence.
 type MessageStore interface {
@@ -9,3 +12,6 @@ type MessageStore interface {
 	FindByConversationID(ctx context.Context, conversationID string) ([]*Message, error)
 	FindByExternalRef(ctx context.Context, channel Channel, externalRef string) (*Message, error)
 }
+
+// ErrMessageNotStored: a request could not be recorded, so nothing was done; it can be sent again.
+var ErrMessageNotStored = errors.New("the message could not be stored")

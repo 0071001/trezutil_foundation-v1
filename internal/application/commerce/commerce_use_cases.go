@@ -20,7 +20,8 @@ type ListingUseCases interface {
 }
 
 type OrderUseCases interface {
-	CreateOrder(ctx context.Context, actorID string, listingID string, quantity int) (*domain.Order, error)
+	// CreateOrderIdempotent returns the order already created with the same key instead of creating another.
+	CreateOrderIdempotent(ctx context.Context, actorID string, listingID string, quantity int, idempotencyKey string) (*domain.Order, error)
 	GetOrder(ctx context.Context, actorID string, orderID string) (*domain.Order, error)
 	CancelOrder(ctx context.Context, actorID string, orderID string) error
 }

@@ -129,6 +129,8 @@ func (m *MockUsageService) Consume(ctx context.Context, reservationID string) er
 	return nil
 }
 
+func (m *MockUsageService) MarkAction(context.Context, string, domain.UsageActionState) error { return nil }
+
 func (m *MockUsageService) Release(ctx context.Context, reservationID string) error {
 	m.wasReleased = true
 	if r, ok := m.reservations[reservationID]; ok {

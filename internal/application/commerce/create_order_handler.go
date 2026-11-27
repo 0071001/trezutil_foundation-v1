@@ -28,7 +28,7 @@ func (h *CreateOrderHandler) Handle(ctx context.Context, actor domain.CommerceAc
 		quantity = v
 	}
 
-	order, err := h.orderUseCases.CreateOrder(ctx, actor.ID, listingID, quantity)
+	order, err := h.orderUseCases.CreateOrderIdempotent(ctx, actor.ID, listingID, quantity, domain.EffectKey(ctx))
 	if err != nil {
 		return nil, err
 	}

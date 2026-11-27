@@ -13,7 +13,7 @@ type fakeOrderUseCasesForHandler struct {
 	actorWhiteList map[string]bool
 }
 
-func (f *fakeOrderUseCasesForHandler) CreateOrder(ctx context.Context, actorID string, listingID string, quantity int) (*domain.Order, error) {
+func (f *fakeOrderUseCasesForHandler) CreateOrderIdempotent(ctx context.Context, actorID string, listingID string, quantity int, _ string) (*domain.Order, error) {
 	if f.err != nil {
 		return nil, f.err
 	}

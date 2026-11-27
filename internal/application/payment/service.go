@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -19,7 +20,7 @@ import (
 type PaymentService struct {
 	payments     domain.PaymentRepository
 	refunds      domain.RefundRepository
-	ledger       domain.LedgerRepository
+	accounting   domain.PaymentAccounting
 	orders       domain.OrderRepository
 	orchestrator *provider.ProviderOrchestrator
 	logger       zerolog.Logger
@@ -27,9 +28,10 @@ type PaymentService struct {
 }
 
 type PaymentServiceConfig struct {
-	Payments     domain.PaymentRepository
-	Refunds      domain.RefundRepository
-	Ledger       domain.LedgerRepository
+	Payments domain.PaymentRepository
+	Refunds  domain.RefundRepository
+	// Accounting writes captures and refunds together with their ledger entries, atomically. Required.
+	Accounting   domain.PaymentAccounting
 	Orders       domain.OrderRepository
 	Orchestrator *provider.ProviderOrchestrator
 	Logger       zerolog.Logger
@@ -42,7 +44,7 @@ func NewPaymentService(config PaymentServiceConfig) *PaymentService {
 	return &PaymentService{
 		payments:     config.Payments,
 		refunds:      config.Refunds,
-		ledger:       config.Ledger,
+		accounting:   config.Accounting,
 		orders:       config.Orders,
 		orchestrator: config.Orchestrator,
 		logger:       config.Logger,
@@ -175,6 +177,10 @@ func (s *PaymentService) CreatePayment(
 func (s *PaymentService) resumePayment(ctx context.Context, orgID, actorID string, p *domain.Payment, idempotencyKey string) *domain.Payment {
 	switch {
 	case p.Status == domain.PaymentStatusCreated && p.ProviderPaymentID == "":
+		if !resendable(p.CreatedAt) {
+			s.logger.Warn().Str("payment", p.ID).Msg("payment too old to send again safely; check it with the provider")
+			return p
+		}
 		return s.drivePayment(ctx, orgID, actorID, p, idempotencyKey)
 	case (p.Status == domain.PaymentStatusCreated || p.Status == domain.PaymentStatusPending) && p.ProviderPaymentID != "":
 		result, err := s.orchestrator.ExecuteCapability(ctx, orgID, actorID, provider.ExecuteOptions{
@@ -197,13 +203,10 @@ func (s *PaymentService) resumePayment(ctx context.Context, orgID, actorID strin
 			// Apply the provider's current state (e.g. the payer confirmed
 			// in the browser and the intent is now authorized/captured).
 			if statusStr, _ := result.Data["status"].(string); statusStr != "" {
-				if target, perr := parseProviderStatus(statusStr); perr == nil && target != p.Status {
-					if aerr := s.applyProviderResult(ctx, p, statusStr, result.ExternalReference); aerr == nil && p.IsCaptured() {
-						if lerr := s.postLedgerForCapture(ctx, p); lerr != nil {
-							s.logger.Warn().Err(lerr).Str("payment", p.ID).Msg("ledger posting for capture failed")
-						}
-						syncOrderWithPayment(ctx, s.orders, p, s.logger)
-					}
+				if aerr := s.applyProviderResult(ctx, p, statusStr, result.ExternalReference); aerr != nil {
+					s.logger.Error().Err(aerr).Str("payment", p.ID).Msg("provider state not recorded; it will be retried")
+				} else if p.IsCaptured() {
+					syncOrderWithPayment(ctx, s.orders, p, s.logger)
 				}
 			}
 		}
@@ -218,7 +221,7 @@ func (s *PaymentService) drivePayment(ctx context.Context, orgID, actorID string
 	providerResult, execErr := s.initiateWithProvider(ctx, orgID, actorID, p, idempotencyKey)
 	if execErr != nil {
 		if errors.Is(execErr, domain.ErrProviderDeclined) {
-			_ = s.failPayment(ctx, p, execErr.Error())
+			s.recordFailure(ctx, p, execErr.Error())
 			return p
 		}
 		s.logger.Warn().Err(execErr).Str("payment", p.ID).Msg("payment initiation failed; payment left in CREATED for retry")
@@ -226,7 +229,7 @@ func (s *PaymentService) drivePayment(ctx context.Context, orgID, actorID string
 	}
 
 	if !providerResult.Success {
-		_ = s.failPayment(ctx, p, providerResult.ErrorMessage)
+		s.recordFailure(ctx, p, providerResult.ErrorMessage)
 		return p
 	}
 	p.ClientAction = clientAction(providerResult.Data)
@@ -240,17 +243,12 @@ func (s *PaymentService) drivePayment(ctx context.Context, orgID, actorID string
 	}
 
 	if err := s.applyProviderResult(ctx, p, statusStr, providerPaymentID); err != nil {
-		s.logger.Warn().Err(err).Str("payment", p.ID).Msg("failed to apply provider result")
+		s.logger.Error().Err(err).Str("payment", p.ID).Msg("provider result not recorded; the webhook or a status read will retry it")
 		return p
 	}
-
 	if p.IsCaptured() {
-		if lerr := s.postLedgerForCapture(ctx, p); lerr != nil {
-			s.logger.Warn().Err(lerr).Str("payment", p.ID).Msg("ledger posting for capture failed")
-		}
 		syncOrderWithPayment(ctx, s.orders, p, s.logger)
 	}
-
 	return p
 }
 
@@ -316,28 +314,65 @@ func (s *PaymentService) initiateWithProvider(
 	})
 }
 
-// applyProviderResult maps a provider status string to a domain transition.
+// errContradiction: the provider reports a state that cannot follow the recorded one. Nothing is changed; the
+// reconciliation report and a person decide.
+var errContradiction = errors.New("provider state contradicts the recorded payment")
+
+// applyProviderResult records the provider's state of a payment. A capture is recorded only together with its ledger
+// entries (one transaction): if that fails nothing changes, p is left as stored, and the error is returned so it is
+// retried (webhook, status read) instead of being shown as done. The provider's reference is saved first, so the
+// retry can find the payment.
 func (s *PaymentService) applyProviderResult(ctx context.Context, p *domain.Payment, statusStr, providerPaymentID string) error {
 	target, err := parseProviderStatus(statusStr)
 	if err != nil {
 		return fmt.Errorf("unknown provider status %q: %w", statusStr, err)
 	}
+	// A refund is recorded from a refund (with its amount and accounting), never from a payment status.
+	if target == domain.PaymentStatusRefunded || target == domain.PaymentStatusPartiallyRefunded {
+		return fmt.Errorf("%w: %s without a refund record", errContradiction, target)
+	}
+	if p.IsCaptured() {
+		switch target {
+		case domain.PaymentStatusCaptured, domain.PaymentStatusAuthorized, domain.PaymentStatusPending, domain.PaymentStatusCreated:
+			return s.ensureCaptureEntries(ctx, p)
+		}
+		return fmt.Errorf("%w: %s after a capture", errContradiction, target)
+	}
+	if p.IsTerminal() {
+		if target == p.Status {
+			return nil
+		}
+		return fmt.Errorf("%w: %s for a payment recorded as %s", errContradiction, target, p.Status)
+	}
+	if target == domain.PaymentStatusCreated && p.Status != domain.PaymentStatusCreated {
+		return nil // an older state
+	}
 
 	now := unixNow()
+	if providerPaymentID != "" && p.ProviderPaymentID == "" && target == domain.PaymentStatusCaptured && p.Status == domain.PaymentStatusCreated {
+		saved := *p
+		p.ProviderPaymentID = providerPaymentID
+		if err := p.TransitionTo(domain.PaymentStatusPending, now); err != nil {
+			*p = saved
+			return err
+		}
+		if err := s.payments.Update(ctx, p); err != nil {
+			*p = saved
+			return fmt.Errorf("provider reference not saved: %w", err)
+		}
+	}
+
+	before := *p
 	if providerPaymentID != "" {
 		p.ProviderPaymentID = providerPaymentID
 	}
-
 	switch target {
 	case domain.PaymentStatusAuthorized:
-		err = p.Authorize(providerPaymentID, now, now)
+		err = p.Authorize(p.ProviderPaymentID, now, now)
 	case domain.PaymentStatusCaptured:
-		err = p.Capture(providerPaymentID, now, now)
+		err = p.Capture(p.ProviderPaymentID, now, now)
 	case domain.PaymentStatusFailed:
 		err = p.Fail("provider declined payment", now)
-		if err == nil {
-			observability.PaymentFailed(ctx, p.ID, p.OrderID, "provider_decline", "provider declined payment")
-		}
 	default:
 		if terr := p.ValidateTransition(target); terr == nil {
 			err = p.TransitionTo(target, now)
@@ -345,74 +380,59 @@ func (s *PaymentService) applyProviderResult(ctx context.Context, p *domain.Paym
 			err = fmt.Errorf("cannot map provider status %q to a valid payment state", statusStr)
 		}
 	}
+	if err == nil {
+		err = s.record(ctx, p)
+	}
+	if err != nil {
+		*p = before
+		return err
+	}
+	if p.Status == domain.PaymentStatusFailed {
+		observability.PaymentFailed(ctx, p.ID, p.OrderID, "provider_decline", "provider declined payment")
+	}
+	return nil
+}
 
+// record persists a payment's new state; a capture goes with its ledger entries.
+func (s *PaymentService) record(ctx context.Context, p *domain.Payment) error {
+	if p.Status != domain.PaymentStatusCaptured {
+		return s.payments.Update(ctx, p)
+	}
+	entries, err := domain.CaptureEntries(p, unixNow())
 	if err != nil {
 		return err
 	}
-	return s.payments.Update(ctx, p)
+	return s.accounting.CommitCapture(ctx, p, entries)
 }
 
-// failPayment transitions the payment to FAILED and persists.
-func (s *PaymentService) failPayment(ctx context.Context, p *domain.Payment, reason string) error {
-	now := unixNow()
-	if err := p.Fail(reason, now); err != nil {
+// ensureCaptureEntries posts a captured payment's entries if any is missing (a payment captured by an earlier version
+// whose posting failed); it never posts a line twice.
+func (s *PaymentService) ensureCaptureEntries(ctx context.Context, p *domain.Payment) error {
+	entries, err := domain.CaptureEntries(p, unixNow())
+	if err != nil {
 		return err
 	}
+	posted, err := s.accounting.EnsureEntries(ctx, entries)
+	if posted > 0 {
+		s.logger.Warn().Str("payment", p.ID).Int("entries", posted).Msg("missing capture entries posted")
+	}
+	return err
+}
+
+// recordFailure marks a payment failed after a definitive provider refusal; if that cannot be saved, the payment is
+// left as stored and the error is logged.
+func (s *PaymentService) recordFailure(ctx context.Context, p *domain.Payment, reason string) {
+	before := *p
+	err := p.Fail(reason, unixNow())
+	if err == nil {
+		err = s.payments.Update(ctx, p)
+	}
+	if err != nil {
+		*p = before
+		s.logger.Error().Err(err).Str("payment", p.ID).Msg("payment refusal not recorded")
+		return
+	}
 	observability.PaymentFailed(ctx, p.ID, p.OrderID, "failed", reason)
-	return s.payments.Update(ctx, p)
-}
-
-// postLedgerForCapture posts DEBIT and CREDIT entries for a captured payment.
-// Idempotency key is unique per payment, so retries are no-ops at the DB level.
-func (s *PaymentService) postLedgerForCapture(ctx context.Context, p *domain.Payment) error {
-	if !p.IsCaptured() {
-		return nil
-	}
-	now := unixNow()
-	entries := []*domain.LedgerEntry{
-		domain.NewLedgerEntry(
-			p.TenantID, &p.ID, nil,
-			domain.LedgerAccountCash, domain.LedgerEntryTypeDebit,
-			p.Amount, "ledger_capture_"+p.ID, now,
-		),
-		domain.NewLedgerEntry(
-			p.TenantID, &p.ID, nil,
-			domain.LedgerAccountRevenue, domain.LedgerEntryTypeCredit,
-			p.Amount, "ledger_capture_rev_"+p.ID, now,
-		),
-	}
-	for _, e := range entries {
-		if err := e.Post(now); err != nil {
-			return fmt.Errorf("ledger entry post failed: %w", err)
-		}
-		if err := e.ValidateInvariants(); err != nil {
-			return fmt.Errorf("ledger invariant violated: %w", err)
-		}
-		if _, err := s.ledger.Post(ctx, e); err != nil {
-			return fmt.Errorf("ledger persist failed: %w", err)
-		}
-	}
-	return nil
-}
-
-// postLedgerForRefund posts a DEBIT entry against the refund account.
-func (s *PaymentService) postLedgerForRefund(ctx context.Context, r *domain.Refund) error {
-	now := unixNow()
-	e := domain.NewLedgerEntry(
-		r.TenantID, nil, &r.ID,
-		domain.LedgerAccountRefund, domain.LedgerEntryTypeDebit,
-		r.Amount, "ledger_refund_"+r.ID, now,
-	)
-	if err := e.Post(now); err != nil {
-		return fmt.Errorf("ledger entry post failed: %w", err)
-	}
-	if err := e.ValidateInvariants(); err != nil {
-		return fmt.Errorf("ledger invariant violated: %w", err)
-	}
-	if _, err := s.ledger.Post(ctx, e); err != nil {
-		return fmt.Errorf("ledger persist failed: %w", err)
-	}
-	return nil
 }
 
 // CancelPayment cancels a payment that is eligible (not captured).
@@ -509,13 +529,10 @@ func (s *PaymentService) capturePayment(ctx context.Context, orgID, actorID, pay
 
 	statusStr, _ := result.Data["status"].(string)
 	if err := s.applyProviderResult(ctx, p, statusStr, result.ExternalReference); err != nil {
-		return nil, err
+		// The provider may have captured: the webhook or a status read records it; nothing claims it is done now.
+		return nil, fmt.Errorf("capture not recorded: %w", err)
 	}
-
 	if p.IsCaptured() {
-		if lerr := s.postLedgerForCapture(ctx, p); lerr != nil {
-			s.logger.Warn().Err(lerr).Str("payment", p.ID).Msg("ledger posting for capture failed")
-		}
 		syncOrderWithPayment(ctx, s.orders, p, s.logger)
 	}
 
@@ -523,6 +540,11 @@ func (s *PaymentService) capturePayment(ctx context.Context, orgID, actorID, pay
 }
 
 // RefundPayment refunds a captured payment (fully or partially).
+//
+// The refund is recorded as pending before the provider is asked, so an interruption never leaves money returned
+// without a trace. Asking again with the same key resumes it (the provider receives the same idempotency key). A
+// refund succeeds only together with the reduced payment and its ledger entries. An outcome that cannot be known (a
+// timeout, an unknown status) stays pending until the provider's webhook or a person settles it.
 func (s *PaymentService) refundPayment(ctx context.Context, orgID, actorID, paymentID, idempotencyKey string, amount *domain.Money) (*domain.Payment, *domain.Refund, error) {
 	if idempotencyKey == "" {
 		// Without a caller key, still make orchestrator retries of this one
@@ -534,10 +556,22 @@ func (s *PaymentService) refundPayment(ctx context.Context, orgID, actorID, paym
 		return nil, nil, fmt.Errorf("failed to load payment: %w", err)
 	}
 
-	// Check idempotency before business logic — allows retry of a previously
-	// completed refund even if the payment status has changed since.
-	if _, err := s.refunds.FindByIdempotencyKey(ctx, orgID, idempotencyKey); err == nil {
+	// The same key again: an interrupted request is resumed; anything else was already handled.
+	existing, err := s.refunds.FindByIdempotencyKey(ctx, orgID, idempotencyKey)
+	switch {
+	case err == nil:
+		if existing.PaymentID != p.ID || (amount != nil && (amount.AmountMinor != existing.Amount.AmountMinor || amount.Currency != existing.Amount.Currency)) {
+			return p, nil, domain.ErrIdempotencyConflict
+		}
+		if existing.Status == domain.RefundStatusPending && existing.ProviderRefundID == "" {
+			if !resendable(existing.CreatedAt) {
+				return p, existing, fmt.Errorf("%w: the request is too old to send again safely; check it with the provider", ErrRefundOutcomeUnknown)
+			}
+			return s.submitRefund(ctx, orgID, actorID, p, existing)
+		}
 		return p, nil, domain.ErrRefundAlreadyExists
+	case !errors.Is(err, domain.ErrRefundNotFound):
+		return p, nil, fmt.Errorf("failed to check existing refund: %w", err)
 	}
 
 	if !p.CanRefund() {
@@ -548,31 +582,72 @@ func (s *PaymentService) refundPayment(ctx context.Context, orgID, actorID, paym
 	if amount != nil {
 		refundAmount = *amount
 	} else {
-		refundAmount = p.Amount
+		refundAmount = p.RemainingRefundable()
 	}
-	if refundAmount.AmountMinor > p.RemainingRefundable().AmountMinor {
+	// Refunds still pending count against what remains: two of them must not return more than was captured.
+	reserved, err := s.pendingRefunds(ctx, p)
+	if err != nil {
+		return p, nil, err
+	}
+	available := p.RemainingRefundable().AmountMinor - reserved
+	if refundAmount.AmountMinor <= 0 || refundAmount.AmountMinor > available {
 		return nil, nil, fmt.Errorf("%w: refund amount %d exceeds remaining refundable %d", domain.ErrRefundExceedsRemaining,
-			refundAmount.AmountMinor, p.RemainingRefundable().AmountMinor)
+			refundAmount.AmountMinor, available)
 	}
 
-	now := unixNow()
-	refund := domain.NewRefund(orgID, p.ID, refundAmount, idempotencyKey, now)
+	refund := domain.NewRefund(orgID, p.ID, refundAmount, idempotencyKey, unixNow())
 	if err := refund.ValidateInvariants(); err != nil {
 		return nil, nil, fmt.Errorf("invalid refund: %w", err)
 	}
+	if err := s.refunds.Create(ctx, refund); err != nil {
+		return p, nil, fmt.Errorf("failed to record the refund request: %w", err)
+	}
+	return s.submitRefund(ctx, orgID, actorID, p, refund)
+}
 
+func (s *PaymentService) pendingRefunds(ctx context.Context, p *domain.Payment) (int64, error) {
+	list, err := s.refunds.FindByPaymentID(ctx, p.TenantID, p.ID, 0, 100)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read pending refunds: %w", err)
+	}
+	var total int64
+	for _, r := range list {
+		if r.Status == domain.RefundStatusPending {
+			total += r.Amount.AmountMinor
+		}
+	}
+	return total, nil
+}
+
+// providerKeyWindow: providers forget idempotency keys after a while (Stripe keeps them at least 24 hours). A request
+// older than this is never sent again on its own: it could be executed a second time.
+const providerKeyWindow = 23 * 60 * 60
+
+func resendable(createdAt int64) bool { return unixNow()-createdAt < providerKeyWindow }
+
+// ErrRefundRefused: the provider certainly did not return the money (declined, or it offers no refund).
+var ErrRefundRefused = errors.New("provider refund failed")
+
+// ErrRefundOutcomeUnknown: the provider may or may not have returned the money. The refund stays pending; asking again
+// with the same idempotency key, the provider's webhook, or a person settles it.
+var ErrRefundOutcomeUnknown = errors.New("the refund's outcome is not known yet")
+
+// submitRefund asks the provider for a pending refund and records the answer.
+func (s *PaymentService) submitRefund(ctx context.Context, orgID, actorID string, p *domain.Payment, refund *domain.Refund) (*domain.Payment, *domain.Refund, error) {
+	key := refund.IdempotencyKey
+	amount := refund.Amount
 	result, execErr := s.orchestrator.ExecuteCapability(ctx, orgID, actorID, provider.ExecuteOptions{
 		Capability:     domain.CapabilityPayment,
 		Operation:      string(domain.PaymentProviderOpRefund),
-		IdempotencyKey: idempotencyKey,
+		IdempotencyKey: key,
 	}, func(ctx context.Context, execCtx *domain.ProviderExecutionContext, adapter domain.ProviderAdapter) (domain.ProviderResult, error) {
 		ppa, err := paymentProviderAdapter(adapter)
 		if err != nil {
 			return domain.ProviderResult{}, err
 		}
-		resp, rerr := ppa.RefundPayment(domain.WithProviderIdempotencyKey(ctx, "refund:"+idempotencyKey), p.ProviderPaymentID, &refundAmount)
+		resp, rerr := ppa.RefundPayment(domain.WithProviderIdempotencyKey(ctx, "refund:"+key), p.ProviderPaymentID, &amount)
 		if rerr != nil {
-			return domain.ProviderResult{Success: false, ErrorMessage: rerr.Error()}, rerr
+			return domain.ProviderResult{Success: false, ErrorCode: resp.ErrorCode, ErrorMessage: rerr.Error()}, rerr
 		}
 		return domain.ProviderResult{
 			Success:           true,
@@ -581,76 +656,130 @@ func (s *PaymentService) refundPayment(ctx context.Context, orgID, actorID, paym
 		}, nil
 	})
 
-	if execErr != nil || !result.Success {
-		var failReason string
-		if execErr != nil {
-			failReason = execErr.Error()
-		} else {
-			failReason = result.ErrorMessage
+	now := unixNow()
+	if execErr != nil || result == nil || !result.Success {
+		reason, code := "provider refund failed", domain.ProviderErrorCode("")
+		if result != nil {
+			reason, code = result.ErrorMessage, result.ErrorCode
 		}
-		_ = refund.Fail(failReason, now)
-		_ = s.refunds.Create(ctx, refund)
-
 		if execErr != nil {
-			return p, refund, fmt.Errorf("provider refund failed: %w", execErr)
+			reason = execErr.Error()
 		}
-		return p, refund, fmt.Errorf("provider refund failed: %s", result.ErrorMessage)
+		if !refusedForCertain(execErr, code) {
+			s.logger.Error().Str("refund", refund.ID).Str("payment", p.ID).Msg("refund outcome unknown; left pending")
+			return p, refund, fmt.Errorf("%w: %s", ErrRefundOutcomeUnknown, reason)
+		}
+		before := *refund
+		if err := refund.Fail(reason, now); err != nil {
+			return p, refund, err
+		}
+		if err := s.refunds.Update(ctx, refund); err != nil {
+			*refund = before
+			return p, refund, fmt.Errorf("refund refused by the provider but not recorded: %w", err)
+		}
+		return p, refund, fmt.Errorf("%w: %s", ErrRefundRefused, reason)
 	}
 
-	if err := s.refunds.Create(ctx, refund); err != nil {
-		return p, refund, fmt.Errorf("failed to create refund: %w", err)
-	}
-
-	providerRefundStatus, _ := result.Data["status"].(string)
-	if err := finalizeRefund(ctx, refund, p, result.ExternalReference, providerRefundStatus, now); err != nil {
-		return p, refund, err
-	}
-	if err := s.refunds.Update(ctx, refund); err != nil {
-		return p, refund, fmt.Errorf("failed to update refund: %w", err)
-	}
-	if refund.Status != domain.RefundStatusSucceeded {
-		// Pending (asynchronous) or failed refunds leave the payment, ledger
-		// and order untouched; the provider webhook completes pending ones.
+	status, _ := result.Data["status"].(string)
+	switch classifyRefundStatus(status) {
+	case refundSucceeded:
+		beforeRefund, beforePayment := *refund, *p
+		err := s.settleRefund(ctx, refund, p, result.ExternalReference, now)
+		if err != nil {
+			*refund, *p = beforeRefund, beforePayment
+			// Keep the provider's reference so its webhook finds the refund and completes it.
+			s.saveReference(ctx, refund, result.ExternalReference, now)
+			return p, refund, fmt.Errorf("refund accepted by the provider but not recorded yet: %w", err)
+		}
+		syncOrderWithPayment(ctx, s.orders, p, s.logger)
 		return p, refund, nil
+	case refundPending:
+		// Asynchronous refund: it completes (or fails) via the provider webhook.
+		if err := s.saveReference(ctx, refund, result.ExternalReference, now); err != nil {
+			return p, refund, fmt.Errorf("failed to update refund: %w", err)
+		}
+		return p, refund, nil
+	case refundFailed:
+		before := *refund
+		if err := refund.Fail("provider reported refund status: "+status, now); err != nil {
+			return p, refund, err
+		}
+		if err := s.refunds.Update(ctx, refund); err != nil {
+			*refund = before
+			return p, refund, fmt.Errorf("failed to update refund: %w", err)
+		}
+		return p, refund, nil
+	default:
+		_ = s.saveReference(ctx, refund, result.ExternalReference, now)
+		s.logger.Error().Str("refund", refund.ID).Str("status", status).Msg("unknown refund status; left pending")
+		return p, refund, fmt.Errorf("%w: unknown provider status %q", ErrRefundOutcomeUnknown, status)
 	}
-	if err := s.payments.Update(ctx, p); err != nil {
-		return p, refund, fmt.Errorf("failed to update payment: %w", err)
-	}
-
-	if lerr := s.postLedgerForRefund(ctx, refund); lerr != nil {
-		s.logger.Warn().Err(lerr).Str("refund", refund.ID).Msg("ledger posting for refund failed")
-	}
-	syncOrderWithPayment(ctx, s.orders, p, s.logger)
-
-	return p, refund, nil
 }
 
-// finalizeRefund marks the refund as succeeded or failed and updates the
-// payment's refund tracking via MarkPartiallyRefunded.
-func finalizeRefund(ctx context.Context, refund *domain.Refund, payment *domain.Payment,
-	providerRefundID, statusStr string, now int64,
-) error {
-	switch statusStr {
-	case "", "succeeded":
-	case "pending":
-		// Asynchronous refund: it completes (or fails) via the provider
-		// webhook, which then updates the payment, ledger and order.
-		refund.MarkSubmitted(providerRefundID, now)
-		return nil
-	default:
-		if err := refund.Fail("provider reported refund status: "+statusStr, now); err != nil {
-			return err
-		}
-		return nil
-	}
-
+// settleRefund records a succeeded refund with the reduced payment and the ledger entries, atomically.
+func (s *PaymentService) settleRefund(ctx context.Context, refund *domain.Refund, p *domain.Payment, providerRefundID string, now int64) error {
 	if err := refund.Succeed(providerRefundID, now, now); err != nil {
 		return fmt.Errorf("failed to mark refund succeeded: %w", err)
 	}
-	if err := payment.MarkPartiallyRefunded(refund.Amount, now); err != nil {
+	if err := p.MarkPartiallyRefunded(refund.Amount, now); err != nil {
 		return fmt.Errorf("failed to update payment for refund: %w", err)
 	}
+	entries, err := domain.RefundEntries(refund, now)
+	if err != nil {
+		return err
+	}
+	return s.accounting.CommitRefund(ctx, refund, p, entries)
+}
+
+func (s *PaymentService) saveReference(ctx context.Context, refund *domain.Refund, providerRefundID string, now int64) error {
+	if providerRefundID == "" {
+		return nil
+	}
+	before := *refund
+	refund.MarkSubmitted(providerRefundID, now)
+	if err := s.refunds.Update(ctx, refund); err != nil {
+		*refund = before
+		s.logger.Error().Err(err).Str("refund", refund.ID).Msg("provider refund reference not saved")
+		return err
+	}
 	return nil
+}
+
+// refusedForCertain reports whether the provider certainly did not act. A timeout, an unavailable provider or an
+// unclassified error leave the outcome unknown.
+func refusedForCertain(err error, code domain.ProviderErrorCode) bool {
+	if errors.Is(err, domain.ErrProviderDeclined) || errors.Is(err, domain.ErrPaymentOperationNotSupported) ||
+		errors.Is(err, domain.ErrNoProvidersAvailable) {
+		return true
+	}
+	switch code {
+	case domain.ErrCodeInvalidRequest, domain.ErrCodeProviderRejected, domain.ErrCodeProviderAuthFailed,
+		domain.ErrCodeUnsupportedCapability, domain.ErrCodeResourceNotFound:
+		return true
+	}
+	return false
+}
+
+type refundOutcome int
+
+const (
+	refundUnknown refundOutcome = iota
+	refundSucceeded
+	refundPending
+	refundFailed
+)
+
+// classifyRefundStatus reads a provider's refund status; anything not recognised is unknown, never success.
+func classifyRefundStatus(status string) refundOutcome {
+	switch strings.ToLower(status) {
+	case "succeeded", "refunded":
+		return refundSucceeded
+	case "pending", "processing", "requires_action":
+		return refundPending
+	case "failed", "declined", "canceled", "cancelled":
+		return refundFailed
+	}
+	return refundUnknown
 }
 
 // AuthorizePayment authorizes a payment that is in CREATED or PENDING status.
@@ -716,7 +845,6 @@ func (s *PaymentService) authorizePayment(ctx context.Context, orgID, actorID, p
 		}, nil
 	})
 
-	now := unixNow()
 	if execErr != nil {
 		s.logger.Warn().Err(execErr).Str("payment", p.ID).Msg("payment authorization failed")
 		observability.PaymentFailed(ctx, p.ID, p.OrderID, "provider_error", execErr.Error())
@@ -724,9 +852,7 @@ func (s *PaymentService) authorizePayment(ctx context.Context, orgID, actorID, p
 	}
 
 	if !result.Success {
-		_ = p.Fail(result.ErrorMessage, now)
-		observability.PaymentFailed(ctx, p.ID, p.OrderID, "provider_decline", result.ErrorMessage)
-		_ = s.payments.Update(ctx, p)
+		s.recordFailure(ctx, p, result.ErrorMessage)
 		return p, nil
 	}
 
@@ -760,8 +886,19 @@ func (s *PaymentService) ListRefunds(ctx context.Context, orgID, paymentID strin
 	return s.refunds.FindByPaymentID(ctx, p.TenantID, p.ID, offset, limit)
 }
 
-// GetPaymentStatus optionally syncs status from the provider.
-func (s *PaymentService) GetPaymentStatus(ctx context.Context, orgID, actorID, paymentID, idempotencyKey string) (*domain.Payment, error) {
+// GetPaymentStatus syncs a payment with the provider's state, under the payment's lock.
+func (s *PaymentService) GetPaymentStatus(ctx context.Context, orgID, actorID, paymentID, idempotencyKey string) (p *domain.Payment, err error) {
+	lockErr := s.withPaymentLock(ctx, paymentID, func(ctx context.Context) error {
+		p, err = s.syncStatus(ctx, orgID, actorID, paymentID, idempotencyKey)
+		return err
+	})
+	if err == nil && lockErr != nil {
+		err = lockErr
+	}
+	return p, err
+}
+
+func (s *PaymentService) syncStatus(ctx context.Context, orgID, actorID, paymentID, idempotencyKey string) (*domain.Payment, error) {
 	p, err := s.payments.FindByID(ctx, orgID, paymentID)
 	if err != nil {
 		return nil, err
@@ -794,20 +931,17 @@ func (s *PaymentService) GetPaymentStatus(ctx context.Context, orgID, actorID, p
 		return p, nil
 	}
 
-	statusStr, _ := result.Data["status"].(string)
-	before := p.Status
-	if err := s.applyProviderResult(ctx, p, statusStr, result.ExternalReference); err != nil {
-		s.logger.Debug().Err(err).Str("payment", p.ID).Msg("provider status sync failed")
-		return p, nil
-	}
 	// A payment confirmed by reading it back (the payer approved on their phone, the webhook is late or lost) settles
 	// the order exactly as the webhook would.
-	if p.Status != before {
-		if p.Status == domain.PaymentStatusCaptured {
-			if lerr := s.postLedgerForCapture(ctx, p); lerr != nil {
-				s.logger.Warn().Err(lerr).Str("payment", p.ID).Msg("ledger posting for polled capture failed")
-			}
-		}
+	statusStr, _ := result.Data["status"].(string)
+	if statusStr == "" {
+		return p, nil
+	}
+	if err := s.applyProviderResult(ctx, p, statusStr, result.ExternalReference); err != nil {
+		s.logger.Error().Err(err).Str("payment", p.ID).Msg("provider status not recorded")
+		return p, nil
+	}
+	if p.IsCaptured() {
 		syncOrderWithPayment(ctx, s.orders, p, s.logger)
 	}
 	return p, nil

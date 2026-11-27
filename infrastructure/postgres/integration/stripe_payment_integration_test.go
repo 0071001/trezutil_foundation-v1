@@ -88,13 +88,12 @@ func setupStripe(t *testing.T, captureMethod string, adapterTimeout time.Duratio
 	orchestrator := provider.NewProviderOrchestrator(registry, postgres.NewProviderExecutionRepository(db.DB), provider.OrchestratorConfig{Logger: zerolog.Nop()})
 	paymentRepo := postgres.NewPaymentRepository(db.DB)
 	refundRepo := postgres.NewRefundRepository(db.DB)
-	ledgerRepo := postgres.NewLedgerRepository(db.DB)
 	env.svc = payment.NewPaymentService(payment.PaymentServiceConfig{
-		Payments: paymentRepo, Refunds: refundRepo, Ledger: ledgerRepo, Orders: env.orders,
+		Payments: paymentRepo, Refunds: refundRepo, Accounting: postgres.NewPaymentAccounting(db.DB), Orders: env.orders,
 		Orchestrator: orchestrator, Logger: zerolog.Nop(), Locker: postgres.NewAdvisoryLocker(db.DB),
 	})
 	env.webhooks = payment.NewWebhookHandler(payment.WebhookHandlerConfig{
-		Payments: paymentRepo, Refunds: refundRepo, Ledger: ledgerRepo,
+		Payments: paymentRepo, Refunds: refundRepo, Accounting: postgres.NewPaymentAccounting(db.DB), Locker: postgres.NewAdvisoryLocker(db.DB),
 		Events: postgres.NewPaymentWebhookEventStore(db.DB), Providers: providerRepo, Orders: env.orders,
 		Normalizers: map[string]payment.WebhookNormalizer{
 			stripe.ProviderCode: &stripe.WebhookNormalizer{SecretFor: loader.WebhookSecret},
@@ -324,8 +323,8 @@ func TestStripe_RefundsReplayOverRefundAndAsync(t *testing.T) {
 	if got.RefundedAmount.AmountMinor != 3000 || got.Status != domain.PaymentStatusRefunded {
 		t.Fatalf("expected fully refunded payment, got %s %d", got.Status, got.RefundedAmount.AmountMinor)
 	}
-	if n := e.count(t, `SELECT COUNT(*) FROM payment_ledger WHERE refund_id IS NOT NULL`); n != 2 {
-		t.Fatalf("expected exactly one ledger entry per refund (2), got %d", n)
+	if n := e.count(t, `SELECT COUNT(*) FROM payment_ledger WHERE refund_id IS NOT NULL`); n != 4 {
+		t.Fatalf("expected both sides of each of the 2 refunds (4 ledger entries), got %d", n)
 	}
 	if s := e.orderStatus(t, order); s != domain.OrderStatusRefunded {
 		t.Fatalf("fully refunded order must be REFUNDED, got %s", s)

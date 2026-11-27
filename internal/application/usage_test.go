@@ -204,6 +204,10 @@ func (f *fakeReservationRepo) UpdateStatus(ctx context.Context, reservationID st
 	return domain.ErrUsageReservationNotFound
 }
 
+func (f *fakeReservationRepo) MarkActionState(context.Context, string, domain.UsageActionState) error {
+	return nil
+}
+
 func (f *fakeReservationRepo) ReserveCreditsTx(ctx context.Context, accountID string, actionType domain.CommerceActionType, cost int64, idempotencyKey, tenantID string, now int64) (*domain.UsageReservation, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

@@ -38,7 +38,9 @@ func main() {
 
 	paymentRepo := postgres.NewPaymentRepository(db)
 	refundRepo := postgres.NewRefundRepository(db)
-	ledgerRepo := postgres.NewLedgerRepository(db)
+	// Captures and refunds are written together with their ledger entries, in one transaction.
+	accounting := postgres.NewPaymentAccounting(db)
+	locker := postgres.NewAdvisoryLocker(db)
 	webhookEventStore := postgres.NewPaymentWebhookEventStore(db)
 	providerRepo := postgres.NewProviderRepository(db)
 	executionRepo := postgres.NewProviderExecutionRepository(db)
@@ -76,12 +78,25 @@ func main() {
 	paymentSvc := payment.NewPaymentService(payment.PaymentServiceConfig{
 		Payments:     paymentRepo,
 		Refunds:      refundRepo,
-		Ledger:       ledgerRepo,
+		Accounting:   accounting,
 		Orders:       orderRepo,
 		Orchestrator: orchestrator,
 		Logger:       logger,
-		Locker:       postgres.NewAdvisoryLocker(db),
+		Locker:       locker,
 	})
+
+	// Reads recent unanswered payments back from their provider and logs records that disagree. It moves no money and
+	// writes no correction on its own (see trezutil-admin repair-ledger). 0 turns it off.
+	reconciler := &payment.Reconciler{
+		Source:     postgres.NewPaymentReconciliation(db),
+		Payments:   paymentRepo,
+		Refunds:    refundRepo,
+		Accounting: accounting,
+		Locker:     locker,
+		Audit:      postgres.NewAuditRepository(db),
+		Logger:     logger,
+	}
+	go reconciler.Run(context.Background(), paymentSvc, time.Duration(common.GetenvInt("PAYMENT_RECONCILE_SECONDS", 900))*time.Second)
 
 	webhookSecrets := map[string]string{}
 	for code, env := range map[string]string{"stripe": "STRIPE_WEBHOOK_SECRET", "paypal": "PAYPAL_WEBHOOK_SECRET"} {
@@ -96,7 +111,8 @@ func main() {
 	webhookHandler := payment.NewWebhookHandler(payment.WebhookHandlerConfig{
 		Payments:          paymentRepo,
 		Refunds:           refundRepo,
-		Ledger:            ledgerRepo,
+		Accounting:        accounting,
+		Locker:            locker,
 		Events:            webhookEventStore,
 		Providers:         providerRepo,
 		SignatureVerifier: signatureVerifier,

@@ -52,8 +52,9 @@ func (h *CreateReservationHandler) Handle(ctx context.Context, actor domain.Comm
 		partySize = v
 	}
 
-	idempotencyKey := ""
-	if v, ok := parameters["idempotency_key"].(string); ok {
+	// The server's effect key comes first: a parameter written by a model or a client never replaces it.
+	idempotencyKey := domain.EffectKey(ctx)
+	if v, ok := parameters["idempotency_key"].(string); ok && idempotencyKey == "" {
 		idempotencyKey = v
 	}
 

@@ -6,6 +6,11 @@
 //	trezutil-admin grant-role    -phone +243812345678 -role operator
 //	trezutil-admin revoke-role   -phone +243812345678 -role seller
 //
+//	trezutil-admin reconcile      [-json]                        list payment records that disagree (read only)
+//	trezutil-admin repair-ledger  -actor <name> [-apply] [-json]   add missing accounting lines (audited)
+//	trezutil-admin credits-held                                   list credits held for actions of unknown outcome
+//	trezutil-admin credits-settle -reservation <id> -outcome consume|release -actor <name>
+//
 // create-admin and set-password read the password from the environment
 // variable TREZUTIL_ADMIN_PASSWORD, or from the first line of standard input
 // with -password-stdin. There is deliberately no -password flag: a password
@@ -40,6 +45,10 @@ const usage = `usage:
   trezutil-admin set-password -email <address> [-password-stdin]
   trezutil-admin grant-role   (-phone <E.164> | -email <address>) -role <role>
   trezutil-admin revoke-role  (-phone <E.164> | -email <address>) -role <role>
+  trezutil-admin reconcile    [-json]
+  trezutil-admin repair-ledger -actor <name> [-apply] [-json]
+  trezutil-admin credits-held
+  trezutil-admin credits-settle -reservation <id> -outcome consume|release -actor <name>
 the password comes from $TREZUTIL_ADMIN_PASSWORD or, with -password-stdin, from standard input`
 
 func main() {
@@ -52,6 +61,10 @@ func main() {
 		roleCommand(cmd, os.Args[2:])
 	case "create-admin", "set-password":
 		staffCommand(cmd, os.Args[2:])
+	case "reconcile", "repair-ledger":
+		reconcileCommand(cmd, os.Args[2:])
+	case "credits-held", "credits-settle":
+		creditsCommand(cmd, os.Args[2:])
 	default:
 		fmt.Fprintln(os.Stderr, usage)
 		os.Exit(2)

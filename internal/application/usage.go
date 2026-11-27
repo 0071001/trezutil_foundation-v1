@@ -129,6 +129,17 @@ func (s *UsageService) Release(ctx context.Context, reservationID string) error 
 	return s.reservationRepo.ReleaseReservation(ctx, reservationID, s.clock.Now())
 }
 
+// MarkAction records what is known of the action a reservation pays for.
+func (s *UsageService) MarkAction(ctx context.Context, reservationID string, state domain.UsageActionState) error {
+	if reservationID == "" {
+		return fmt.Errorf("reservationID is required")
+	}
+	if s.reservationRepo == nil {
+		return domain.ErrNotImplemented
+	}
+	return s.reservationRepo.MarkActionState(ctx, reservationID, state)
+}
+
 // Grant adds credits to an account.
 func (s *UsageService) Grant(ctx context.Context, accountID string, amount int64, reason string) error {
 	if accountID == "" {

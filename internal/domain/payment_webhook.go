@@ -13,7 +13,13 @@ const (
 	PaymentWebhookStatusProcessing PaymentWebhookStatus = "processing"
 	PaymentWebhookStatusProcessed  PaymentWebhookStatus = "processed"
 	PaymentWebhookStatusFailed     PaymentWebhookStatus = "failed"
+	// PaymentWebhookStatusReview: the event contradicts what is recorded; it changed nothing and a person must look.
+	PaymentWebhookStatusReview PaymentWebhookStatus = "review"
 )
+
+// PaymentWebhookClaimTimeout is how long a claimed event may stay "processing" before another delivery may take it
+// over (its processor is considered stopped).
+const PaymentWebhookClaimTimeout = 5 * 60 // seconds
 
 // PaymentWebhookEventType represents the type of a payment provider webhook event.
 type PaymentWebhookEventType string
@@ -82,13 +88,15 @@ func (e *PaymentWebhookEvent) ValidateInvariants() error {
 // because payment webhooks require provider-specific tenant resolution,
 // signature verification, and reconciliation semantics.
 type PaymentWebhookEventStore interface {
-	// TryClaim atomically claims a webhook event for processing.
-	// Returns (claimed, error). If already claimed/processed, returns false, nil.
+	// TryClaim atomically claims a webhook event for processing: a new one, one whose processing failed, or one
+	// stuck "processing" longer than PaymentWebhookClaimTimeout. Returns false, nil otherwise.
 	TryClaim(ctx context.Context, providerCode, providerMsgID string) (bool, error)
 	// MarkProcessed marks a claimed event as successfully processed.
 	MarkProcessed(ctx context.Context, providerCode, providerMsgID string) error
 	// MarkFailed marks a claimed event as failed for retry.
 	MarkFailed(ctx context.Context, providerCode, providerMsgID string, errorMsg string) error
+	// MarkReview keeps a claimed event for a person, with the reason; it is not processed again.
+	MarkReview(ctx context.Context, providerCode, providerMsgID string, reason string) error
 	// FindByProviderMessageID retrieves an event by provider and message ID.
 	FindByProviderMessageID(ctx context.Context, providerCode, providerMsgID string) (*PaymentWebhookEvent, error)
 	// PersistEvent inserts a webhook event record (idempotent via ON CONFLICT).

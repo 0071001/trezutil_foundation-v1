@@ -90,6 +90,8 @@ func (c *creditStore) Consume(_ context.Context, id string) error {
 	c.consumed++
 	return nil
 }
+func (c *creditStore) MarkAction(context.Context, string, domain.UsageActionState) error { return nil }
+
 func (c *creditStore) Release(_ context.Context, id string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()

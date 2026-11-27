@@ -190,7 +190,9 @@ func (p *ConversationProcessor) ProcessMessage(ctx context.Context, req *Process
 			if errors.Is(err, domain.ErrDuplicateMessage) {
 				return p.replayReply(ctx, conv, messageKey), nil
 			}
-			p.logger.Warn().Err(err).Str("conversation_id", conv.ID).Msg("Failed to persist inbound message")
+			// Without the stored message a redelivery would run the action again: stop here.
+			p.logger.Error().Err(err).Str("conversation_id", conv.ID).Msg("Failed to persist inbound message")
+			return nil, fmt.Errorf("%w: %v", domain.ErrMessageNotStored, err)
 		}
 	}
 

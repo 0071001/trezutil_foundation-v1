@@ -150,6 +150,10 @@ func (r *RefundRepository) FindByIdempotencyKey(ctx context.Context, tenantID, i
 }
 
 func (r *RefundRepository) Update(ctx context.Context, refund *domain.Refund) error {
+	return r.update(ctx, r.db, refund)
+}
+
+func (r *RefundRepository) update(ctx context.Context, db sqlExecer, refund *domain.Refund) error {
 	metadataJSON, _ := json.Marshal(refund.Metadata)
 	if metadataJSON == nil {
 		metadataJSON = []byte("{}")
@@ -165,7 +169,7 @@ func (r *RefundRepository) Update(ctx context.Context, refund *domain.Refund) er
 		failure_reason = $5, metadata = $6, version = $7, updated_at = $8
 		WHERE id = $9 AND organization_id = $10 AND version = $11`
 
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := db.ExecContext(ctx, query,
 		providerRefundID, string(refund.Status),
 		nullTimeFromPtr(refund.ProcessedAt), nullTimeFromPtr(refund.FailedAt),
 		refund.FailureReason, string(metadataJSON),

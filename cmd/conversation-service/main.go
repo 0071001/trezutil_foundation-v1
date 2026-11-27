@@ -79,7 +79,9 @@ func main() {
 		usageReservations,
 		systemClock{},
 	).WithPersonalSpaces(postgres.NewPersonalSpaceStore(db)) // a person's own credits live in their personal space
-	go releaseOrphanedCreditReservations(logger, usageReservations)
+	go settleOrphanedCreditReservations(logger, usageReservations)
+	actionJournal := postgres.NewActionJournal(db)
+	go forgetOldActions(actionJournal)
 
 	// Commerce use cases executed by the runtime. They are the same
 	// application services the REST APIs use; the runtime adds identity
@@ -122,7 +124,7 @@ func main() {
 	runtime := commerce.NewCommerceActionRuntime(commerce.RuntimeConfig{
 		Logger:             logger,
 		HandlerRegistry:    registry,
-		IdempotencyStore:   commerce.NewInMemoryIdempotencyStore(),
+		IdempotencyStore:   actionJournal, // durable: a restart forgets no action
 		ConfirmationPolicy: commerce.NewDefaultConfirmationPolicy(),
 		ParameterValidator: commerce.NewDefaultParameterValidator(),
 		UsageService:       usageSvc,
@@ -538,20 +540,38 @@ func every(interval time.Duration, fn func(context.Context)) {
 	}
 }
 
-// releaseOrphanedCreditReservations periodically returns credits held by
-// reservations whose action never completed (process crash mid-request).
-func releaseOrphanedCreditReservations(logger zerolog.Logger, repo *postgres.PostgresUsageReservationRepository) {
+// settleOrphanedCreditReservations settles reservations a stopped process or a failed write left active: charged when
+// the action succeeded, released when it failed or never started, kept and logged when its outcome is unknown.
+func settleOrphanedCreditReservations(logger zerolog.Logger, repo *postgres.PostgresUsageReservationRepository) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
+	held := 0
 	for range ticker.C {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		n, err := repo.ReleaseStaleReservations(ctx, 15*time.Minute, time.Now().Unix())
+		sweep, err := repo.ResolveStaleReservations(ctx, 15*time.Minute, time.Now().Unix())
 		cancel()
 		if err != nil {
 			logger.Warn().Err(err).Msg("stale credit reservation sweep failed")
-		} else if n > 0 {
-			logger.Info().Int("released", n).Msg("released orphaned credit reservations")
+			continue
 		}
+		if sweep.Released+sweep.Consumed+sweep.Errors > 0 {
+			logger.Info().Int("released", sweep.Released).Int("consumed", sweep.Consumed).Int("errors", sweep.Errors).Msg("settled orphaned credit reservations")
+		}
+		if sweep.Held != held && sweep.Held > 0 {
+			logger.Warn().Int("held", sweep.Held).Msg("credits held for actions with an unknown outcome: run trezutil-admin credits-held")
+		}
+		held = sweep.Held
+	}
+}
+
+// forgetOldActions drops results of completed actions after 30 days; unfinished ones are never dropped here.
+func forgetOldActions(journal *postgres.ActionJournal) {
+	ticker := time.NewTicker(6 * time.Hour)
+	defer ticker.Stop()
+	for range ticker.C {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+		journal.Cleanup(ctx, 30*24*time.Hour)
+		cancel()
 	}
 }
 

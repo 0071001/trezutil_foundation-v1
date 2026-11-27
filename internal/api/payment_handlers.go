@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/trezutil/trezutil/internal/application/payment"
 	"github.com/trezutil/trezutil/internal/domain"
 	"github.com/trezutil/trezutil/packages/auth"
 )
@@ -362,6 +363,14 @@ func (h *PaymentHandler) RefundPaymentH(w http.ResponseWriter, r *http.Request) 
 		switch {
 		case errors.Is(err, domain.ErrRefundAlreadyExists):
 			writeJSON(w, ErrorResponse{Error: Error{Code: "REFUND_ALREADY_EXISTS", Message: "A refund with this key already exists"}}, http.StatusConflict)
+		case errors.Is(err, payment.ErrRefundOutcomeUnknown) && refund != nil:
+			// Neither a success nor a failure: the refund is recorded as pending until the provider confirms it.
+			writeJSON(w, map[string]interface{}{"payment_id": p.ID, "status": string(p.Status), "refund_id": refund.ID,
+				"refund_status": string(refund.Status), "refund_amount": refund.Amount.AmountMinor, "outcome": "unknown"}, http.StatusAccepted)
+		case errors.Is(err, payment.ErrRefundRefused):
+			writeJSON(w, ErrorResponse{Error: Error{Code: "REFUND_REFUSED", Message: "The payment provider refused or does not offer this refund"}}, http.StatusUnprocessableEntity)
+		case errors.Is(err, domain.ErrIdempotencyConflict):
+			writeJSON(w, ErrorResponse{Error: Error{Code: "IDEMPOTENCY_CONFLICT", Message: "This key was used for a different request"}}, http.StatusConflict)
 		case errors.Is(err, domain.ErrRefundExceedsRemaining):
 			writeJSON(w, ErrorResponse{Error: Error{Code: "REFUND_EXCEEDS_REMAINING", Message: "The refund amount exceeds what is left to refund"}}, http.StatusConflict)
 		default:
@@ -504,6 +513,9 @@ func (h *PaymentHandler) WebhookPaymentH(w http.ResponseWriter, r *http.Request)
 		switch err {
 		case domain.ErrWebhookSignatureInvalid:
 			writeJSON(w, ErrorResponse{Error: Error{Code: "WEBHOOK_SIGNATURE_INVALID", Message: "Invalid webhook signature"}}, http.StatusUnauthorized)
+		case payment.ErrWebhookInProgress:
+			// Not acknowledged: the provider sends it again.
+			writeJSON(w, ErrorResponse{Error: Error{Code: "WEBHOOK_IN_PROGRESS", Message: "This event is being processed; send it again"}}, http.StatusConflict)
 		case domain.ErrWebhookEventDuplicate:
 			writeJSON(w, map[string]interface{}{"status": "duplicate"}, http.StatusOK)
 		default:

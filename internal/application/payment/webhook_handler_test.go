@@ -47,7 +47,7 @@ func (m *mockWebhookEventStore) TryClaim(ctx context.Context, providerCode, prov
 	if !ok {
 		return false, nil
 	}
-	if e.Status != domain.PaymentWebhookStatusPending {
+	if e.Status != domain.PaymentWebhookStatusPending && e.Status != domain.PaymentWebhookStatusFailed {
 		return false, nil
 	}
 	e.Status = domain.PaymentWebhookStatusProcessing
@@ -61,6 +61,16 @@ func (m *mockWebhookEventStore) MarkProcessed(ctx context.Context, providerCode,
 	key := providerCode + ":" + providerMsgID
 	if e, ok := m.events[key]; ok {
 		e.Status = domain.PaymentWebhookStatusProcessed
+		return nil
+	}
+	return domain.ErrWebhookEventDuplicate
+}
+
+func (m *mockWebhookEventStore) MarkReview(ctx context.Context, providerCode, providerMsgID string, reason string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if e, ok := m.events[providerCode+":"+providerMsgID]; ok {
+		e.Status, e.ErrorMessage = domain.PaymentWebhookStatusReview, reason
 		return nil
 	}
 	return domain.ErrWebhookEventDuplicate
@@ -118,7 +128,8 @@ func setupWebhookTestService(t *testing.T) (*WebhookHandler, *mockPaymentRepo, *
 	h := &WebhookHandler{
 		payments:          mockRepo,
 		refunds:           mockRefundRepo,
-		ledger:            mockLedgerRepo,
+		accounting:        newMockAccounting(mockRepo, mockRefundRepo, mockLedgerRepo),
+		locker:            NewLocalLocker(),
 		events:            mockEvents,
 		providers:         mockProviders,
 		signatureVerifier: nil,
@@ -240,10 +251,10 @@ func TestWebhookHandler_UnknownPayment(t *testing.T) {
 	}
 	body, _ := json.Marshal(payload)
 
-	// Should not error — unknown payments are logged and skipped
-	err := h.ProcessWebhook(context.Background(), "org-test", "mock-provider", "sig-004", body)
-	if err != nil {
-		t.Fatalf("ProcessWebhook should not error for unknown payment: %v", err)
+	// A payment not recorded (yet) is refused so the provider sends the event again: acknowledging it would lose it
+	// when the record is only late.
+	if err := h.ProcessWebhook(context.Background(), "org-test", "mock-provider", "sig-004", body); err == nil {
+		t.Fatal("an event about an unknown payment must be retried")
 	}
 }
 

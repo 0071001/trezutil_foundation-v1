@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"sync"
 	"time"
@@ -150,6 +151,9 @@ func meterUsage(ctx context.Context, usage domain.UsageService, action domain.Co
 		return noop, true
 	}
 	policy, err := usage.ResolvePolicy(ctx, action, channel, actor.Type)
+	if err != nil && !errors.Is(err, domain.ErrUsagePolicyNotFound) {
+		return noop, false // the price cannot be read: do without the model rather than give it away
+	}
 	if err != nil || policy == nil || !policy.IsMetered() {
 		return noop, true
 	}
@@ -165,7 +169,10 @@ func meterUsage(ctx context.Context, usage domain.UsageService, action domain.Co
 		return noop, false
 	}
 	return func(used bool) {
+		ctx := context.WithoutCancel(ctx)
 		if used {
+			// Recorded first: if consuming fails now, the sweep consumes it later.
+			_ = usage.MarkAction(ctx, res.ReservationID, domain.UsageActionSucceeded)
 			_ = usage.Consume(ctx, res.ReservationID)
 		} else {
 			_ = usage.Release(ctx, res.ReservationID)

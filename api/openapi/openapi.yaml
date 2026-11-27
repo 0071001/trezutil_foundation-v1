@@ -6,7 +6,7 @@ info:
 servers:
   - url: https://api.trezutil.example/api/v1
 paths:
-/health:
+  /health:
     get:
       summary: Health check
       security: []
@@ -17,83 +17,163 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HealthResponse'
-/auth:
+  /auth/request-otp:
     post:
-      request-otp:
-        summary: Request OTP for authentication
-        security: []
-        requestBody:
-          required: true
+      summary: Send a one-time sign-in code to a phone number
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequestOTP'
+      responses:
+        '200':
+          description: Code sent
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthRequestOTP'
-        responses:
-          '200':
-            description: OTP requested
-            content:
-              application/json:
-                schema:
-                  $ref: '#/components/schemas/AuthOTPResponse'
-    post:
-      verify-otp:
-        summary: Verify OTP for authentication
-        security: []
-        requestBody:
-          required: true
+                $ref: '#/components/schemas/AuthOTPResponse'
+        '400':
+          description: INVALID_REQUEST or INVALID_PHONE
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthVerifyOTP'
-        responses:
-          '200':
-            description: OTP verified
-            content:
-              application/json:
-                schema:
-                  $ref: '#/components/schemas/AuthVerifyResponse'
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: OTP_DELIVERY_FAILED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/verify-otp:
+    post:
+      summary: Exchange a one-time code for a session
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthVerifyOTP'
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthVerifyResponse'
+        '400':
+          description: Invalid request or code
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Code refused
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/staff/login:
+    post:
+      summary: Platform staff sign-in with email and password
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StaffLoginRequest'
+      responses:
+        '200':
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthVerifyResponse'
+        '401':
+          description: INVALID_CREDENTIALS
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/refresh:
+    post:
+      summary: Renew a session with its refresh token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: New session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthVerifyResponse'
+        '401':
+          description: Refresh token refused
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /auth/users/me:
     get:
-      users-me:
-        summary: Get current user profile
-        security:
-          - bearerAuth: []
-        responses:
-          '200':
-            description: User profile
-            content:
-              application/json:
-                schema:
-                  $ref: '#/components/schemas/User'
+      summary: Get current user profile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     patch:
-      users-me:
-        summary: Update current user profile
-        security:
-          - bearerAuth: []
-        requestBody:
-          required: true
+      summary: Update current user profile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+      responses:
+        '200':
+          description: Updated user profile
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/UserUpdateRequest'
-        responses:
-          '200':
-            description: Updated user profile
-            content:
-              application/json:
-                schema:
-                  $ref: '#/components/schemas/User'
-    get:
-      users-me-roles:
-        summary: Get current user roles
-        security:
-          - bearerAuth: []
-        responses:
-          '200':
-            description: User roles
-            content:
-              application/json:
-                schema:
-                  $ref: '#/components/schemas/UserRolesResponse'
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /organizations:
     post:
       summary: Create an organization
@@ -136,7 +216,7 @@ paths:
           content:
             application/json:
               schema:
-              $ref: '#/components/schemas/Organization'
+                $ref: '#/components/schemas/Organization'
         '404':
           $ref: '#/components/responses/NotFound'
     patch:
@@ -352,23 +432,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/Store'
-  parameters:
-    OrganizationId:
-      in: path
-      name: organization_id
-      required: true
-      schema: { type: string, format: uuid }
-    SellerId:
-      in: path
-      name: seller_id
-      required: true
-      schema: { type: string, format: uuid }
-    StoreId:
-      in: path
-      name: store_id
-      required: true
-      schema: { type: string, format: uuid }
-    ListingId:
+  /listings:
+    post:
       summary: Create a listing draft
       security:
         - bearerAuth: []
@@ -736,12 +801,12 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
-         '429':
-           description: Rate limited or insufficient credits
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Rate limited or insufficient credits
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /packs:
     get:
       summary: List all vertical packs
@@ -944,7 +1009,7 @@ paths:
                         text: { type: string }
                         created_at: { type: integer, description: Unix seconds }
         '401': { description: Not signed in }
-        '403': { description: The conversation belongs to another user, or to no account }
+        '403': { description: 'The conversation belongs to another user, or to no account' }
         '404': { description: No such conversation }
   /missions:
     post:
@@ -1381,17 +1446,13 @@ paths:
               schema: { $ref: '#/components/schemas/ErrorResponse' }
   /payments:
     post:
-      summary: Create a payment
+      summary: Create a payment for an order
       tags: [Payments]
+      security:
+        - bearerAuth: []
       parameters:
-        - in: query
-          name: organization_id
-          required: true
-          schema: { type: string }
-        - in: query
-          name: user_id
-          required: true
-          schema: { type: string }
+        - $ref: '#/components/parameters/OrganizationQuery'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -1399,195 +1460,170 @@ paths:
             schema: { $ref: '#/components/schemas/CreatePaymentRequest' }
       responses:
         '201':
-          description: Payment created
+          description: Payment created (or the one already created with this key)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PaymentResponse' }
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '400': { description: 'INVALID_REQUEST, MISSING_ORDER_ID, INVALID_AMOUNT or INVALID_PAYMENT_METHOD', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
         '401': { $ref: '#/components/responses/Unauthorized' }
-        '500': { $ref: '#/components/responses/InternalError' }
-
-  /payments/{payment_id}:
-    get:
-      summary: Get a payment by ID
-      tags: [Payments]
-      parameters:
-        - in: query
-          name: organization_id
-          required: true
-          schema: { type: string }
-        - in: query
-          name: payment_id
-          required: true
-          schema: { type: string }
-      responses:
-        '200':
-          description: Payment details
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/PaymentResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
-
+        '409': { description: 'IDEMPOTENCY_CONFLICT or ORDER_NOT_PAYABLE', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '503': { description: 'PAYMENT_PROVIDER_UNAVAILABLE', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+  /payments/{payment_id}:
+    get:
+      summary: Get a payment
+      tags: [Payments]
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PaymentId'
+        - $ref: '#/components/parameters/OrganizationQuery'
+      responses:
+        '200':
+          description: Payment
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PaymentResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/InternalError' }
   /payments/{payment_id}/cancel:
     post:
-      summary: Cancel a payment
+      summary: Cancel a payment that is not captured
       tags: [Payments]
+      security:
+        - bearerAuth: []
       parameters:
-        - in: query
-          name: organization_id
-          required: true
-          schema: { type: string }
-        - in: query
-          name: user_id
-          required: true
-          schema: { type: string }
-        - in: query
-          name: payment_id
-          required: true
-          schema: { type: string }
-      headers:
-        Idempotency-Key:
-          schema: { type: string }
+        - $ref: '#/components/parameters/PaymentId'
+        - $ref: '#/components/parameters/OrganizationQuery'
+        - $ref: '#/components/parameters/IdempotencyKey'
       responses:
         '200':
           description: Payment cancelled
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PaymentResponse' }
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
-
   /payments/{payment_id}/capture:
     post:
-      summary: Capture a payment
+      summary: Capture an authorized payment (staff)
       tags: [Payments]
+      security:
+        - bearerAuth: []
       parameters:
-        - in: query
-          name: organization_id
-          required: true
-          schema: { type: string }
-        - in: query
-          name: user_id
-          required: true
-          schema: { type: string }
-        - in: query
-          name: payment_id
-          required: true
-          schema: { type: string }
+        - $ref: '#/components/parameters/PaymentId'
+        - $ref: '#/components/parameters/OrganizationQuery'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         content:
           application/json:
             schema: { $ref: '#/components/schemas/CapturePaymentRequest' }
       responses:
         '200':
-          description: Payment captured
+          description: Payment
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PaymentResponse' }
-        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
-
   /payments/{payment_id}/refund:
     post:
-      summary: Refund a payment
+      summary: Refund a captured payment (staff)
       tags: [Payments]
+      security:
+        - bearerAuth: []
       parameters:
-        - in: query
-          name: organization_id
-          required: true
-          schema: { type: string }
-        - in: query
-          name: user_id
-          required: true
-          schema: { type: string }
-        - in: query
-          name: payment_id
-          required: true
-          schema: { type: string }
-      headers:
-        Idempotency-Key:
-          schema: { type: string }
+        - $ref: '#/components/parameters/PaymentId'
+        - $ref: '#/components/parameters/OrganizationQuery'
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         content:
           application/json:
             schema: { $ref: '#/components/schemas/RefundPaymentRequest' }
       responses:
         '201':
-          description: Refund created
+          description: Refund recorded (succeeded, pending or failed as refund_status says)
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/RefundResponse' }
-        '400': { $ref: '#/components/responses/BadRequest' }
+              schema: { $ref: '#/components/schemas/RefundResult' }
+        '202':
+          description: 'The provider did not give a final answer: the refund stays pending (outcome unknown), neither done nor refused'
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefundResult' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
-
+        '409': { description: 'REFUND_ALREADY_EXISTS, REFUND_EXCEEDS_REMAINING or IDEMPOTENCY_CONFLICT', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '422': { description: 'REFUND_REFUSED: the provider refused or offers no refund', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
   /payments/{payment_id}/status:
     get:
-      summary: Get payment status (syncs from provider)
+      summary: Payment status, read back from the provider
       tags: [Payments]
+      security:
+        - bearerAuth: []
       parameters:
-        - in: query
-          name: organization_id
-          required: true
-          schema: { type: string }
-        - in: query
-          name: user_id
-          required: true
-          schema: { type: string }
-        - in: query
-          name: payment_id
-          required: true
-          schema: { type: string }
+        - $ref: '#/components/parameters/PaymentId'
+        - $ref: '#/components/parameters/OrganizationQuery'
       responses:
         '200':
-          description: Payment status
+          description: Payment
           content:
             application/json:
               schema: { $ref: '#/components/schemas/PaymentResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
-
   /payments/{payment_id}/refunds/{refund_id}:
     get:
-      summary: Get a refund by ID
+      summary: Get a refund
       tags: [Payments]
+      security:
+        - bearerAuth: []
       parameters:
-        - in: query
-          name: organization_id
-          required: true
-          schema: { type: string }
-        - in: query
-          name: payment_id
-          required: true
-          schema: { type: string }
-        - in: query
-          name: refund_id
-          required: true
-          schema: { type: string }
+        - $ref: '#/components/parameters/PaymentId'
+        - $ref: '#/components/parameters/RefundId'
+        - $ref: '#/components/parameters/OrganizationQuery'
       responses:
         '200':
-          description: Refund details
+          description: Refund
           content:
             application/json:
               schema: { $ref: '#/components/schemas/RefundResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '500': { $ref: '#/components/responses/InternalError' }
-
   /webhooks/payments/{provider_code}:
     post:
-      summary: Payment provider webhook callback
+      summary: Payment provider webhook, authenticated by the provider signature
       tags: [Webhooks]
+      security: []
       parameters:
-        - in: query
-          name: organization_id
-          required: true
-          schema: { type: string }
-        - in: query
+        - in: path
           name: provider_code
           required: true
           schema: { type: string }
-      headers:
-        X-Signature:
+        - $ref: '#/components/parameters/OrganizationQuery'
+        - in: header
+          name: Stripe-Signature
+          schema: { type: string }
+        - in: header
+          name: X-Webhook-Signature
+          description: SasPay signature, sent with X-Webhook-Timestamp
+          schema: { type: string }
+        - in: header
+          name: X-Webhook-Timestamp
           schema: { type: string }
       requestBody:
         required: true
@@ -1598,12 +1634,13 @@ paths:
               additionalProperties: true
       responses:
         '200':
-          description: Webhook accepted
+          description: Processed, already processed, or kept for review
           content:
             application/json:
               schema: { type: object, properties: { status: { type: string } } }
-        '401': { $ref: '#/components/responses/Unauthorized' }
-        '500': { $ref: '#/components/responses/InternalError' }
+        '401': { description: 'WEBHOOK_SIGNATURE_INVALID', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '409': { description: 'WEBHOOK_IN_PROGRESS: send it again', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
+        '500': { description: 'Not processed: send it again', content: { application/json: { schema: { $ref: '#/components/schemas/ErrorResponse' } } } }
 
 components:
   securitySchemes:
@@ -1617,6 +1654,21 @@ components:
       name: X-Internal-Service-Token
       description: Service-to-service authentication token for internal endpoints
   parameters:
+    OrganizationId:
+      in: path
+      name: organization_id
+      required: true
+      schema: { type: string, format: uuid }
+    SellerId:
+      in: path
+      name: seller_id
+      required: true
+      schema: { type: string, format: uuid }
+    StoreId:
+      in: path
+      name: store_id
+      required: true
+      schema: { type: string, format: uuid }
     MissionId:
       in: path
       name: mission_id
@@ -1625,6 +1677,21 @@ components:
     ListingId:
       in: path
       name: listing_id
+      required: true
+      schema: { type: string, format: uuid }
+    PaymentId:
+      in: path
+      name: payment_id
+      required: true
+      schema: { type: string, format: uuid }
+    RefundId:
+      in: path
+      name: refund_id
+      required: true
+      schema: { type: string, format: uuid }
+    OrganizationQuery:
+      in: query
+      name: organization_id
       required: true
       schema: { type: string, format: uuid }
     IdempotencyKey:
@@ -1650,6 +1717,11 @@ components:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
     Forbidden:
       description: Access forbidden
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/ErrorResponse' }
+    InternalError:
+      description: Unexpected server error
       content:
         application/json:
           schema: { $ref: '#/components/schemas/ErrorResponse' }
@@ -1688,8 +1760,17 @@ components:
         failed_at: { type: integer, nullable: true }
         failure_reason: { type: string, nullable: true }
         refunded_amount: { type: integer, format: int64 }
-        created_at: { type: integer }
-        updated_at: { type: integer }
+        created_at: { type: string }
+        updated_at: { type: string }
+    RefundResult:
+      type: object
+      properties:
+        payment_id: { type: string }
+        status: { type: string, description: Status of the payment }
+        refund_id: { type: string }
+        refund_status: { type: string, enum: [pending, succeeded, failed, cancelled] }
+        refund_amount: { type: integer, format: int64 }
+        outcome: { type: string, enum: [unknown] }
     CapturePaymentRequest:
       type: object
       properties:
@@ -1703,11 +1784,37 @@ components:
     RefundResponse:
       type: object
       properties:
-        payment_id: { type: string }
-        status: { type: string }
         refund_id: { type: string }
-        refund_status: { type: string, enum: [pending, succeeded, failed, cancelled] }
-        refund_amount: { type: integer, format: int64 }
+        payment_id: { type: string }
+        status: { type: string, enum: [pending, succeeded, failed, cancelled] }
+        amount: { type: integer, format: int64 }
+        currency: { type: string }
+        provider_refund_id: { type: string }
+        processed_at: { type: integer, nullable: true }
+        failed_at: { type: integer, nullable: true }
+        failure_reason: { type: string }
+        created_at: { type: string }
+        updated_at: { type: string }
+    SearchResult:
+      type: object
+      description: Field names as the search service writes them.
+      properties:
+        ListingID: { type: string, format: uuid }
+        Title: { type: string }
+        Vertical: { type: string }
+        PriceAmount: { type: number }
+        PriceCurrency: { type: string }
+        AvailabilityStatus: { type: string }
+        DistanceMeters: { type: number, nullable: true }
+        Score: { type: number }
+        MatchedAttributes: { type: array, nullable: true, items: { type: object, additionalProperties: true } }
+        Location: { type: object, nullable: true, additionalProperties: true }
+        Seller: { type: object, nullable: true, additionalProperties: true }
+        Store: { type: object, nullable: true, additionalProperties: true }
+        PrimaryMediaURL: { type: string, nullable: true }
+        CompareAtAmount: { type: number, nullable: true }
+        DiscountPercent: { type: integer }
+        PublishedAt: { type: integer }
     HealthResponse:
       type: object
       required: [status]
@@ -1794,140 +1901,140 @@ components:
         status: { type: string }
         total: { $ref: '#/components/schemas/Money' }
     VerticalPack:
-    type: object
-    properties:
-      id:
-        type: string
-        description: Pack identifier
-      code:
-        type: string
-        description: Pack code (ECOMMERCE, BOOKING, SERVICES)
-      name:
-        type: string
-        description: Human-readable pack name
-      description:
-        type: string
-        description: Pack description
-      version:
-        $ref: '#/components/schemas/PackVersion'
-      status:
-        type: string
-        enum: [ACTIVE, INACTIVE, DEPRECATED]
-        description: Pack lifecycle status
-      capabilities:
-        type: array
-        items:
+      type: object
+      properties:
+        id:
           type: string
-        description: Capabilities provided by this pack
-      supported_actions:
-        type: array
-        items:
+          description: Pack identifier
+        code:
           type: string
-        description: Action types supported by this pack
-      policies:
-        type: array
-        items:
-          $ref: '#/components/schemas/PackPolicy'
-        description: Pack-level policies
-      workflow:
-        $ref: '#/components/schemas/PackWorkflow'
-        description: Workflow definition for the pack
-      ui_metadata:
-        $ref: '#/components/schemas/PackUIMetadata'
-        description: UI routing and display metadata
-      ai_profile:
-        type: string
-        description: AI specialist code for this pack
-      created_at:
-        type: integer
-        description: Unix timestamp of creation
-      updated_at:
-        type: integer
-        description: Unix timestamp of last update
-  PackVersion:
-    type: object
-    properties:
-      major:
-        type: integer
-      minor:
-        type: integer
-      patch:
-        type: integer
-  PackPolicy:
-    type: object
-    properties:
-      key:
-        type: string
-      value:
-        type: string
-  PackWorkflow:
-    type: object
-    properties:
-      name:
-        type: string
-      entry_step:
-        type: string
-      steps:
-        type: array
-        items:
-          $ref: '#/components/schemas/PackWorkflowStep'
-  PackWorkflowStep:
-    type: object
-    properties:
-      name:
-        type: string
-      description:
-        type: string
-      action:
-        type: string
-      required:
-        type: boolean
-      next_steps:
-        type: array
-        items:
+          description: Pack code (ECOMMERCE, BOOKING, SERVICES)
+        name:
           type: string
-  PackUIMetadata:
-    type: object
-    properties:
-      route_prefix:
-        type: string
-      icon:
-        type: string
-      color:
-        type: string
-      order:
-        type: integer
-  PackActionResponse:
-    type: object
-    properties:
-      status:
-        type: string
-        example: enabled
-      pack_code:
-        type: string
-      org_id:
-        type: string
-  OrgPacksResponse:
-    type: object
-    properties:
-      org_id:
-        type: string
-      packs:
-        type: array
-        items:
+          description: Human-readable pack name
+        description:
           type: string
-  ActionCheckResponse:
-    type: object
-    properties:
-      org_id:
-        type: string
-      action:
-        type: string
-      allowed:
-        type: boolean
-      checked_at:
-        type: integer
-  ErrorResponse:
+          description: Pack description
+        version:
+          $ref: '#/components/schemas/PackVersion'
+        status:
+          type: string
+          enum: [ACTIVE, INACTIVE, DEPRECATED]
+          description: Pack lifecycle status
+        capabilities:
+          type: array
+          items:
+            type: string
+          description: Capabilities provided by this pack
+        supported_actions:
+          type: array
+          items:
+            type: string
+          description: Action types supported by this pack
+        policies:
+          type: array
+          items:
+            $ref: '#/components/schemas/PackPolicy'
+          description: Pack-level policies
+        workflow:
+          $ref: '#/components/schemas/PackWorkflow'
+          description: Workflow definition for the pack
+        ui_metadata:
+          $ref: '#/components/schemas/PackUIMetadata'
+          description: UI routing and display metadata
+        ai_profile:
+          type: string
+          description: AI specialist code for this pack
+        created_at:
+          type: integer
+          description: Unix timestamp of creation
+        updated_at:
+          type: integer
+          description: Unix timestamp of last update
+    PackVersion:
+      type: object
+      properties:
+        major:
+          type: integer
+        minor:
+          type: integer
+        patch:
+          type: integer
+    PackPolicy:
+      type: object
+      properties:
+        key:
+          type: string
+        value:
+          type: string
+    PackWorkflow:
+      type: object
+      properties:
+        name:
+          type: string
+        entry_step:
+          type: string
+        steps:
+          type: array
+          items:
+            $ref: '#/components/schemas/PackWorkflowStep'
+    PackWorkflowStep:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        action:
+          type: string
+        required:
+          type: boolean
+        next_steps:
+          type: array
+          items:
+            type: string
+    PackUIMetadata:
+      type: object
+      properties:
+        route_prefix:
+          type: string
+        icon:
+          type: string
+        color:
+          type: string
+        order:
+          type: integer
+    PackActionResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          example: enabled
+        pack_code:
+          type: string
+        org_id:
+          type: string
+    OrgPacksResponse:
+      type: object
+      properties:
+        org_id:
+          type: string
+        packs:
+          type: array
+          items:
+            type: string
+    ActionCheckResponse:
+      type: object
+      properties:
+        org_id:
+          type: string
+        action:
+          type: string
+        allowed:
+          type: boolean
+        checked_at:
+          type: integer
+    ErrorResponse:
       type: object
       required: [error]
       properties:
@@ -1949,11 +2056,23 @@ components:
       required: [request_id]
       properties:
         request_id: { type: string }
-        code_sent: { type: boolean }
+        expires_at: { type: string, format: date-time }
+    StaffLoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      properties:
+        refresh_token: { type: string }
     AuthVerifyOTP:
       type: object
-      required: [code]
+      required: [request_id, code]
       properties:
+        request_id: { type: string }
         code: { type: string, minLength: 4, maxLength: 10 }
     AuthVerifyResponse:
       type: object
@@ -2332,7 +2451,7 @@ components:
       additionalProperties: false
       required: [objective]
       properties:
-        objective: { type: string, minLength: 3, maxLength: 2000, description: What the person wants, in their own words }
+        objective: { type: string, minLength: 3, maxLength: 2000, description: 'What the person wants, in their own words' }
         type: { $ref: '#/components/schemas/MissionType' }
         title: { type: string, minLength: 2, maxLength: 120 }
         location: { type: string, maxLength: 120 }
@@ -2389,7 +2508,7 @@ components:
         type: { type: string, pattern: '^[A-Za-z][A-Za-z0-9_ ]{1,31}$', description: A code such as VENUE or CATERING }
         title: { type: string, minLength: 2, maxLength: 120 }
         description: { type: string, maxLength: 1000 }
-        action_type: { type: string, description: The commerce action a later phase will run, for example SEARCH_LISTINGS }
+        action_type: { type: string, description: 'The commerce action a later phase will run, for example SEARCH_LISTINGS' }
     MissionStep:
       type: object
       properties:
@@ -2404,7 +2523,7 @@ components:
         action_support: { type: string, enum: ['', supported, not_yet_supported], description: 'supported when a handler for action_type is registered in the Commerce Action Runtime; empty for a step added by hand' }
         plan_version: { type: integer, minimum: 0, description: 0 for a step added by hand }
         executable: { type: boolean, description: Whether the step has an executable action behind it that the runtime supports }
-        can_execute: { type: boolean, description: Whether it can be executed now (executable, mission draft or active, step pending or failed or stale) }
+        can_execute: { type: boolean, description: 'Whether it can be executed now (executable, mission draft or active, step pending or failed or stale)' }
         stale: { type: boolean, description: In progress but its attempt has gone silent; it can be executed again }
         execution: { $ref: '#/components/schemas/MissionStepExecution' }
         state:
@@ -2454,14 +2573,14 @@ components:
           type: object
           description: Present when completed. A small summary with references, never a copy of commerce data.
           properties:
-            reference: { type: string, description: What the attempt produced; for a search, this execution }
+            reference: { type: string, description: 'What the attempt produced; for a search, this execution' }
             total: { type: integer }
             listing_ids: { type: array, items: { type: string }, description: The first listings found (at most 10) }
             has_more: { type: boolean }
             vertical: { type: string }
             location: { type: string }
-            available: { type: boolean, description: For an availability check, whether the listing is free then }
-            listing_id: { type: string, description: For an availability check, the listing that was checked (the reference) }
+            available: { type: boolean, description: 'For an availability check, whether the listing is free then' }
+            listing_id: { type: string, description: 'For an availability check, the listing that was checked (the reference)' }
             capacity: { type: integer }
             remaining: { type: integer }
             reason: { type: string }

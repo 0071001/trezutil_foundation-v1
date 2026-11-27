@@ -86,6 +86,10 @@ func (h *ConversationHandler) HandleProcessMessage(w http.ResponseWriter, r *htt
 
 	resp, err := h.useCases.ProcessMessage(r.Context(), req)
 	if err != nil {
+		if errors.Is(err, domain.ErrMessageNotStored) {
+			writeJSON(w, ErrorResponse{Error: Error{Code: "MESSAGE_NOT_STORED", Message: "Your message could not be saved; nothing was done. Please send it again."}}, http.StatusServiceUnavailable)
+			return
+		}
 		if errors.Is(err, domain.ErrConversationForbidden) {
 			writeJSON(w, ErrorResponse{Error: Error{Code: "FORBIDDEN", Message: "This conversation belongs to another user"}}, http.StatusForbidden)
 			return

@@ -2,6 +2,7 @@ package ai
 
 import (
 	"context"
+	"errors"
 	"encoding/json"
 	"fmt"
 	"regexp"
@@ -112,6 +113,11 @@ func (o *AIOrchestrator) Interpret(ctx context.Context, req *AIInterpretRequest)
 	var reservationID string
 	if o.usageService != nil {
 		policy, err := o.usageService.ResolvePolicy(ctx, "AI_INTERPRETATION", req.Channel, req.AuthenticatedActor.Type)
+		if err != nil && !errors.Is(err, domain.ErrUsagePolicyNotFound) {
+			result.Response = o.buildFallbackResponse("AI features are unavailable right now. Please try again.")
+			result.LatencyMs = time.Since(startTime).Milliseconds()
+			return result, nil
+		}
 		if err == nil && policy.IsMetered() {
 			ok, _ := o.usageService.Check(ctx, req.AuthenticatedActor.ID, policy.Cost)
 			if !ok {
@@ -134,7 +140,8 @@ func (o *AIOrchestrator) Interpret(ctx context.Context, req *AIInterpretRequest)
 
 	consumeCredits := func() {
 		if reservationID != "" && o.usageService != nil {
-			_ = o.usageService.Consume(ctx, reservationID)
+			_ = o.usageService.MarkAction(context.WithoutCancel(ctx), reservationID, domain.UsageActionSucceeded)
+			_ = o.usageService.Consume(context.WithoutCancel(ctx), reservationID)
 		}
 	}
 

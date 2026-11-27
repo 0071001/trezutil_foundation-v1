@@ -1,0 +1,10 @@
+{
+  "description": "A conversational commerce platform that helps buyers and suppliers find partners, compare offers, negotiate terms, and manage purchasing operations.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

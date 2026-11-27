@@ -194,13 +194,12 @@ func setupPaymentIntegration(t *testing.T) *testEnv {
 
 	paymentRepo := postgres.NewPaymentRepository(db.DB)
 	refundRepo := postgres.NewRefundRepository(db.DB)
-	ledgerRepo := postgres.NewLedgerRepository(db.DB)
 	webhookStore := postgres.NewPaymentWebhookEventStore(db.DB)
 
 	svc := payment.NewPaymentService(payment.PaymentServiceConfig{
 		Payments:     paymentRepo,
 		Refunds:      refundRepo,
-		Ledger:       ledgerRepo,
+		Accounting:   postgres.NewPaymentAccounting(db.DB),
 		Orders:       orderRepo,
 		Orchestrator: orchestrator,
 		Logger:       zerolog.Nop(),
@@ -210,7 +209,8 @@ func setupPaymentIntegration(t *testing.T) *testEnv {
 	whHandler := payment.NewWebhookHandler(payment.WebhookHandlerConfig{
 		Payments:          paymentRepo,
 		Refunds:           refundRepo,
-		Ledger:            ledgerRepo,
+		Accounting:        postgres.NewPaymentAccounting(db.DB),
+		Locker:            postgres.NewAdvisoryLocker(db.DB),
 		Events:            webhookStore,
 		Providers:         providerRepo,
 		SignatureVerifier: nil,
@@ -640,8 +640,8 @@ func TestPaymentIntegration_RefundIdempotency(t *testing.T) {
 	var totalEntries int
 	rows.Scan(&totalEntries)
 	rows.Close()
-	if totalEntries != 3 {
-		t.Errorf("expected 3 ledger entries (2 capture + 1 refund), got %d", totalEntries)
+	if totalEntries != 4 {
+		t.Errorf("expected 4 ledger entries (2 capture + 2 refund, both sides), got %d", totalEntries)
 	}
 }
 
@@ -883,8 +883,8 @@ func TestPaymentIntegration_FullWorkflow(t *testing.T) {
 	var totalEntries int
 	rows.Scan(&totalEntries)
 	rows.Close()
-	if totalEntries != 3 {
-		t.Errorf("expected 3 ledger entries (2 capture + 1 refund), got %d", totalEntries)
+	if totalEntries != 4 {
+		t.Errorf("expected 4 ledger entries (2 capture + 2 refund, both sides), got %d", totalEntries)
 	}
 }
 

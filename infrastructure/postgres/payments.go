@@ -167,6 +167,10 @@ func (r *PaymentRepository) FindByIdempotencyKey(ctx context.Context, tenantID, 
 }
 
 func (r *PaymentRepository) Update(ctx context.Context, payment *domain.Payment) error {
+	return r.update(ctx, r.db, payment)
+}
+
+func (r *PaymentRepository) update(ctx context.Context, db sqlExecer, payment *domain.Payment) error {
 	metadataJSON, _ := json.Marshal(payment.Metadata)
 	if metadataJSON == nil {
 		metadataJSON = []byte("{}")
@@ -184,7 +188,7 @@ func (r *PaymentRepository) Update(ctx context.Context, payment *domain.Payment)
 		version = $11, updated_at = $12
 		WHERE id = $13 AND organization_id = $14 AND version = $15`
 
-	result, err := r.db.ExecContext(ctx, query,
+	result, err := db.ExecContext(ctx, query,
 		providerPaymentID,
 		string(payment.Status),
 		nullTimeFromPtr(payment.AuthorizedAt),

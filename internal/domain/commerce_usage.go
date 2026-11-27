@@ -44,6 +44,8 @@ type UsageService interface {
 	Reserve(ctx context.Context, accountID string, actionType CommerceActionType, cost int64, idempotencyKey, tenantID string) (*UsageReservation, error)
 	Consume(ctx context.Context, reservationID string) error
 	Release(ctx context.Context, reservationID string) error
+	// MarkAction records what is known of the action an active reservation pays for.
+	MarkAction(ctx context.Context, reservationID string, state UsageActionState) error
 	Grant(ctx context.Context, accountID string, amount int64, reason string) error
 	// FindOrCreateCreditAccountByOwner finds or creates a credit account for the given owner.
 	FindOrCreateCreditAccountByOwner(ctx context.Context, ownerType ActorType, ownerID string, tenantID string, planID string, periodID string) (*CreditAccount, error)
@@ -89,6 +91,8 @@ type UsageReservationRepository interface {
 	// ReleaseReservation atomically marks a reservation released, returns reserved
 	// credits to the account, and appends a ledger event.
 	ReleaseReservation(ctx context.Context, reservationID string, now int64) error
+	// MarkActionState records the action state of an active reservation.
+	MarkActionState(ctx context.Context, reservationID string, state UsageActionState) error
 }
 
 // CreditGranter is the narrow, idempotent contract that monetization services depend

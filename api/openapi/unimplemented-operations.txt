@@ -1,0 +1,19 @@
+# Documented operation no service registers
+# This list may only shrink. Regenerate: UPDATE_CONTRACT_LISTS=1 go test ./api/openapi/
+DELETE /organizations/{}/members/{}
+GET /admin/ai/health
+GET /admin/ai/models
+GET /admin/ai/providers
+GET /listings/{}
+GET /organizations/{}
+GET /organizations/{}/members
+GET /sellers/{}
+GET /stores/{}
+PATCH /listings/{}
+PATCH /organizations/{}
+PATCH /sellers/{}
+PATCH /stores/{}
+POST /internal/api/v1/ai/interpret
+POST /listings/{}/publish
+POST /organizations/{}/members
+POST /search/listings

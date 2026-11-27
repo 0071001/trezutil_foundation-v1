@@ -603,6 +603,8 @@ type fakeUsageService struct {
 	reserveErr   error
 	consumeErr   error
 	releaseErr   error
+	markErr      error
+	marks        map[string]domain.UsageActionState
 }
 
 func newFakeUsageService() *fakeUsageService {
@@ -681,6 +683,17 @@ func (f *fakeUsageService) Consume(ctx context.Context, reservationID string) er
 	if acc, ok := f.accounts[res.AccountID]; ok {
 		acc.Reserved -= res.Amount
 	}
+	return nil
+}
+
+func (f *fakeUsageService) MarkAction(_ context.Context, reservationID string, state domain.UsageActionState) error {
+	if f.markErr != nil {
+		return f.markErr
+	}
+	if f.marks == nil {
+		f.marks = map[string]domain.UsageActionState{}
+	}
+	f.marks[reservationID] = state
 	return nil
 }
 

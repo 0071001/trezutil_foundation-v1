@@ -180,51 +180,54 @@ func (m *mockRefundRepo) Create(ctx context.Context, refund *domain.Refund) erro
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.refunds[refund.ID] = refund
-	m.byPayment[refund.PaymentID] = append(m.byPayment[refund.PaymentID], refund)
+	for _, r := range m.refunds {
+		if r.TenantID == refund.TenantID && r.IdempotencyKey == refund.IdempotencyKey {
+			return domain.ErrRefundAlreadyExists
+		}
+	}
+	cp := *refund
+	m.refunds[refund.ID] = &cp
+	m.byPayment[refund.PaymentID] = append(m.byPayment[refund.PaymentID], &cp)
 	return nil
 }
-func (m *mockRefundRepo) FindByID(ctx context.Context, tenantID, refundID string) (*domain.Refund, error) {
+func (m *mockRefundRepo) find(match func(*domain.Refund) bool) (*domain.Refund, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	r, ok := m.refunds[refundID]
-	if !ok {
-		return nil, domain.ErrRefundNotFound
+	for _, r := range m.refunds {
+		if match(r) {
+			cp := *r
+			return &cp, nil
+		}
 	}
-	if r.TenantID != tenantID {
-		return nil, domain.ErrRefundNotFound
-	}
-	return r, nil
+	return nil, domain.ErrRefundNotFound
+}
+func (m *mockRefundRepo) FindByID(ctx context.Context, tenantID, refundID string) (*domain.Refund, error) {
+	return m.find(func(r *domain.Refund) bool { return r.ID == refundID && r.TenantID == tenantID })
 }
 func (m *mockRefundRepo) FindByPaymentID(ctx context.Context, tenantID, paymentID string, offset, limit int) ([]*domain.Refund, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.byPayment[paymentID], nil
+	out := []*domain.Refund{}
+	for _, r := range m.byPayment[paymentID] {
+		cp := *m.refunds[r.ID]
+		out = append(out, &cp)
+	}
+	return out, nil
 }
 func (m *mockRefundRepo) FindByProviderRefundID(ctx context.Context, tenantID, providerID, providerRefundID string) (*domain.Refund, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for _, r := range m.refunds {
-		if r.ProviderRefundID == providerRefundID {
-			return r, nil
-		}
-	}
-	return nil, domain.ErrRefundNotFound
+	return m.find(func(r *domain.Refund) bool { return r.ProviderRefundID == providerRefundID })
 }
 func (m *mockRefundRepo) FindByIdempotencyKey(ctx context.Context, tenantID, idempotencyKey string) (*domain.Refund, error) {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	for _, r := range m.refunds {
-		if r.IdempotencyKey == idempotencyKey {
-			return r, nil
-		}
-	}
-	return nil, domain.ErrRefundNotFound
+	return m.find(func(r *domain.Refund) bool { return r.IdempotencyKey == idempotencyKey && r.TenantID == tenantID })
 }
 func (m *mockRefundRepo) Update(ctx context.Context, refund *domain.Refund) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.refunds[refund.ID] = refund
+	if stored, ok := m.refunds[refund.ID]; ok && stored.Version != refund.Version-1 {
+		return domain.ErrOptimisticLock
+	}
+	cp := *refund
+	m.refunds[refund.ID] = &cp
 	return nil
 }
 
@@ -418,7 +421,7 @@ func setupTestService(t *testing.T) (*PaymentService, *mockPaymentRepo, *mockRef
 		Locker:       NewLocalLocker(),
 		Payments:     mockRepo,
 		Refunds:      mockRefundRepo,
-		Ledger:       mockLedgerRepo,
+		Accounting:   newMockAccounting(mockRepo, mockRefundRepo, mockLedgerRepo),
 		Orders:       mockOrders,
 		Orchestrator: orch,
 		Logger:       zerolog.Nop(),
@@ -1186,7 +1189,7 @@ func TestPaymentService_LedgerIdempotency_Capture(t *testing.T) {
 
 	// Manually trigger a second ledger posting for the same payment
 	// (already posted during CreatePayment with captured status)
-	_ = svc.postLedgerForCapture(context.Background(), p)
+	_ = svc.ensureCaptureEntries(context.Background(), p)
 
 	// Should be idempotent ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â¦ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã¢â‚¬Â¦Ãƒâ€šÃ‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€¦Ã‚Â¡ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â no new entries
 	if len(ledgerRepo.entries) != initialLedgerCount {
@@ -1728,6 +1731,9 @@ func TestRefundPayment_ExceedsAmount_SingleEntry(t *testing.T) {
 		Currency:       "USD",
 		Status:         domain.OrderStatusPendingPayment,
 	}
+
+	// A refund succeeds only when the provider says so: an empty status is not a success.
+	adapter.responses[domain.PaymentProviderOpRefund] = domain.PaymentProviderResponse{Status: "succeeded", ProviderPaymentID: "re-exceeds"}
 
 	p, err := svc.CreatePayment(context.Background(), "org-test", "actor-1", "order-refund-exceeds",
 		domain.Money{AmountMinor: 1000, Currency: "USD"},
